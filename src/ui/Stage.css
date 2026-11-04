@@ -1,0 +1,129 @@
+.stage-area {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	min-height: 0;
+	padding: var(--spacing-5);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--paper);
+	container-type: size;
+}
+
+.stage-frame {
+	position: relative;
+	overflow: hidden;
+	aspect-ratio: 16 / 9;
+	width: min(100cqw, 100cqh * 16 / 9);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg);
+}
+
+.stage-frame.isRecording {
+	border-color: var(--destructive);
+}
+
+.stage-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+.stage-cover {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+	background: var(--bg);
+	opacity: 0.96;
+}
+
+.stage-cover.isCentered {
+	align-items: center;
+	justify-content: center;
+	opacity: 0.9;
+}
+
+.stage-pill {
+	position: absolute;
+	top: var(--spacing-4);
+	left: var(--spacing-4);
+	display: flex;
+	padding: var(--spacing-1) var(--spacing-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg);
+}
+
+.stage-dropcard {
+	position: absolute;
+	right: var(--spacing-4);
+	bottom: var(--spacing-4);
+	left: var(--spacing-4);
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-4);
+	padding: var(--spacing-3) var(--spacing-4);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg);
+}
+
+.stage-dropcard-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 2.5rem;
+	height: 2.5rem;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--paper);
+	color: var(--foreground);
+	font-size: var(--font-size-5);
+}
+
+.stage-dropcard-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.stage-dropcard-title {
+	font-size: var(--font-size-3);
+	font-weight: 600;
+}
+
+.stage-dropcard-hint {
+	color: var(--muted);
+	font-size: var(--font-size-2);
+}
+
+.stage-analyzing {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-3);
+	width: min(22rem, 80%);
+}
+
+.stage-analyzing-title {
+	font-size: var(--font-size-5);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+.stage-analyzing-hint {
+	color: var(--muted);
+	font-size: var(--font-size-2);
+}
+
+.stage-recording {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	left: 0;
+}

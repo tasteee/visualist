@@ -1,0 +1,27 @@
+{
+	"name": "@tasteee/vink",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "pnpm --filter @tasteee/zest build && vite --port 5179",
+		"build": "pnpm --filter @tasteee/zest build && svelte-check --tsconfig ./tsconfig.json && vite build",
+		"build:site": "svelte-check --tsconfig ./tsconfig.json && vite build --outDir ../blog/dist/vink --emptyOutDir",
+		"preview": "vite preview --port 5179",
+		"typecheck": "svelte-check --tsconfig ./tsconfig.json"
+	},
+	"dependencies": {
+		"@fontsource/dm-sans": "^5.2.8",
+		"@tasteee/zest": "workspace:*",
+		"phosphor-svelte": "^3.1.1"
+	},
+	"devDependencies": {
+		"@sveltejs/vite-plugin-svelte": "^5.1.1",
+		"@tsconfig/svelte": "^5.0.8",
+		"@types/node": "^26.0.0",
+		"svelte": "^5.56.7",
+		"svelte-check": "^4.7.8",
+		"typescript": "^5.9.3",
+		"vite": "^6.4.3"
+	}
+}

@@ -1,0 +1,29 @@
+.music-stats {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--spacing-3);
+}
+
+.music-stats z-stat {
+	padding: var(--spacing-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg);
+}
+
+.music-bpm {
+	display: flex;
+	align-items: flex-end;
+	gap: var(--spacing-3);
+}
+
+.music-bpm z-field {
+	flex: 1;
+	min-width: 0;
+}
+
+.music-detected {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--font-size-2);
+}

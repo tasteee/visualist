@@ -1,0 +1,40 @@
+.timeline {
+	position: relative;
+	flex: 1;
+	height: 3.25rem;
+	min-width: 0;
+	border-radius: var(--radius-md);
+	cursor: pointer;
+	touch-action: none;
+}
+
+.timeline:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+}
+
+.timeline.isDisabled {
+	cursor: default;
+}
+
+.timeline-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+	color: var(--color-neutral-4);
+	caret-color: var(--foreground);
+	outline-color: var(--accent-alt);
+}
+
+.timeline-empty {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px dashed var(--border);
+	border-radius: var(--radius-md);
+	color: var(--muted);
+	font-size: var(--font-size-2);
+	pointer-events: none;
+}

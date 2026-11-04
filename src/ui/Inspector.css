@@ -1,0 +1,22 @@
+.inspector {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+.inspector-tabs {
+	flex: none;
+	padding: var(--spacing-2) var(--spacing-5) 0;
+	border-bottom: 1px solid var(--border);
+}
+
+.inspector-scroll {
+	flex: 1;
+	min-height: 0;
+	height: 100%;
+}
+
+.inspector-panel {
+	padding: 0 var(--spacing-5) var(--spacing-8);
+}
