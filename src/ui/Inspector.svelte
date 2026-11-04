@@ -1,12 +1,16 @@
 <script lang="ts">
 	import ExportPanel from './ExportPanel.svelte'
+	import LayersPanel from './LayersPanel.svelte'
+	import PostPanel from './PostPanel.svelte'
 	import SettingsPanel from './SettingsPanel.svelte'
 	import './Inspector.css'
 
-	type TabNameT = 'settings' | 'export'
+	type TabNameT = 'settings' | 'layers' | 'post' | 'export'
 
 	const TABS = [
 		{ value: 'settings', label: 'Settings' },
+		{ value: 'layers', label: 'Layers' },
+		{ value: 'post', label: 'Post' },
 		{ value: 'export', label: 'Export' }
 	]
 
@@ -27,6 +31,12 @@
 		<div class="inspector-panel">
 			{#if activeTab === 'settings'}
 				<SettingsPanel />
+			{/if}
+			{#if activeTab === 'layers'}
+				<LayersPanel />
+			{/if}
+			{#if activeTab === 'post'}
+				<PostPanel />
 			{/if}
 			{#if activeTab === 'export'}
 				<ExportPanel />

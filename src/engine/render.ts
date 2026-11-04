@@ -2,6 +2,7 @@ import { findFirstHitIndex, getLevels } from './analysis'
 import { collectEchoes } from './echoes'
 import { getFrameLayout } from './formats'
 import type { FrameLayoutT } from './formats'
+import { drawLayerStack } from './layerRender'
 import type { EchoT } from './echoes'
 import { FRAME_HEIGHT, FRAME_WIDTH, LOGO_CENTER_X, LOGO_CENTER_Y, getLayerHeight, getLayerWidth, getTinted, tintLayer } from './logoLayers'
 import type { LayerT, LogoLayersT } from './logoLayers'
@@ -382,12 +383,11 @@ const drawTitle = (context: CanvasRenderingContext2D, palette: ScenePaletteT, st
 	context.restore()
 }
 
-// One full frame in one mode, back to front. Background and
-// grain fill the frame. Everything else lives in the scene.
-const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT): void => {
+// The built-in logo group: echoes, grain, logo and title. It is
+// one layer in the stack. Grain fills the frame, the rest lives
+// in the 16:9 scene.
+const drawLogoGroup = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT): void => {
 	const palette = getScenePalette(state.input)
-	drawBackground(context, layers, palette, state.frame)
-
 	context.save()
 	applySceneTransform(context, state.frame)
 	for (const echo of state.echoes) drawEcho(context, echo, layers, palette, state)
@@ -400,6 +400,22 @@ const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state
 	drawLogo(context, layers, palette, state)
 	drawTitle(context, palette, state)
 	context.restore()
+}
+
+// One full frame, back to front: the background, then every
+// layer in the stack, the logo group among them.
+const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT): void => {
+	const palette = getScenePalette(state.input)
+	drawBackground(context, layers, palette, state.frame)
+
+	drawLayerStack(context, {
+		layers: state.input.layers,
+		time: state.input.time,
+		signals: state.input.signals,
+		palette: state.input.palette,
+		frame: state.frame,
+		drawLogo: (target) => drawLogoGroup(target, layers, state)
+	})
 }
 
 // Every frame is a pure function of the time and the settings,

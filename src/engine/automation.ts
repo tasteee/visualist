@@ -23,7 +23,13 @@ export const AUTOMATION_CONTROLS: AutomationControlT[] = [
 	{ key: 'echoSpeed', label: 'Echoes speed', min: 0.4, max: 3, step: 0.05 },
 	{ key: 'glitchAmount', label: 'Glitch amount', min: 0, max: 2, step: 0.05 },
 	{ key: 'textureAmount', label: 'Texture amount', min: 0, max: 2, step: 0.05 },
-	{ key: 'solidAmount', label: 'Solids amount', min: 0, max: 2, step: 0.05 }
+	{ key: 'solidAmount', label: 'Solids amount', min: 0, max: 2, step: 0.05 },
+	{ key: 'bloomAmount', label: 'Bloom', min: 0, max: 2, step: 0.05 },
+	{ key: 'aberrationAmount', label: 'Chromatic aberration', min: 0, max: 2, step: 0.05 },
+	{ key: 'warpAmount', label: 'Warp', min: 0, max: 2, step: 0.05 },
+	{ key: 'scanlineAmount', label: 'Scanlines', min: 0, max: 1, step: 0.05 },
+	{ key: 'noiseAmount', label: 'Film noise', min: 0, max: 1, step: 0.05 },
+	{ key: 'vignetteAmount', label: 'Vignette', min: 0, max: 1, step: 0.05 }
 ]
 
 export const findControl = (key: AutomatableKeyT | null): AutomationControlT | null => {

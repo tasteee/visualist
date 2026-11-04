@@ -37,7 +37,14 @@ export const createDefaultSettings = (): SettingsT => ({
 	audioFadeIn: 0,
 	audioFadeOut: 0,
 	videoFadeIn: 0,
-	videoFadeOut: 0
+	videoFadeOut: 0,
+	bloomAmount: 0,
+	aberrationAmount: 0,
+	warpAmount: 0,
+	scanlineAmount: 0,
+	noiseAmount: 0,
+	vignetteAmount: 0,
+	modulations: {}
 })
 
 const STORAGE_KEY = 'vink.settings.v2'
@@ -52,7 +59,8 @@ export const loadSettings = (): SettingsT => {
 		const storedAspectRatio = parsed.aspectRatio
 		const hasValidAspectRatio = checkIsAspectRatio(storedAspectRatio)
 		const aspectRatio = hasValidAspectRatio ? storedAspectRatio : defaults.aspectRatio
-		return { ...defaults, ...parsed, echoStyles, aspectRatio }
+		const modulations = { ...parsed.modulations }
+		return { ...defaults, ...parsed, echoStyles, aspectRatio, modulations }
 	} catch {
 		return defaults
 	}

@@ -10,6 +10,9 @@ import {
 } from './engine/audio'
 import { automation, clampLanesToDuration } from './automation.svelte'
 import { applyAutomation } from './engine/automation'
+import { applySettingsModulation, computeSignals } from './engine/modulation'
+import { applyPostEffects, getPostAmounts } from './engine/post'
+import { layerStore, restoreLayerAssets, startLayerWatchers } from './layers.svelte'
 import { buildDemoAnalysis } from './engine/demo'
 import { buildLogoLayers } from './engine/logoLayers'
 import type { LogoLayersT } from './engine/logoLayers'
@@ -27,7 +30,7 @@ import {
 	loadSettings,
 	saveSettings
 } from './engine/settings'
-import type { AnalysisT, FrameInputT, ModeT, PaletteT, SettingsT } from './engine/types'
+import type { AnalysisT, FrameInputT, LayerT, ModeT, PaletteT, SettingsT, SignalsT } from './engine/types'
 
 export type StatusToneT = 'neutral' | 'success' | 'warning' | 'danger'
 
@@ -144,16 +147,35 @@ const getFrameTime = (): number => {
 	return elapsed % DEMO_LOOP_SECONDS
 }
 
-const buildFrameInput = (time: number): FrameInputT => ({
-	time,
-	analysis,
-	settings: applyAutomation(app.settings, automation.lanes, time),
-	palette: appliedPalette,
-	bpm: analysis.bpm,
-	beatOffset: analysis.beatOffset,
-	title: app.title,
-	isIntroActive: app.isPlaying || app.isRecording
-})
+// Lanes set each control's base for this instant, then the
+// modulations push it around with the music.
+const buildFrameInput = (time: number): FrameInputT => {
+	const signals = computeSignals(analysis, time)
+	const automatedSettings = applyAutomation(app.settings, automation.lanes, time)
+	const settings = applySettingsModulation(automatedSettings, signals)
+
+	return {
+		time,
+		analysis,
+		settings,
+		palette: appliedPalette,
+		bpm: analysis.bpm,
+		beatOffset: analysis.beatOffset,
+		title: app.title,
+		isIntroActive: app.isPlaying || app.isRecording,
+		layers: layerStore.layers as LayerT[],
+		signals
+	}
+}
+
+// The live mod sources at the playhead, for meters in the UI.
+export const getLiveSignals = (): SignalsT => computeSignals(analysis, app.currentTime)
+
+const renderFrame = (context: CanvasRenderingContext2D, time: number, logoLayers: LogoLayersT, width: number, height: number): void => {
+	const input = buildFrameInput(time)
+	drawFrame(context, input, logoLayers, width, height)
+	applyPostEffects(context, getPostAmounts(input.settings), time)
+}
 
 const titleFromFileName = (fileName: string): string => {
 	const withoutExtension = fileName.replace(/\.[^.]+$/, '')
@@ -271,7 +293,7 @@ const tick = (): void => {
 	const time = getFrameTime()
 	const isAnimating = app.isPlaying || app.isRecording || !app.hasAudio
 	const shouldDraw = isDirty || isAnimating
-	if (shouldDraw) drawFrame(context, buildFrameInput(time), currentLayers, size.width, size.height)
+	if (shouldDraw) renderFrame(context, time, currentLayers, size.width, size.height)
 	const recordingElapsed = time - app.trimStart
 	if (shouldDraw && app.isRecording) drawVideoFade(context, size.width, size.height, recordingElapsed)
 	isDirty = false
@@ -447,6 +469,8 @@ const startWatchers = (): void => {
 		$effect(() => {
 			JSON.stringify(app.settings)
 			JSON.stringify(automation.lanes)
+			JSON.stringify(layerStore.layers)
+			void layerStore.assetVersion
 			void app.title
 			void app.bpm
 			void appliedPalette
@@ -471,6 +495,7 @@ const startWatchers = (): void => {
 
 export const startApp = async (): Promise<void> => {
 	startWatchers()
+	startLayerWatchers()
 	const format = pickRecorderFormat()
 	app.recorderLabel = format === null ? 'No video recording' : format.label
 
@@ -487,4 +512,5 @@ export const startApp = async (): Promise<void> => {
 	await document.fonts.load('900 52px "DM Sans"')
 	layers = await buildLogoLayers()
 	app.isLayersReady = true
+	await restoreLayerAssets()
 }

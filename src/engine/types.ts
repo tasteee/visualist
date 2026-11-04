@@ -4,6 +4,16 @@ export type AspectRatioT = '16:9' | '9:16' | '1:1' | '4:5'
 export type FrameRateT = 30 | 60
 export type EchoStyleNameT = 'hollow' | 'faintFill' | 'double' | 'sliced' | 'gritty'
 
+export type ModSourceT = 'bass' | 'mids' | 'highs' | 'energy' | 'kick' | 'snare' | 'beat' | 'bar'
+
+// amount runs -1 to 1, as a share of the control's full range.
+export type ModulationT = {
+	source: ModSourceT
+	amount: number
+}
+
+export type SignalsT = Record<ModSourceT, number>
+
 export type FadeSettingNameT = 'audioFadeIn' | 'audioFadeOut' | 'videoFadeIn' | 'videoFadeOut'
 
 export type EchoStylesT = Record<EchoStyleNameT, boolean>
@@ -30,7 +40,16 @@ export type SettingsT = {
 	audioFadeOut: number
 	videoFadeIn: number
 	videoFadeOut: number
+	bloomAmount: number
+	aberrationAmount: number
+	warpAmount: number
+	scanlineAmount: number
+	noiseAmount: number
+	vignetteAmount: number
+	modulations: SettingModulationsT
 }
+
+export type SettingModulationsT = Partial<Record<AutomatableKeyT, ModulationT>>
 
 export type HitT = {
 	time: number
@@ -76,6 +95,8 @@ export type FrameInputT = {
 	beatOffset: number
 	title: string
 	isIntroActive: boolean
+	layers: LayerT[]
+	signals: SignalsT
 }
 
 export type AutomatableKeyT =
@@ -87,6 +108,12 @@ export type AutomatableKeyT =
 	| 'glitchAmount'
 	| 'textureAmount'
 	| 'solidAmount'
+	| 'bloomAmount'
+	| 'aberrationAmount'
+	| 'warpAmount'
+	| 'scanlineAmount'
+	| 'noiseAmount'
+	| 'vignetteAmount'
 
 export type AutomationControlT = {
 	key: AutomatableKeyT
@@ -109,4 +136,60 @@ export type AutomationLaneT = {
 	id: string
 	controlKey: AutomatableKeyT | null
 	points: AutomationPointT[]
+}
+
+export type LayerKindT = 'logo' | 'text' | 'image' | 'svg'
+
+export type BlendModeT = 'normal' | 'screen' | 'multiply' | 'overlay' | 'softLight' | 'add' | 'difference'
+
+export type PaletteSlotT = 'foreground' | 'accent1' | 'accent2' | 'background'
+
+// SVG layers can keep their own colors or take one from the palette.
+export type SvgColorT = 'original' | PaletteSlotT
+
+export type TextWeightT = 400 | 700 | 900
+
+// x and y are percent of the frame from its center. scale 1 is
+// the layer's natural size. rotation is in degrees.
+export type LayerTransformT = {
+	x: number
+	y: number
+	scale: number
+	rotation: number
+	opacity: number
+}
+
+export type LayerParamKeyT = keyof LayerTransformT
+
+export type FxKindT = 'glow' | 'split' | 'glitch' | 'shake' | 'flicker' | 'blur'
+
+export type LayerFxT = {
+	id: string
+	kind: FxKindT
+	amount: number
+	modulation: ModulationT | null
+}
+
+export type TextContentT = {
+	text: string
+	weight: TextWeightT
+	isUppercase: boolean
+	color: PaletteSlotT
+}
+
+// endTime null means the layer runs to the end of the song.
+export type LayerT = {
+	id: string
+	kind: LayerKindT
+	name: string
+	isVisible: boolean
+	transform: LayerTransformT
+	modulations: Partial<Record<LayerParamKeyT, ModulationT>>
+	blend: BlendModeT
+	startTime: number
+	endTime: number | null
+	fx: LayerFxT[]
+	text: TextContentT | null
+	assetId: string | null
+	svgColor: SvgColorT
 }

@@ -1,12 +1,10 @@
 <script lang="ts">
 	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
-	import { automation, revealLane } from '../automation.svelte'
-	import { checkIsAutomated, findLaneForControl, getControlTone, getLiveControlValue } from '../engine/automation'
 	import { app, detectBpm, getAnalysis, setBpm, setTheme, setTitle } from '../store.svelte'
-	import type { AutomatableKeyT, EchoStyleNameT, ModeT } from '../engine/types'
+	import type { EchoStyleNameT, ModeT } from '../engine/types'
 	import ColorRow from './ColorRow.svelte'
+	import ControlSlider from './ControlSlider.svelte'
 	import Segmented from './Segmented.svelte'
-	import SettingSlider from './SettingSlider.svelte'
 	import './SettingsPanel.css'
 
 	type StyleChipT = {
@@ -42,30 +40,6 @@
 		const isBlockedByGlitch = name === 'sliced' && app.settings.glitchAmount <= 0
 		const isBlockedByTexture = name === 'gritty' && app.settings.textureAmount <= 0
 		return isEchoOn && !isBlockedByGlitch && !isBlockedByTexture
-	}
-
-	const checkIsKeyAutomated = (key: AutomatableKeyT): boolean => checkIsAutomated(automation.lanes, key)
-
-	// Automated sliders follow the playhead and lock until the
-	// lane's points are removed.
-	const getSliderValue = (key: AutomatableKeyT): number => {
-		const lane = automation.lanes.find((candidate) => candidate.controlKey === key)
-		const isAutomated = lane !== undefined && lane.points.length > 0
-		if (!isAutomated) return app.settings[key]
-		const liveValue = getLiveControlValue(lane, app.settings, app.currentTime)
-		return liveValue ?? app.settings[key]
-	}
-
-	const getAutomationTone = (key: AutomatableKeyT): number => {
-		const isAutomated = checkIsKeyAutomated(key)
-		if (!isAutomated) return 0
-		return getControlTone(key)
-	}
-
-	const revealControlLane = (key: AutomatableKeyT) => {
-		const lane = findLaneForControl(automation.lanes, key)
-		if (lane === undefined) return
-		revealLane(lane.id)
 	}
 
 	const handleTitleInput = (event: Event) => {
@@ -113,17 +87,17 @@
 	</div>
 
 	<Segmented label="Theme" options={THEME_OPTIONS} value={app.settings.mode} onchange={(value) => setTheme(value as ModeT)} />
-	<SettingSlider label="Logo border" value={getSliderValue('logoBorder')} automationTone={getAutomationTone('logoBorder')} onreveal={() => revealControlLane('logoBorder')} min={0} max={1} step={0.05} onchange={(value) => (app.settings.logoBorder = value)} />
-	<SettingSlider label="Reactivity" value={getSliderValue('reactivity')} automationTone={getAutomationTone('reactivity')} onreveal={() => revealControlLane('reactivity')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.reactivity = value)} />
+	<ControlSlider controlKey="logoBorder" label="Logo border" />
+	<ControlSlider controlKey="reactivity" label="Reactivity" />
 
 	<ColorRow label="Accent 1" value={app.settings.accent1} onchange={(value) => (app.settings.accent1 = value)} />
 	<ColorRow label="Accent 2" value={app.settings.accent2} onchange={(value) => (app.settings.accent2 = value)} />
 	<ColorRow label="Background" value={app.settings.background} onchange={(value) => (app.settings.background = value)} />
 	<ColorRow label="Foreground" value={app.settings.foreground} onchange={(value) => (app.settings.foreground = value)} />
 
-	<SettingSlider label="Echoes Amount" value={getSliderValue('echoAmount')} automationTone={getAutomationTone('echoAmount')} onreveal={() => revealControlLane('echoAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoAmount = value)} />
-	<SettingSlider label="Echoes Size" value={getSliderValue('echoSize')} automationTone={getAutomationTone('echoSize')} onreveal={() => revealControlLane('echoSize')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoSize = value)} />
-	<SettingSlider label="Echoes Speed" value={getSliderValue('echoSpeed')} automationTone={getAutomationTone('echoSpeed')} onreveal={() => revealControlLane('echoSpeed')} min={0.4} max={3} step={0.05} onchange={(value) => (app.settings.echoSpeed = value)} />
+	<ControlSlider controlKey="echoAmount" label="Echoes Amount" />
+	<ControlSlider controlKey="echoSize" label="Echoes Size" />
+	<ControlSlider controlKey="echoSpeed" label="Echoes Speed" />
 	<div class="settings-chips">
 		{#each STYLE_CHIPS as chip (chip.name)}
 			<z-badge
@@ -140,7 +114,7 @@
 		{/each}
 	</div>
 
-	<SettingSlider label="Glitch Amount" value={getSliderValue('glitchAmount')} automationTone={getAutomationTone('glitchAmount')} onreveal={() => revealControlLane('glitchAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.glitchAmount = value)} />
-	<SettingSlider label="Texture Amount" value={getSliderValue('textureAmount')} automationTone={getAutomationTone('textureAmount')} onreveal={() => revealControlLane('textureAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.textureAmount = value)} />
-	<SettingSlider label="Solids Amount" value={getSliderValue('solidAmount')} automationTone={getAutomationTone('solidAmount')} onreveal={() => revealControlLane('solidAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.solidAmount = value)} />
+	<ControlSlider controlKey="glitchAmount" label="Glitch Amount" />
+	<ControlSlider controlKey="textureAmount" label="Texture Amount" />
+	<ControlSlider controlKey="solidAmount" label="Solids Amount" />
 </div>

@@ -13,3 +13,21 @@ export const openAudioPicker = (): void => {
 	}
 	input.click()
 }
+
+const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/avif'
+const SVG_ACCEPT = 'image/svg+xml,.svg'
+
+export type LayerFileKindT = 'image' | 'svg'
+
+// Opens the system file chooser for a picture layer.
+export const openLayerFilePicker = (kind: LayerFileKindT, onfile: (file: File) => void): void => {
+	const input = document.createElement('input')
+	input.type = 'file'
+	input.accept = kind === 'svg' ? SVG_ACCEPT : IMAGE_ACCEPT
+	input.onchange = () => {
+		const file = input.files?.[0]
+		if (file === undefined) return
+		onfile(file)
+	}
+	input.click()
+}

@@ -1,0 +1,121 @@
+.layer-row {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-1);
+	padding-right: var(--spacing-2);
+	border: 1px solid transparent;
+	border-radius: var(--radius-lg);
+	transition:
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease;
+}
+
+.layer-row:hover {
+	background: var(--paper-soft);
+}
+
+.layer-row.isSelected {
+	border-color: var(--accent);
+	background: color-mix(in oklch, var(--accent) 6%, var(--bg));
+}
+
+.layer-row-main {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: var(--spacing-3);
+	min-width: 0;
+	padding: var(--spacing-2) var(--spacing-2) var(--spacing-2) var(--spacing-3);
+	border: 0;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--foreground);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.layer-row-main:focus-visible,
+.layer-row-visibility:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.layer-row-icon {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-8);
+	height: var(--spacing-8);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg);
+	color: var(--muted);
+	font-size: var(--font-size-3);
+}
+
+.layer-row.isSelected .layer-row-icon {
+	border-color: color-mix(in oklch, var(--accent) 40%, var(--border));
+	color: var(--accent);
+}
+
+.layer-row-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 0.125rem;
+	min-width: 0;
+}
+
+.layer-row-name {
+	overflow: hidden;
+	font-size: var(--font-size-small);
+	font-weight: var(--font-weight-semibold);
+	line-height: 1.25;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.layer-row-detail {
+	overflow: hidden;
+	color: var(--secondary);
+	font-size: var(--font-size-caption);
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.layer-row-detail.isWarning {
+	color: var(--warning);
+}
+
+.layer-row-fx {
+	color: var(--accent-alt);
+}
+
+.layer-row.isHidden .layer-row-text,
+.layer-row.isHidden .layer-row-icon {
+	opacity: 0.45;
+}
+
+.layer-row-visibility {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-8);
+	height: var(--spacing-8);
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--muted);
+	font-size: var(--font-size-3);
+	cursor: pointer;
+	transition: color var(--motion-fast) ease;
+}
+
+.layer-row-visibility:hover {
+	color: var(--foreground);
+}

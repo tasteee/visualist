@@ -1,0 +1,77 @@
+.layer-editor {
+	display: flex;
+	flex-direction: column;
+}
+
+.layer-editor-name {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+}
+
+.layer-editor-name z-input {
+	flex: 1;
+	min-width: 0;
+}
+
+.layer-editor-pair {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: end;
+	gap: var(--spacing-3);
+}
+
+.layer-editor-note {
+	margin: 0;
+	color: var(--secondary);
+	font-size: var(--font-size-2);
+	line-height: 1.45;
+}
+
+.layer-editor-note.isWarning {
+	color: var(--warning);
+}
+
+.layer-editor-fx-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-2);
+}
+
+.layer-editor-fx-add {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--spacing-2);
+}
+
+.layer-editor-fx-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--spacing-1);
+	height: var(--spacing-7);
+	padding: 0 var(--spacing-3) 0 var(--spacing-2);
+	border: 1px dashed var(--border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--secondary);
+	font: inherit;
+	font-size: var(--font-size-caption);
+	font-weight: var(--font-weight-semibold);
+	cursor: pointer;
+	transition:
+		color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease,
+		background-color var(--motion-fast) ease;
+}
+
+.layer-editor-fx-chip:hover {
+	border-color: var(--accent-alt);
+	border-style: solid;
+	background: color-mix(in oklch, var(--accent-alt) 8%, transparent);
+	color: var(--accent-alt);
+}
+
+.layer-editor-fx-chip:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}

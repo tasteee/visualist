@@ -1,0 +1,57 @@
+.layers-panel-add {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--spacing-2);
+}
+
+.layers-panel-add-button {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--spacing-2);
+	padding: var(--spacing-4) var(--spacing-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg);
+	color: var(--foreground);
+	font: inherit;
+	font-size: var(--font-size-small);
+	font-weight: var(--font-weight-semibold);
+	cursor: pointer;
+	transition:
+		border-color var(--motion-fast) ease,
+		background-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.layers-panel-add-button svg {
+	color: var(--muted);
+	font-size: var(--font-size-5);
+	transition: color var(--motion-fast) ease;
+}
+
+.layers-panel-add-button:hover {
+	border-color: var(--accent);
+	background: color-mix(in oklch, var(--accent) 6%, var(--bg));
+}
+
+.layers-panel-add-button:hover svg {
+	color: var(--accent);
+}
+
+.layers-panel-add-button:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.layers-panel-add-button:disabled {
+	opacity: var(--control-disabled-opacity);
+	cursor: progress;
+}
+
+.layers-panel-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-1);
+}

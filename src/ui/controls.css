@@ -140,6 +140,84 @@
 	--setting-tone: var(--color-neutral-7);
 }
 
+.setting-slider-mod {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: var(--spacing-1);
+	min-width: var(--spacing-5);
+	height: var(--spacing-5);
+	padding: 0 var(--spacing-1);
+	border: 1px solid transparent;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--muted);
+	font: inherit;
+	font-size: var(--font-size-0);
+	font-weight: var(--font-weight-semibold);
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity var(--motion-fast) ease,
+		color var(--motion-fast) ease,
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease;
+}
+
+.setting-slider:hover .setting-slider-mod,
+.setting-slider-mod:focus-visible,
+.setting-slider-mod.isOpen,
+.setting-slider-mod.isActive {
+	opacity: 1;
+}
+
+.setting-slider-mod:hover {
+	color: var(--accent-alt);
+}
+
+.setting-slider-mod:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.setting-slider-mod.isActive {
+	padding: 0 var(--spacing-2);
+	border-color: color-mix(in oklch, var(--accent-alt) 45%, transparent);
+	color: var(--accent-alt);
+}
+
+.setting-slider-mod.isActive:hover,
+.setting-slider-mod.isOpen {
+	background: color-mix(in oklch, var(--accent-alt) 12%, transparent);
+}
+
+.setting-slider-mod-label {
+	max-width: 7.5rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Where the modulation has pushed the value right now. */
+.setting-slider-meter {
+	position: relative;
+	height: 2px;
+	margin-top: var(--spacing-2);
+	overflow: hidden;
+	border-radius: 999px;
+	background: color-mix(in oklch, var(--accent-alt) 14%, transparent);
+}
+
+.setting-slider-meter-fill {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	border-radius: 999px;
+	background: var(--accent-alt);
+}
+
 .color-row {
 	display: flex;
 	align-items: center;
