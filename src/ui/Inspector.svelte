@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { inspector, showInspectorTab } from '../inspector.svelte'
+	import type { InspectorTabT } from '../inspector.svelte'
 	import ExportPanel from './ExportPanel.svelte'
 	import LayersPanel from './LayersPanel.svelte'
 	import PostPanel from './PostPanel.svelte'
 	import SettingsPanel from './SettingsPanel.svelte'
 	import './Inspector.css'
 
-	type TabNameT = 'settings' | 'layers' | 'post' | 'export'
 
 	const TABS = [
 		{ value: 'settings', label: 'Settings' },
@@ -14,11 +15,11 @@
 		{ value: 'export', label: 'Export' }
 	]
 
-	let activeTab = $state<TabNameT>('settings')
+	const activeTab = $derived(inspector.activeTab)
 
 	const handleTabChange = (event: Event) => {
 		const detail = (event as CustomEvent<{ value: string }>).detail
-		activeTab = detail.value as TabNameT
+		showInspectorTab(detail.value as InspectorTabT)
 	}
 </script>
 

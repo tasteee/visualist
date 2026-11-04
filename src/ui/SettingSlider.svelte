@@ -19,6 +19,9 @@
 		// the lane's color. 0 or missing when it is free.
 		automationTone?: number
 		onreveal?: () => void
+		// Passing onautomate shows an Automate button on hover
+		// while the control has no lane.
+		onautomate?: () => void
 		// Passing onmodulationchange turns on the mod badge.
 		// liveValue is where the modulation has pushed the value
 		// at the playhead, shown as a meter under the slider.
@@ -53,6 +56,11 @@
 	const livePercent = $derived(range <= 0 ? 0 : Math.min(100, Math.max(0, ((liveValue - props.min) / range) * 100)))
 	const liveStyle = $derived(`${livePercent.toFixed(2)}%`)
 
+	const canAutomate = $derived(props.onautomate !== undefined && !isAutomated)
+	const automateLabel = $derived(`Automate ${props.label} in the timeline`)
+
+	const handleAutomate = () => props.onautomate?.()
+
 	const handleModToggle = () => {
 		isModOpen = !isModOpen
 	}
@@ -77,6 +85,13 @@
 				<button class={badgeClass} type="button" aria-label="{props.label} is automated. Open its lane." onclick={handleReveal}>
 					<LightningIcon weight="fill" />
 					Automated
+				</button>
+			</z-tooltip>
+		{/if}
+		{#if canAutomate}
+			<z-tooltip content={automateLabel} placement="left" openDelay={300}>
+				<button class="setting-slider-automate" type="button" aria-label={automateLabel} onclick={handleAutomate}>
+					<LightningIcon weight="bold" />
 				</button>
 			</z-tooltip>
 		{/if}

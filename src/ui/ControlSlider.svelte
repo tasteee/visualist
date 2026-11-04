@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { automation, revealLane } from '../automation.svelte'
-	import { findControl, findLaneForControl, getControlTone, getLiveControlValue } from '../engine/automation'
+	import { automateTarget, automation, revealLane } from '../automation.svelte'
+	import { findControl, findLaneForTarget, getLiveLaneValue, getTargetTone } from '../engine/automation'
 	import { applyModulation } from '../engine/modulation'
 	import { app, getLiveSignals } from '../store.svelte'
-	import type { AutomatableKeyT, ModulationT } from '../engine/types'
+	import type { AutomatableKeyT, LaneTargetT, ModulationT } from '../engine/types'
 	import SettingSlider from './SettingSlider.svelte'
 
 	// One global setting, wired to its automation lane and its
@@ -17,13 +17,14 @@
 
 	const props: ControlSliderPropsT = $props()
 
+	const target = $derived<LaneTargetT>({ kind: 'setting', key: props.controlKey })
 	const control = $derived(findControl(props.controlKey))
 	const min = $derived(control === null ? 0 : control.min)
 	const max = $derived(control === null ? 1 : control.max)
 	const step = $derived(control === null ? 0.01 : control.step)
-	const lane = $derived(findLaneForControl(automation.lanes, props.controlKey))
+	const lane = $derived(findLaneForTarget(automation.lanes, target))
 	const isAutomated = $derived(lane !== undefined && lane.points.length > 0)
-	const automationTone = $derived(isAutomated ? getControlTone(props.controlKey) : 0)
+	const automationTone = $derived(isAutomated ? getTargetTone(target, []) : 0)
 	const modulation = $derived(app.settings.modulations[props.controlKey] ?? null)
 
 	// Automated sliders follow the playhead and lock until the
@@ -31,7 +32,7 @@
 	const getBaseValue = (): number => {
 		const baseSetting = app.settings[props.controlKey]
 		if (!isAutomated || lane === undefined) return baseSetting
-		const laneValue = getLiveControlValue(lane, app.settings, app.currentTime)
+		const laneValue = getLiveLaneValue(lane, app.settings, [], app.currentTime)
 		return laneValue ?? baseSetting
 	}
 
@@ -55,6 +56,8 @@
 		revealLane(lane.id)
 	}
 
+	const handleAutomate = () => automateTarget(target)
+
 	const handleModulationChange = (nextModulation: ModulationT | null) => {
 		const isRemoved = nextModulation === null
 		if (isRemoved) {
@@ -75,6 +78,7 @@
 	isDisabled={props.isDisabled}
 	{automationTone}
 	onreveal={handleReveal}
+	onautomate={app.hasAudio ? handleAutomate : undefined}
 	{modulation}
 	{liveValue}
 	onmodulationchange={handleModulationChange}

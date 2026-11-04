@@ -1,0 +1,224 @@
+.lane-group {
+	display: grid;
+	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
+	height: var(--spacing-11);
+	border-bottom: 1px solid var(--border);
+}
+
+/* Header column */
+
+.lane-group-header {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-1);
+	min-width: 0;
+	padding: 0 var(--spacing-2);
+	border-right: 1px solid var(--border);
+	background: var(--paper-soft);
+	transition: background-color var(--motion-base) ease;
+}
+
+/* A thin accent rule marks the layer open in the panel. */
+.lane-group.isSelected .lane-group-header {
+	background: color-mix(in oklab, var(--accent) 9%, var(--paper-soft));
+}
+
+.lane-group.isSelected .lane-group-header::before {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: 2px;
+	background: var(--accent);
+	content: '';
+}
+
+.lane-group-caret {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-5);
+	height: var(--spacing-5);
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--secondary);
+	font-size: var(--font-size-1);
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.lane-group-caret svg {
+	transform: rotate(90deg);
+	transition: transform var(--motion-base) var(--ease-move);
+}
+
+.lane-group.isCollapsed .lane-group-caret svg {
+	transform: rotate(0deg);
+}
+
+.lane-group-caret:hover {
+	background: var(--paper);
+	color: var(--foreground);
+}
+
+.lane-group-title {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: var(--spacing-2);
+	min-width: 0;
+	height: 100%;
+	padding: 0 var(--spacing-1);
+	border: 0;
+	background: transparent;
+	color: var(--foreground);
+	font: inherit;
+	text-align: left;
+}
+
+.lane-group-title.canSelect {
+	cursor: pointer;
+}
+
+.lane-group-title:disabled {
+	cursor: default;
+}
+
+.lane-group-icon {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-7);
+	height: var(--spacing-7);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg);
+	color: var(--muted);
+	font-size: var(--font-size-2);
+	transition:
+		border-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.lane-group.isSelected .lane-group-icon,
+.lane-group-title.canSelect:hover .lane-group-icon {
+	border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
+	color: var(--accent);
+}
+
+.lane-group-text {
+	display: flex;
+	flex-direction: column;
+	gap: 0.0625rem;
+	min-width: 0;
+}
+
+.lane-group-name {
+	overflow: hidden;
+	font-size: var(--font-size-small);
+	font-weight: var(--font-weight-semibold);
+	line-height: 1.2;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.lane-group-detail {
+	overflow: hidden;
+	color: var(--secondary);
+	font-size: var(--font-size-caption);
+	line-height: 1.25;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.lane-group.isHidden .lane-group-text,
+.lane-group.isHidden .lane-group-icon {
+	opacity: 0.45;
+}
+
+.lane-group-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 0.125rem;
+}
+
+.lane-group-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-6);
+	height: var(--spacing-6);
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--muted);
+	font-size: var(--font-size-2);
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.lane-group-action:hover:not(:disabled) {
+	background: var(--paper);
+	color: var(--foreground);
+}
+
+.lane-group-action:disabled {
+	cursor: default;
+	opacity: var(--control-disabled-opacity);
+}
+
+.lane-group-caret:focus-visible,
+.lane-group-title:focus-visible,
+.lane-group-action:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+/* Track column */
+
+.lane-group-track {
+	position: relative;
+	min-width: 0;
+	overflow: hidden;
+	background: color-mix(in oklab, var(--paper-soft) 40%, var(--bg));
+}
+
+.lane-group-grid {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.lane-group-gridline {
+	stroke: var(--color-neutral-2);
+	stroke-width: 1;
+	vector-effect: non-scaling-stroke;
+}
+
+.lane-group-gridline.isLabel {
+	stroke: var(--color-neutral-3);
+}
+
+.lane-group-playhead {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--group-x);
+	z-index: 2;
+	width: 1px;
+	background: var(--foreground);
+	pointer-events: none;
+}

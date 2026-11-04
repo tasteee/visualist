@@ -1,8 +1,10 @@
 import { toaster } from '@tasteee/zest'
+import { removeLanesForFx, removeLanesForLayer } from './automation.svelte'
 import { deleteAsset, importAssetFile, restoreAssets } from './engine/assets'
 import type { AssetRequestT } from './engine/assets'
 import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createTextLayer } from './engine/layers'
 import type { FxKindT, LayerFxT, LayerT } from './engine/types'
+import { showInspectorTab } from './inspector.svelte'
 
 type LayerStoreT = {
 	layers: LayerT[]
@@ -85,6 +87,31 @@ export const selectLayer = (layerId: string | null): void => {
 	layerStore.selectedLayerId = layerId
 }
 
+// Picking a layer in the timeline opens it in the panel.
+export const focusLayer = (layerId: string): void => {
+	layerStore.selectedLayerId = layerId
+	showInspectorTab('layers')
+}
+
+const MIN_CLIP_SECONDS = 0.1
+
+export type LayerTimeRangeT = {
+	startTime: number
+	endTime: number | null
+}
+
+// endTime at or past the song's end means "to the end", so the
+// layer keeps going if a longer song is loaded later.
+export const setLayerTimeRange = (layerId: string, startTime: number, endTime: number, songLength: number): void => {
+	const layer = findLayer(layerId)
+	if (layer === undefined) return
+	const safeStart = Math.max(0, Math.min(startTime, songLength - MIN_CLIP_SECONDS))
+	const safeEnd = Math.max(safeStart + MIN_CLIP_SECONDS, endTime)
+	const isAtSongEnd = safeEnd >= songLength - 0.005
+	layer.startTime = safeStart
+	layer.endTime = isAtSongEnd ? null : safeEnd
+}
+
 // New layers land on top of the stack, in front of everything.
 const pushLayer = (layer: LayerT): void => {
 	layerStore.layers.push(layer)
@@ -119,6 +146,7 @@ export const removeLayer = (layerId: string): void => {
 	layerStore.layers = layerStore.layers.filter((candidate) => candidate.id !== layerId)
 	const wasSelected = layerStore.selectedLayerId === layerId
 	if (wasSelected) layerStore.selectedLayerId = null
+	removeLanesForLayer(layerId)
 	const assetId = layer.assetId
 	if (assetId !== null) void deleteAsset(assetId)
 }
@@ -163,6 +191,7 @@ export const removeLayerFx = (layerId: string, fxId: string): void => {
 	const layer = findLayer(layerId)
 	if (layer === undefined) return
 	layer.fx = layer.fx.filter((fx: LayerFxT) => fx.id !== fxId)
+	removeLanesForFx(fxId)
 }
 
 const collectAssetRequests = (): AssetRequestT[] => {

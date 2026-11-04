@@ -8,8 +8,8 @@ import {
 	setPausedPosition,
 	startPlayback
 } from './engine/audio'
-import { automation, clampLanesToDuration } from './automation.svelte'
-import { applyAutomation } from './engine/automation'
+import { automation, clampLanesToDuration, startAutomationWatchers } from './automation.svelte'
+import { applyAutomation, applyLayerAutomation } from './engine/automation'
 import { applySettingsModulation, computeSignals } from './engine/modulation'
 import { applyPostEffects, getPostAmounts } from './engine/post'
 import { layerStore, restoreLayerAssets, startLayerWatchers } from './layers.svelte'
@@ -163,7 +163,7 @@ const buildFrameInput = (time: number): FrameInputT => {
 		beatOffset: analysis.beatOffset,
 		title: app.title,
 		isIntroActive: app.isPlaying || app.isRecording,
-		layers: layerStore.layers as LayerT[],
+		layers: applyLayerAutomation(layerStore.layers as LayerT[], app.settings, automation.lanes, time),
 		signals
 	}
 }
@@ -496,6 +496,7 @@ const startWatchers = (): void => {
 export const startApp = async (): Promise<void> => {
 	startWatchers()
 	startLayerWatchers()
+	startAutomationWatchers()
 	const format = pickRecorderFormat()
 	app.recorderLabel = format === null ? 'No video recording' : format.label
 

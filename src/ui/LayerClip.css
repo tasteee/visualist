@@ -1,0 +1,103 @@
+/* A layer's visible span on the timeline. Its body moves the
+   whole span, its edges trim the start and the end. */
+.layer-clip {
+	position: absolute;
+	top: var(--spacing-2);
+	right: var(--clip-right);
+	bottom: var(--spacing-2);
+	left: var(--clip-left);
+	z-index: 1;
+	display: flex;
+	align-items: stretch;
+	min-width: var(--spacing-3);
+	border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--accent) 14%, var(--bg));
+	color: var(--foreground);
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+	transition:
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease;
+}
+
+.layer-clip:hover {
+	border-color: color-mix(in oklab, var(--accent) 70%, transparent);
+}
+
+.layer-clip.isSelected {
+	border-color: var(--accent);
+	background: color-mix(in oklab, var(--accent) 22%, var(--bg));
+}
+
+.layer-clip.isDragging {
+	cursor: grabbing;
+}
+
+.layer-clip.isHidden {
+	border-style: dashed;
+	background: transparent;
+	color: var(--secondary);
+}
+
+.layer-clip:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.layer-clip-label {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: var(--spacing-2);
+	min-width: 0;
+	padding: 0 var(--spacing-2);
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.layer-clip-name {
+	overflow: hidden;
+	font-size: var(--font-size-caption);
+	font-weight: var(--font-weight-semibold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.layer-clip-range {
+	flex: none;
+	color: var(--accent);
+	font-size: var(--font-size-caption);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-weight-medium);
+	white-space: nowrap;
+}
+
+.layer-clip-edge {
+	position: relative;
+	flex: none;
+	width: var(--spacing-2);
+	cursor: ew-resize;
+}
+
+/* A short grip line shows on hover so the edges read as
+   handles without crowding the bar at rest. */
+.layer-clip-edge::after {
+	position: absolute;
+	top: 30%;
+	bottom: 30%;
+	left: 50%;
+	width: 2px;
+	border-radius: 999px;
+	background: var(--accent);
+	opacity: 0;
+	transform: translateX(-50%);
+	transition: opacity var(--motion-fast) ease;
+	content: '';
+}
+
+.layer-clip:hover .layer-clip-edge::after,
+.layer-clip.isDragging .layer-clip-edge::after {
+	opacity: 0.8;
+}

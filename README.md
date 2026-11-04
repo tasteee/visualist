@@ -143,6 +143,16 @@ layout.json (pivot and size). It is never retyped in a font.
   click it to seek. The bar along its top is the export range.
 - The overview at the bottom shows the whole song: drag the window
   to scroll, drag its edges to zoom, double-click to fit.
+- Lanes are grouped: **Scene and post** for the global controls,
+  then one group per layer, front to back. Click a group's caret to
+  fold its lanes, and its + to automate another of its controls.
+- Each layer's header row holds its **clip bar**: drag the body to
+  move when the layer shows, drag an edge to trim it, double-click to
+  fill the whole song. Arrow keys nudge it, Shift+arrows trim the end.
+- Clicking a layer's header, bar or lanes opens it in the Layers tab.
+  Automated sliders lock and show their lane's color there. Hover a
+  free slider and press the lightning icon to give it a lane.
+- Lanes are saved with the layers, so a reload keeps them.
 - Drag the grip above the editor to resize it. The video keeps its
   frame shape in the space left over.
 

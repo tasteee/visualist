@@ -9,6 +9,7 @@
 	import type { BlendModeT, FxKindT, LayerT, PaletteSlotT, SvgColorT, TextWeightT } from '../engine/types'
 	import { addLayerFx, checkCanMove, layerStore, moveLayer, removeLayer, removeLayerFx } from '../layers.svelte'
 	import { app } from '../store.svelte'
+	import { formatPreciseTime } from '../engine/timeline'
 	import FxRow from './FxRow.svelte'
 	import LayerParamSlider from './LayerParamSlider.svelte'
 	import Section from './Section.svelte'
@@ -22,7 +23,6 @@
 	const props: LayerEditorPropsT = $props()
 
 	const NAME_LIMIT = 40
-	const TIME_STEP = 0.1
 
 	const isLogo = $derived(props.layer.kind === 'logo')
 	const isText = $derived(props.layer.kind === 'text')
@@ -49,8 +49,6 @@
 	const isMissingFile = $derived(getIsMissingFile())
 
 	const readText = (event: Event): string => (event as CustomEvent<{ value: string }>).detail.value
-
-	const readNumber = (event: Event): number => (event as CustomEvent<{ value: number }>).detail.value
 
 	const handleNameChange = (event: Event) => {
 		const name = readText(event).slice(0, NAME_LIMIT)
@@ -92,28 +90,8 @@
 		props.layer.blend = readText(event) as BlendModeT
 	}
 
-	const handleStartChange = (event: Event) => {
-		const value = readNumber(event)
-		const isNumber = Number.isFinite(value)
-		if (!isNumber) return
-		const latestStart = Math.max(0, endTimeValue - TIME_STEP)
-		props.layer.startTime = Math.min(Math.max(0, value), latestStart)
-	}
-
-	// Reaching the song's end means "run to the end", so the
-	// layer keeps going if a longer song is loaded later.
-	const handleEndChange = (event: Event) => {
-		const value = readNumber(event)
-		const isNumber = Number.isFinite(value)
-		if (!isNumber) return
-		const isAtSongEnd = value >= songLength - TIME_STEP / 2
-		if (isAtSongEnd) {
-			props.layer.endTime = null
-			return
-		}
-		const earliestEnd = props.layer.startTime + TIME_STEP
-		props.layer.endTime = Math.max(earliestEnd, value)
-	}
+	const timingLabel = $derived(`${formatPreciseTime(props.layer.startTime)} – ${formatPreciseTime(endTimeValue)}`)
+	const timingDescription = $derived(app.hasAudio ? `Shows ${timingLabel}. Drag its bar in the timeline to change when.` : 'Load a song to set when this layer shows.')
 
 	const handleAddFx = (kind: FxKindT) => addLayerFx(props.layer.id, kind)
 
@@ -170,25 +148,17 @@
 		{/each}
 	</Section>
 
-	<Section title="Blend and timing" description="Layers fade in and out over a quarter second at their edges.">
+	<Section title="Blend and timing" description={timingDescription}>
 		<z-field label="Blend">
 			<z-select value={props.layer.blend} options={BLEND_OPTIONS} aria-label="Blend mode" onchange={handleBlendChange}></z-select>
 		</z-field>
-		<div class="layer-editor-pair">
-			<z-field label="Starts (s)">
-				<z-number-input value={Number(props.layer.startTime.toFixed(2))} min={0} max={songLength} step={TIME_STEP} isFullWidth onchange={handleStartChange}></z-number-input>
-			</z-field>
-			<z-field label="Ends (s)">
-				<z-number-input value={Number(endTimeValue.toFixed(2))} min={0} max={songLength} step={TIME_STEP} isFullWidth onchange={handleEndChange}></z-number-input>
-			</z-field>
-		</div>
 	</Section>
 
 	<Section title="Effects" description="Stacked in order. Each one can follow the music.">
 		{#if hasFx}
 			<div class="layer-editor-fx-list">
 				{#each props.layer.fx as fx (fx.id)}
-					<FxRow {fx} onremove={() => handleRemoveFx(fx.id)} />
+					<FxRow layerId={props.layer.id} {fx} onremove={() => handleRemoveFx(fx.id)} />
 				{/each}
 			</div>
 		{/if}

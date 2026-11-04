@@ -1,7 +1,9 @@
 <script lang="ts">
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import { automation, deletePoint, movePoint, recordHistory } from '../automation.svelte'
-	import { findControl, toControlValue, toNormalized } from '../engine/automation'
+	import { getTargetControl, toControlValue, toNormalized } from '../engine/automation'
+	import type { LayerT } from '../engine/types'
+	import { layerStore } from '../layers.svelte'
 	import { app } from '../store.svelte'
 	import './AutomationPopover.css'
 
@@ -19,7 +21,7 @@
 
 	const lane = $derived(automation.lanes.find((candidate) => candidate.id === props.laneId))
 	const point = $derived(lane?.points.find((candidate) => candidate.id === props.pointId))
-	const control = $derived(lane === undefined ? null : findControl(lane.controlKey))
+	const control = $derived(lane === undefined ? null : getTargetControl(lane.target, layerStore.layers as LayerT[]))
 	const isReady = $derived(lane !== undefined && point !== undefined && control !== null)
 
 	const controlValue = $derived(control === null || point === undefined ? 0 : Number(toControlValue(control, point.value).toFixed(2)))

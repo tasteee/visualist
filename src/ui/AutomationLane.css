@@ -65,6 +65,23 @@
 	opacity: 1;
 }
 
+/* Lanes under a layer step in from the group's header, with a
+   guide line tying them to it. */
+.automation-lane.isNested .automation-lane-header {
+	padding-left: var(--spacing-6);
+	background: color-mix(in oklab, var(--paper) 70%, var(--bg));
+}
+
+.automation-lane.isNested .automation-lane-header::before {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--spacing-4);
+	width: 1px;
+	background: var(--border);
+	content: '';
+}
+
 .automation-lane.isFlashing .automation-lane-header {
 	background: color-mix(in oklab, var(--lane-tone) 16%, var(--paper));
 }

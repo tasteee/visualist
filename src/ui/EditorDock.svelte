@@ -4,8 +4,25 @@
 	import CaretDoubleUpIcon from 'phosphor-svelte/lib/CaretDoubleUpIcon'
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
-	import { addLane, automation, checkAreAllCollapsed, checkCanAddLane, redo, toggleAllCollapsed, undo } from '../automation.svelte'
+	import {
+		addLayerLane,
+		addSettingLane,
+		automation,
+		checkAreAllCollapsed,
+		checkCanAddLayerLane,
+		checkCanAddSettingLane,
+		checkIsGroupCollapsed,
+		getLanesInGroup,
+		redo,
+		revealLane,
+		toggleAllCollapsed,
+		toggleGroupCollapsed,
+		undo
+	} from '../automation.svelte'
+	import { GLOBAL_GROUP_ID } from '../engine/automation'
 	import { buildGrid, ratioToTime } from '../engine/timeline'
+	import type { LayerT } from '../engine/types'
+	import { focusLayer, layerStore, toggleLayerVisible } from '../layers.svelte'
 	import { app, formatTime, getAnalysis, seekTo } from '../store.svelte'
 	import {
 		MAX_DOCK_SHARE,
@@ -24,6 +41,8 @@
 	} from '../timeline.svelte'
 	import AutomationLane from './AutomationLane.svelte'
 	import AutomationPopover from './AutomationPopover.svelte'
+	import LaneGroup from './LaneGroup.svelte'
+	import LayerClip from './LayerClip.svelte'
 	import OverviewBar from './OverviewBar.svelte'
 	import TimeRuler from './TimeRuler.svelte'
 	import TransportBar from './TransportBar.svelte'
@@ -68,10 +87,22 @@
 
 	const laneCount = $derived(automation.lanes.length)
 	const hasLanes = $derived(laneCount > 0)
-	const canAddLane = $derived(checkCanAddLane())
+	const formatLaneCount = (count: number): string => {
+		if (count === 0) return 'No lanes'
+		if (count === 1) return '1 lane'
+		return `${count} lanes`
+	}
+
+	const canAddSettingLane = $derived(checkCanAddSettingLane())
 	const areAllCollapsed = $derived(checkAreAllCollapsed())
 	const collapseAllLabel = $derived(areAllCollapsed ? 'Expand all lanes' : 'Collapse all lanes')
-	const addLaneLabel = $derived(canAddLane ? 'Add automation lane' : 'Every control already has a lane')
+	const addLaneLabel = $derived(canAddSettingLane ? 'Add a scene and post lane' : 'Every scene and post control already has a lane')
+	const globalLanes = $derived(getLanesInGroup(GLOBAL_GROUP_ID))
+	const isGlobalCollapsed = $derived(checkIsGroupCollapsed(GLOBAL_GROUP_ID))
+	const globalDetail = $derived(formatLaneCount(globalLanes.length))
+
+	// Front to back, matching the Layers panel.
+	const layersFrontToBack = $derived([...layerStore.layers].reverse() as LayerT[])
 	const laneCountLabel = $derived(String(laneCount))
 	const songName = $derived(app.fileName === '' ? 'Untitled' : app.fileName)
 	const songMeta = $derived(`${formatTime(app.duration)} · ${Math.round(analysis.bpm)} BPM`)
@@ -226,13 +257,24 @@
 		editor = null
 	}
 
-	const handleAddLane = () => {
-		const laneId = addLane()
+	const handleAddSettingLane = () => {
+		const laneId = addSettingLane()
 		if (laneId === null) return
-		requestAnimationFrame(() => {
-			const lanes = frame.querySelector('.editor-lanes')
-			lanes?.scrollTo({ top: lanes.scrollHeight, behavior: 'smooth' })
-		})
+		revealLane(laneId)
+	}
+
+	const handleAddLayerLane = (layerId: string) => {
+		const laneId = addLayerLane(layerId)
+		if (laneId === null) return
+		revealLane(laneId)
+		focusLayer(layerId)
+	}
+
+	const getLayerDetail = (layer: LayerT): string => {
+		const laneCount = getLanesInGroup(layer.id).length
+		const isHidden = !layer.isVisible
+		if (isHidden) return `Hidden · ${formatLaneCount(laneCount)}`
+		return formatLaneCount(laneCount)
 	}
 </script>
 
@@ -270,7 +312,7 @@
 						</button>
 					</z-tooltip>
 					<z-tooltip content={addLaneLabel} placement="top">
-						<button class="editor-icon" type="button" aria-label="Add automation lane" disabled={!canAddLane} onclick={handleAddLane}>
+						<button class="editor-icon" type="button" aria-label={addLaneLabel} disabled={!canAddSettingLane} onclick={handleAddSettingLane}>
 							<PlusIcon weight="bold" />
 						</button>
 					</z-tooltip>
@@ -291,21 +333,56 @@
 		</div>
 
 		<div class="editor-lanes">
-			{#each automation.lanes as lane (lane.id)}
-				<AutomationLane {lane} {grid} onedit={openEditor} />
+			<LaneGroup
+				kind="global"
+				title="Scene and post"
+				detail={globalDetail}
+				{grid}
+				isCollapsed={isGlobalCollapsed}
+				canAddLane={canAddSettingLane}
+				ontoggle={() => toggleGroupCollapsed(GLOBAL_GROUP_ID)}
+				onadd={handleAddSettingLane}
+			/>
+			{#if !isGlobalCollapsed}
+				{#each globalLanes as lane (lane.id)}
+					<AutomationLane {lane} {grid} isNested onedit={openEditor} />
+				{/each}
+			{/if}
+
+			{#each layersFrontToBack as layer (layer.id)}
+				{@const isCollapsed = checkIsGroupCollapsed(layer.id)}
+				{@const isSelected = layerStore.selectedLayerId === layer.id}
+				<LaneGroup
+					kind={layer.kind}
+					title={layer.name}
+					detail={getLayerDetail(layer)}
+					{grid}
+					{isCollapsed}
+					{isSelected}
+					isHidden={!layer.isVisible}
+					canAddLane={checkCanAddLayerLane(layer.id)}
+					ontoggle={() => toggleGroupCollapsed(layer.id)}
+					onadd={() => handleAddLayerLane(layer.id)}
+					onselect={() => focusLayer(layer.id)}
+					ontogglevisible={() => toggleLayerVisible(layer.id)}
+				>
+					{#snippet track()}
+						<LayerClip {layer} {grid} {isSelected} />
+					{/snippet}
+				</LaneGroup>
+				{#if !isCollapsed}
+					<div class="editor-layer-lanes" role="presentation" onpointerdowncapture={() => focusLayer(layer.id)}>
+						{#each getLanesInGroup(layer.id) as lane (lane.id)}
+							<AutomationLane {lane} {grid} isNested onedit={openEditor} />
+						{/each}
+					</div>
+				{/if}
 			{/each}
 
-			<div class="editor-add-row" class:isEmpty={!hasLanes}>
-				<div class="editor-add-cell">
-					<button class="editor-add-button" type="button" disabled={!canAddLane} onclick={handleAddLane}>
-						<PlusIcon weight="bold" />
-						Add lane
-					</button>
-				</div>
+			<div class="editor-add-row">
+				<div class="editor-add-cell"></div>
 				<div class="editor-add-fill">
-					{#if !hasLanes}
-						<span class="editor-add-hint">Automate any visual control over the song. Each lane starts from the control's current value.</span>
-					{/if}
+					<span class="editor-add-hint">Drag a layer's bar to set when it shows. Press + on any row to automate one of its controls.</span>
 				</div>
 			</div>
 		</div>

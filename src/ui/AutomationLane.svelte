@@ -13,28 +13,33 @@
 		removeLane,
 		resetLane,
 		selectPoint,
-		setLaneControl,
+		setLaneTarget,
 		setPointBend,
 		toggleLaneCollapsed
 	} from '../automation.svelte'
 	import {
-		AUTOMATION_CONTROLS,
 		PATH_WIDTH,
 		buildAreaPath,
 		buildLinePath,
 		buildVertices,
-		findControl,
+		checkIsSameTarget,
 		findSegmentStart,
 		formatControlValue,
-		getControlTone,
-		getLiveControlValue,
+		getLiveLaneValue,
+		getTargetBase,
+		getTargetControl,
+		getTargetId,
+		getTargetTone,
+		listLayerTargets,
+		listSettingTargets,
 		toControlValue,
 		toNormalized
 	} from '../engine/automation'
 	import { clamp } from '../engine/settings'
 	import { checkIsTimeVisible, formatPreciseTime, getViewEnd, ratioToTime, snapToGrid, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
-	import type { AutomatableKeyT, AutomationLaneT, AutomationPointT } from '../engine/types'
+	import type { AutomationLaneT, AutomationPointT, LaneTargetT, LayerT } from '../engine/types'
+	import { findLayer, layerStore } from '../layers.svelte'
 	import { app } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import './AutomationLane.css'
@@ -42,6 +47,8 @@
 	type AutomationLanePropsT = {
 		lane: AutomationLaneT
 		grid: TimelineGridT
+		// Lanes under a layer sit indented below its header.
+		isNested?: boolean
 		onedit: (laneId: string, pointId: string, anchor: HTMLElement) => void
 	}
 
@@ -75,14 +82,15 @@
 	let draggingPointId = $state<string | null>(null)
 	let hoveredPointId = $state<string | null>(null)
 
-	const control = $derived(findControl(props.lane.controlKey))
+	const layers = $derived(layerStore.layers as LayerT[])
+	const control = $derived(getTargetControl(props.lane.target, layers))
 	const hasControl = $derived(control !== null)
 	const duration = $derived(app.duration)
 	const view = $derived(timeline.view)
 	const points = $derived(props.lane.points)
 	const pointCount = $derived(points.length)
 	const isCollapsed = $derived(checkIsLaneCollapsed(props.lane.id))
-	const toneClass = $derived(`isTone${getControlTone(props.lane.controlKey)}`)
+	const toneClass = $derived(`isTone${getTargetTone(props.lane.target, layers)}`)
 	const controlLabel = $derived(control === null ? 'No control' : control.label)
 	const pointCountLabel = $derived(pointCount === 1 ? '1 point' : `${pointCount} points`)
 	const collapseLabel = $derived(isCollapsed ? `Expand ${controlLabel}` : `Collapse ${controlLabel}`)
@@ -90,16 +98,16 @@
 	const shouldShowHint = $derived(hasControl && pointCount <= 1 && !isCollapsed)
 
 	const baseNormalized = $derived.by(() => {
-		const key = props.lane.controlKey
-		if (control === null || key === null) return 0
-		return toNormalized(control, app.settings[key])
+		const base = getTargetBase(props.lane.target, app.settings, layers)
+		if (control === null || base === null) return 0
+		return toNormalized(control, base)
 	})
 
 	const vertices = $derived(buildVertices(points, view, baseNormalized))
 	const linePath = $derived(buildLinePath(vertices))
 	const areaPath = $derived(buildAreaPath(vertices))
 
-	const liveValue = $derived(getLiveControlValue(props.lane, app.settings, app.currentTime))
+	const liveValue = $derived(getLiveLaneValue(props.lane, app.settings, layers, app.currentTime))
 	const liveLabel = $derived(liveValue === null ? '—' : formatControlValue(liveValue))
 
 	const gridLines = $derived(props.grid.lines.filter((line) => line.kind !== 'sub'))
@@ -135,15 +143,33 @@
 
 	const isPillBelow = $derived(pillPoint !== undefined && pillPoint.value > PILL_FLIP_VALUE)
 
+	// A lane can switch to any free control in its own group:
+	// global settings, or the params and effects of its layer.
+	const getGroupTargets = (): LaneTargetT[] => {
+		const target = props.lane.target
+		if (target.kind === 'setting') return listSettingTargets()
+		const layer = findLayer(target.layerId)
+		if (layer === undefined) return []
+		return listLayerTargets(layer)
+	}
+
+	const getTargetLabel = (target: LaneTargetT): string => {
+		const targetControl = getTargetControl(target, layers)
+		if (targetControl === null) return 'Missing'
+		return targetControl.label
+	}
+
+	const groupTargets = $derived(getGroupTargets())
+
 	const selectOptions = $derived.by(() => {
 		const otherLanes = automation.lanes.filter((lane) => lane.id !== props.lane.id)
-		const usedKeys = otherLanes.map((lane) => lane.controlKey)
-		return AUTOMATION_CONTROLS.map((candidate) => ({
-			value: candidate.key,
-			label: candidate.label,
-			isDisabled: usedKeys.includes(candidate.key)
-		}))
+		return groupTargets.map((target) => {
+			const isUsed = otherLanes.some((lane) => checkIsSameTarget(lane.target, target))
+			return { value: getTargetId(target), label: getTargetLabel(target), isDisabled: isUsed }
+		})
 	})
+
+	const selectValue = $derived(getTargetId(props.lane.target))
 
 	const isFlashing = $derived(automation.revealedLaneId === props.lane.id)
 
@@ -182,7 +208,9 @@
 
 	const handleControlChange = (event: Event) => {
 		const detail = (event as CustomEvent<{ value: string }>).detail
-		setLaneControl(props.lane.id, detail.value as AutomatableKeyT)
+		const target = groupTargets.find((candidate) => getTargetId(candidate) === detail.value)
+		if (target === undefined) return
+		setLaneTarget(props.lane.id, target)
 	}
 
 	const handleRemove = () => removeLane(props.lane.id)
@@ -312,7 +340,7 @@
 	}
 </script>
 
-<div class="automation-lane {toneClass}" class:isCollapsed class:isActive={hasSelectedPoint} class:isFlashing bind:this={root}>
+<div class="automation-lane {toneClass}" class:isCollapsed class:isActive={hasSelectedPoint} class:isFlashing class:isNested={props.isNested} bind:this={root}>
 	<div class="automation-lane-header">
 		<div class="automation-lane-title">
 			<button class="automation-lane-caret" type="button" aria-expanded={!isCollapsed} aria-label={collapseLabel} onclick={handleToggle}>
@@ -326,7 +354,7 @@
 				<z-select
 					class="automation-lane-select"
 					size="sm"
-					value={props.lane.controlKey ?? ''}
+					value={selectValue}
 					options={selectOptions}
 					placeholder="Choose control"
 					aria-label="Automated control"

@@ -1,23 +1,75 @@
 import { clamp } from './engine/settings'
-import { AUTOMATION_CONTROLS, MIN_POINT_GAP, createPointId, findControl, toNormalized } from './engine/automation'
-import type { AutomatableKeyT, AutomationLaneT, AutomationPointT } from './engine/types'
+import {
+	MIN_POINT_GAP,
+	checkIsSameTarget,
+	checkIsTargetLive,
+	createPointId,
+	getTargetBase,
+	getTargetControl,
+	getTargetGroupId,
+	listLayerTargets,
+	listSettingTargets,
+	toNormalized
+} from './engine/automation'
+import type { AutomationLaneT, AutomationPointT, LaneTargetT, LayerT } from './engine/types'
+import { findLayer, layerStore } from './layers.svelte'
 import { app } from './store.svelte'
 
 type AutomationStateT = {
 	lanes: AutomationLaneT[]
 	selectedPointId: string | null
 	collapsedLaneIds: string[]
+	// Groups are 'global' or a layer id.
+	collapsedGroupIds: string[]
 	revealedLaneId: string | null
 	undoDepth: number
 	redoDepth: number
 }
 
 const HISTORY_LIMIT = 120
+const STORAGE_KEY = 'vink.automation.v1'
+
+const checkIsTargetShape = (target: unknown): target is LaneTargetT => {
+	const isObject = typeof target === 'object' && target !== null
+	if (!isObject) return false
+	const kind = (target as { kind?: unknown }).kind
+	return kind === 'setting' || kind === 'layer' || kind === 'fx'
+}
+
+const checkIsLaneShape = (lane: Partial<AutomationLaneT>): boolean => {
+	const hasId = typeof lane.id === 'string'
+	const hasPoints = Array.isArray(lane.points)
+	return hasId && hasPoints && checkIsTargetShape(lane.target)
+}
+
+// Lanes are saved with the layers, so layer lanes come back
+// with the layers they drive.
+const loadLanes = (): AutomationLaneT[] => {
+	try {
+		const stored = window.localStorage.getItem(STORAGE_KEY)
+		if (stored === null) return []
+		const parsed = JSON.parse(stored) as Partial<AutomationLaneT>[]
+		const isList = Array.isArray(parsed)
+		if (!isList) return []
+		return parsed.filter(checkIsLaneShape) as AutomationLaneT[]
+	} catch {
+		return []
+	}
+}
+
+const saveLanes = (lanes: AutomationLaneT[]): void => {
+	try {
+		window.localStorage.setItem(STORAGE_KEY, JSON.stringify(lanes))
+	} catch {
+		return
+	}
+}
 
 export const automation = $state<AutomationStateT>({
-	lanes: [],
+	lanes: loadLanes(),
 	selectedPointId: null,
 	collapsedLaneIds: [],
+	collapsedGroupIds: [],
 	revealedLaneId: null,
 	undoDepth: 0,
 	redoDepth: 0
@@ -45,8 +97,12 @@ export const recordHistory = (): void => {
 	syncHistoryDepth()
 }
 
+const getLayers = (): LayerT[] => layerStore.layers as LayerT[]
+
+// Undo can bring back a lane whose layer has since been
+// deleted, so restored lanes are checked against the layers.
 const restoreLanes = (lanes: AutomationLaneT[]): void => {
-	automation.lanes = lanes
+	automation.lanes = lanes.filter((lane) => checkIsTargetLive(lane.target, getLayers()))
 	automation.selectedPointId = null
 	const laneIds = lanes.map((lane) => lane.id)
 	automation.collapsedLaneIds = automation.collapsedLaneIds.filter((laneId) => laneIds.includes(laneId))
@@ -76,35 +132,79 @@ const findPoint = (lane: AutomationLaneT, pointId: string): AutomationPointT | u
 	return lane.points.find((point) => point.id === pointId)
 }
 
-const getUsedControlKeys = (): AutomatableKeyT[] => {
-	const keys = automation.lanes.map((lane) => lane.controlKey)
-	return keys.filter((key): key is AutomatableKeyT => key !== null)
+const checkIsTargetUsed = (target: LaneTargetT): boolean => {
+	return automation.lanes.some((lane) => checkIsSameTarget(lane.target, target))
 }
 
-const findUnusedControlKey = (): AutomatableKeyT | null => {
-	const usedKeys = getUsedControlKeys()
-	const unused = AUTOMATION_CONTROLS.find((control) => !usedKeys.includes(control.key))
-	return unused === undefined ? null : unused.key
+const findUnusedTarget = (targets: LaneTargetT[]): LaneTargetT | null => {
+	const unused = targets.find((target) => !checkIsTargetUsed(target))
+	return unused ?? null
 }
 
-export const checkCanAddLane = (): boolean => findUnusedControlKey() !== null
+// Opacity and scale are what most layer lanes are for, so a
+// new lane on a layer offers those first.
+const LAYER_LANE_ORDER = ['opacity', 'scale']
+
+const getLaneOrderRank = (target: LaneTargetT): number => {
+	const isParam = target.kind === 'layer'
+	if (!isParam) return LAYER_LANE_ORDER.length
+	const rank = LAYER_LANE_ORDER.indexOf(target.param)
+	const isPreferred = rank !== -1
+	if (!isPreferred) return LAYER_LANE_ORDER.length
+	return rank
+}
+
+const getLayerTargetsInLaneOrder = (layer: LayerT): LaneTargetT[] => {
+	const targets = listLayerTargets(layer)
+	return [...targets].sort((first, second) => getLaneOrderRank(first) - getLaneOrderRank(second))
+}
+
+export const checkCanAddSettingLane = (): boolean => findUnusedTarget(listSettingTargets()) !== null
+
+export const checkCanAddLayerLane = (layerId: string): boolean => {
+	const layer = findLayer(layerId)
+	if (layer === undefined) return false
+	return findUnusedTarget(listLayerTargets(layer)) !== null
+}
 
 // A new lane starts from the control's current value, so taking
 // over a control never changes what is on screen.
-const buildSeedPoint = (key: AutomatableKeyT): AutomationPointT => {
-	const control = findControl(key)
-	const currentValue = app.settings[key]
-	const normalized = control === null ? 0 : toNormalized(control, currentValue)
+const buildSeedPoint = (target: LaneTargetT): AutomationPointT => {
+	const control = getTargetControl(target, getLayers())
+	const base = getTargetBase(target, app.settings, getLayers())
+	const hasValue = control !== null && base !== null
+	const normalized = hasValue ? toNormalized(control, base) : 0
 	return { id: createPointId(), time: 0, value: normalized, bend: 0 }
 }
 
-export const addLane = (): string | null => {
-	const key = findUnusedControlKey()
-	if (key === null) return null
+const pushLane = (target: LaneTargetT): string => {
 	recordHistory()
-	const lane: AutomationLaneT = { id: crypto.randomUUID(), controlKey: key, points: [buildSeedPoint(key)] }
+	const lane: AutomationLaneT = { id: crypto.randomUUID(), target, points: [buildSeedPoint(target)] }
 	automation.lanes.push(lane)
+	expandGroup(getTargetGroupId(target))
 	return lane.id
+}
+
+export const addSettingLane = (): string | null => {
+	const target = findUnusedTarget(listSettingTargets())
+	if (target === null) return null
+	return pushLane(target)
+}
+
+export const addLayerLane = (layerId: string): string | null => {
+	const layer = findLayer(layerId)
+	if (layer === undefined) return null
+	const target = findUnusedTarget(getLayerTargetsInLaneOrder(layer))
+	if (target === null) return null
+	return pushLane(target)
+}
+
+// From a panel control: opens its lane if it has one, makes
+// one if not, and brings it into view either way.
+export const automateTarget = (target: LaneTargetT): void => {
+	const existing = automation.lanes.find((lane) => checkIsSameTarget(lane.target, target))
+	const laneId = existing === undefined ? pushLane(target) : existing.id
+	revealLane(laneId)
 }
 
 export const removeLane = (laneId: string): void => {
@@ -113,14 +213,24 @@ export const removeLane = (laneId: string): void => {
 	automation.collapsedLaneIds = automation.collapsedLaneIds.filter((candidate) => candidate !== laneId)
 }
 
-export const setLaneControl = (laneId: string, key: AutomatableKeyT): void => {
+// Layer and effect removal takes their lanes along. It is not
+// an undo step, since the layer itself cannot be undone.
+export const removeLanesForLayer = (layerId: string): void => {
+	automation.lanes = automation.lanes.filter((lane) => getTargetGroupId(lane.target) !== layerId)
+}
+
+export const removeLanesForFx = (fxId: string): void => {
+	automation.lanes = automation.lanes.filter((lane) => lane.target.kind !== 'fx' || lane.target.fxId !== fxId)
+}
+
+export const setLaneTarget = (laneId: string, target: LaneTargetT): void => {
 	const lane = findLane(laneId)
 	if (lane === undefined) return
-	const isChange = lane.controlKey !== key
+	const isChange = !checkIsSameTarget(lane.target, target)
 	if (!isChange) return
 	recordHistory()
-	lane.controlKey = key
-	lane.points = [buildSeedPoint(key)]
+	lane.target = target
+	lane.points = [buildSeedPoint(target)]
 	automation.selectedPointId = null
 }
 
@@ -128,14 +238,30 @@ export const setLaneControl = (laneId: string, key: AutomatableKeyT): void => {
 // lane had there, so the control does not jump.
 export const resetLane = (laneId: string): void => {
 	const lane = findLane(laneId)
-	if (lane === undefined || lane.controlKey === null) return
+	if (lane === undefined) return
 	recordHistory()
 	const firstPoint = lane.points[0]
 	const hasFirstPoint = firstPoint !== undefined
-	const seed = buildSeedPoint(lane.controlKey)
+	const seed = buildSeedPoint(lane.target)
 	if (hasFirstPoint) seed.value = firstPoint.value
 	lane.points = [seed]
 	automation.selectedPointId = null
+}
+
+export const getLanesInGroup = (groupId: string): AutomationLaneT[] => {
+	return automation.lanes.filter((lane) => getTargetGroupId(lane.target) === groupId)
+}
+
+export const checkIsGroupCollapsed = (groupId: string): boolean => automation.collapsedGroupIds.includes(groupId)
+
+const expandGroup = (groupId: string): void => {
+	automation.collapsedGroupIds = automation.collapsedGroupIds.filter((candidate) => candidate !== groupId)
+}
+
+export const toggleGroupCollapsed = (groupId: string): void => {
+	const isCollapsed = checkIsGroupCollapsed(groupId)
+	if (isCollapsed) return expandGroup(groupId)
+	automation.collapsedGroupIds = [...automation.collapsedGroupIds, groupId]
 }
 
 export const checkIsLaneCollapsed = (laneId: string): boolean => automation.collapsedLaneIds.includes(laneId)
@@ -170,6 +296,8 @@ let revealTimer = 0
 // Expands a lane and asks it to scroll into view and flash,
 // for jumping from an automated control to its lane.
 export const revealLane = (laneId: string): void => {
+	const lane = findLane(laneId)
+	if (lane !== undefined) expandGroup(getTargetGroupId(lane.target))
 	automation.collapsedLaneIds = automation.collapsedLaneIds.filter((candidate) => candidate !== laneId)
 	automation.revealedLaneId = laneId
 	window.clearTimeout(revealTimer)
@@ -233,4 +361,12 @@ export const clampLanesToDuration = (duration: number): void => {
 	for (const lane of automation.lanes) {
 		for (const point of lane.points) point.time = Math.min(point.time, duration)
 	}
+}
+
+export const startAutomationWatchers = (): void => {
+	$effect.root(() => {
+		$effect(() => {
+			saveLanes($state.snapshot(automation.lanes) as AutomationLaneT[])
+		})
+	})
 }

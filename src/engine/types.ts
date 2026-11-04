@@ -132,9 +132,24 @@ export type AutomationPointT = {
 	bend: number
 }
 
+// What a lane drives: a global setting, a layer's transform
+// param, or the amount of one effect on a layer.
+export type LaneTargetT =
+	| { kind: 'setting'; key: AutomatableKeyT }
+	| { kind: 'layer'; layerId: string; param: LayerParamKeyT }
+	| { kind: 'fx'; layerId: string; fxId: string }
+
+// The range a lane's 0-1 points map onto.
+export type LaneControlT = {
+	label: string
+	min: number
+	max: number
+	step: number
+}
+
 export type AutomationLaneT = {
 	id: string
-	controlKey: AutomatableKeyT | null
+	target: LaneTargetT
 	points: AutomationPointT[]
 }
 

@@ -252,56 +252,6 @@
 	background: var(--bg);
 }
 
-.editor-add-button {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--spacing-2);
-	width: 100%;
-	height: var(--spacing-8);
-	padding: 0 var(--spacing-3);
-	border: 1px dashed var(--color-neutral-3);
-	border-radius: var(--radius-md);
-	background: transparent;
-	color: var(--muted);
-	font: inherit;
-	font-size: var(--font-size-2);
-	font-weight: 500;
-	cursor: pointer;
-	transition:
-		background-color var(--motion-fast) ease,
-		border-color var(--motion-fast) ease,
-		color var(--motion-fast) ease;
-}
-
-.editor-add-button:hover:not(:disabled) {
-	border-color: var(--color-neutral-5);
-	background: var(--paper-soft);
-	color: var(--foreground);
-}
-
-.editor-add-button:disabled {
-	cursor: default;
-	opacity: var(--control-disabled-opacity);
-}
-
-.editor-add-button:focus-visible {
-	outline: 2px solid var(--focus-ring);
-	outline-offset: 1px;
-}
-
-.editor-add-row.isEmpty .editor-add-button {
-	border-style: solid;
-	border-color: var(--foreground);
-	background: var(--foreground);
-	color: var(--bg);
-}
-
-.editor-add-row.isEmpty .editor-add-button:hover {
-	border-color: var(--color-neutral-9);
-	background: var(--color-neutral-9);
-	color: var(--bg);
-}
-
 .editor-add-hint {
 	max-width: 32rem;
 	color: var(--secondary);
@@ -318,4 +268,14 @@
 	.editor-song-icon {
 		display: none;
 	}
+}
+
+/* A layer's lanes stack as one block under its header. */
+.editor-layer-lanes {
+	display: flex;
+	flex-direction: column;
+}
+
+.editor-layer-lanes > * {
+	flex-shrink: 0;
 }

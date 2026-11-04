@@ -199,6 +199,42 @@
 	text-overflow: ellipsis;
 }
 
+.setting-slider-automate {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-5);
+	height: var(--spacing-5);
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--muted);
+	font-size: var(--font-size-0);
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity var(--motion-fast) ease,
+		color var(--motion-fast) ease,
+		background-color var(--motion-fast) ease;
+}
+
+.setting-slider:hover .setting-slider-automate,
+.setting-slider-automate:focus-visible {
+	opacity: 1;
+}
+
+.setting-slider-automate:hover {
+	background: color-mix(in oklch, var(--purple) 12%, transparent);
+	color: var(--purple);
+}
+
+.setting-slider-automate:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
 /* Where the modulation has pushed the value right now. */
 .setting-slider-meter {
 	position: relative;
