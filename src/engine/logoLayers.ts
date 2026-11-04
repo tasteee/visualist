@@ -1,11 +1,7 @@
-import coreUrl from '../assets/logo-layers/core.png'
-import fringeAUrl from '../assets/logo-layers/fringeA.png'
-import fringeBUrl from '../assets/logo-layers/fringeB.png'
-import silhouetteUrl from '../assets/logo-layers/sil.png'
-import outlineUrl from '../assets/logo-layers/outline.png'
 import haloUrl from '../assets/logo-layers/halo.png'
 import backgroundUrl from '../assets/logo-layers/bg.jpg'
 import layout from '../assets/logo-layers/layout.json'
+import tracedPaths from '../assets/logo-layers/paths.json'
 import { createRandom } from './rng'
 import { clamp } from './settings'
 
@@ -17,7 +13,10 @@ export const LOGO_CENTER_Y = layout.cy
 const DISTRESSED_CORE_VARIANTS = 4
 const CORE_SPECK_COUNT = 9000
 const OUTLINE_SPECK_COUNT = 15000
-const SOLID_ALPHA_THRESHOLD = 100
+const OUTLINE_WIDTH = 5
+// Worn and gritty variants are rasters. They are rendered a little
+// above the frame size so they stay sharp at 1080p output.
+const RASTER_SCALE = 1.25
 // The background photo is the faint lyric pattern on near-white.
 // Darkness against these two levels becomes the pattern's alpha.
 const BACKGROUND_PAPER_LEVEL = 250
@@ -30,12 +29,19 @@ export type BoundsT = {
 	bottom: number
 }
 
+// A traced vector shape in frame coordinates. A line width of 0
+// fills the shape, anything above strokes its edge.
+export type VectorMaskT = {
+	path: Path2D
+	lineWidth: number
+}
+
 export type LogoLayersT = {
-	core: HTMLCanvasElement
-	fringeA: HTMLCanvasElement
-	fringeB: HTMLCanvasElement
-	silhouette: HTMLCanvasElement
-	outline: HTMLCanvasElement
+	core: VectorMaskT
+	fringeA: VectorMaskT
+	fringeB: VectorMaskT
+	silhouette: VectorMaskT
+	outline: VectorMaskT
 	halo: HTMLCanvasElement
 	coreVariants: HTMLCanvasElement[]
 	outlineGritty: HTMLCanvasElement
@@ -66,15 +72,68 @@ const loadImage = (url: string): Promise<HTMLImageElement> => {
 	})
 }
 
-// Every layer PNG is the same size and centered on the logo
-// pivot, so each one lands in the shared frame at the same spot.
+const getLayerLeft = (): number => Math.round(LOGO_CENTER_X - layout.w / 2)
+const getLayerTop = (): number => Math.round(LOGO_CENTER_Y - layout.h / 2)
+
+// Raster layers are the same size and centered on the logo pivot.
 const placeLayer = async (url: string): Promise<HTMLCanvasElement> => {
 	const image = await loadImage(url)
 	const placed = createCanvas(FRAME_WIDTH, FRAME_HEIGHT)
-	const left = Math.round(LOGO_CENTER_X - layout.w / 2)
-	const top = Math.round(LOGO_CENTER_Y - layout.h / 2)
-	getContext(placed).drawImage(image, left, top)
+	getContext(placed).drawImage(image, getLayerLeft(), getLayerTop())
 	return placed
+}
+
+const buildVectorMask = (pathData: string, lineWidth: number): VectorMaskT => {
+	const path = new Path2D()
+	const placement = new DOMMatrix([1, 0, 0, 1, getLayerLeft(), getLayerTop()])
+	path.addPath(new Path2D(pathData), placement)
+	return { path, lineWidth }
+}
+
+// Paints a vector mask in one color. Optionally slid sideways and
+// cut to one horizontal strip, which is how glitching works.
+export type StripT = {
+	top: number
+	height: number
+}
+
+const STRIP_OVERLAP = 0.5
+
+export const paintMask = (
+	context: CanvasRenderingContext2D,
+	mask: VectorMaskT,
+	color: string,
+	offsetX = 0,
+	strip?: StripT
+): void => {
+	context.save()
+	if (strip !== undefined) {
+		context.beginPath()
+		context.rect(-FRAME_WIDTH, strip.top, FRAME_WIDTH * 3, strip.height + STRIP_OVERLAP)
+		context.clip()
+	}
+
+	context.translate(offsetX, 0)
+	const isStroke = mask.lineWidth > 0
+	if (isStroke) {
+		context.strokeStyle = color
+		context.lineWidth = mask.lineWidth
+		context.lineJoin = 'round'
+		context.stroke(mask.path)
+	}
+	if (!isStroke) {
+		context.fillStyle = color
+		context.fill(mask.path, 'evenodd')
+	}
+	context.restore()
+}
+
+const rasterizeMask = (mask: VectorMaskT): HTMLCanvasElement => {
+	const canvas = createCanvas(Math.round(FRAME_WIDTH * RASTER_SCALE), Math.round(FRAME_HEIGHT * RASTER_SCALE))
+	const context = getContext(canvas)
+	context.scale(RASTER_SCALE, RASTER_SCALE)
+	paintMask(context, mask, '#fff')
+	return canvas
 }
 
 // The faint lyric rows, as a white alpha mask that can be tinted
@@ -100,30 +159,13 @@ const buildLyricPattern = async (): Promise<HTMLCanvasElement> => {
 	return pattern
 }
 
-const findBounds = (mask: HTMLCanvasElement): BoundsT => {
-	const pixels = getContext(mask).getImageData(0, 0, mask.width, mask.height)
-	const bounds: BoundsT = { left: mask.width, top: mask.height, right: 0, bottom: 0 }
-
-	for (let index = 0; index < mask.width * mask.height; index++) {
-		const alpha = pixels.data[index * 4 + 3]
-		const isSolid = alpha > SOLID_ALPHA_THRESHOLD
-		if (!isSolid) continue
-		const column = index % mask.width
-		const row = Math.floor(index / mask.width)
-		bounds.left = Math.min(bounds.left, column)
-		bounds.right = Math.max(bounds.right, column)
-		bounds.top = Math.min(bounds.top, row)
-		bounds.bottom = Math.max(bounds.bottom, row)
-	}
-
-	return bounds
-}
-
 // Knocks random specks and short scratches out of a mask.
 const distress = (mask: HTMLCanvasElement, bounds: BoundsT, count: number, seed: number): HTMLCanvasElement => {
 	const worn = createCanvas(mask.width, mask.height)
 	const context = getContext(worn)
+	const scale = mask.width / FRAME_WIDTH
 	context.drawImage(mask, 0, 0)
+	context.scale(scale, scale)
 	context.globalCompositeOperation = 'destination-out'
 	context.fillStyle = '#fff'
 	context.strokeStyle = '#fff'
@@ -184,17 +226,24 @@ const buildGrainTile = (): HTMLCanvasElement => {
 }
 
 export const buildLogoLayers = async (): Promise<LogoLayersT> => {
-	const core = await placeLayer(coreUrl)
-	const fringeA = await placeLayer(fringeAUrl)
-	const fringeB = await placeLayer(fringeBUrl)
-	const silhouette = await placeLayer(silhouetteUrl)
-	const outline = await placeLayer(outlineUrl)
+	const core = buildVectorMask(tracedPaths.core, 0)
+	const fringeA = buildVectorMask(tracedPaths.fringeA, 0)
+	const fringeB = buildVectorMask(tracedPaths.fringeB, 0)
+	const silhouette = buildVectorMask(tracedPaths.sil, 0)
+	const outline = buildVectorMask(tracedPaths.sil, OUTLINE_WIDTH)
 	const halo = await placeLayer(haloUrl)
-	const bounds = findBounds(silhouette)
 
+	const bounds: BoundsT = {
+		left: tracedPaths.bounds.left + getLayerLeft(),
+		right: tracedPaths.bounds.right + getLayerLeft(),
+		top: tracedPaths.bounds.top + getLayerTop(),
+		bottom: tracedPaths.bounds.bottom + getLayerTop()
+	}
+
+	const coreRaster = rasterizeMask(core)
 	const coreVariants: HTMLCanvasElement[] = []
 	for (let variant = 0; variant < DISTRESSED_CORE_VARIANTS; variant++) {
-		coreVariants.push(distress(core, bounds, CORE_SPECK_COUNT, 101 + variant))
+		coreVariants.push(distress(coreRaster, bounds, CORE_SPECK_COUNT, 101 + variant))
 	}
 
 	return {
@@ -205,7 +254,7 @@ export const buildLogoLayers = async (): Promise<LogoLayersT> => {
 		outline,
 		halo,
 		coreVariants,
-		outlineGritty: distress(outline, bounds, OUTLINE_SPECK_COUNT, 211),
+		outlineGritty: distress(rasterizeMask(outline), bounds, OUTLINE_SPECK_COUNT, 211),
 		lyricPattern: await buildLyricPattern(),
 		grainTile: buildGrainTile(),
 		bounds
@@ -217,7 +266,7 @@ export const buildLogoLayers = async (): Promise<LogoLayersT> => {
 // dropped wholesale when a color picker drag fills it up.
 const tintCache = new Map<string, HTMLCanvasElement>()
 const maskIds = new WeakMap<HTMLCanvasElement, number>()
-const MAX_TINTED_LAYERS = 40
+const MAX_TINTED_LAYERS = 24
 let nextMaskId = 1
 
 const getMaskId = (mask: HTMLCanvasElement): number => {

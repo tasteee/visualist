@@ -19,16 +19,13 @@ body {
 }
 
 .app-shell {
-	--header-height: 3.5rem;
 	--inspector-width: 23.5rem;
 	position: fixed;
 	inset: 0;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) var(--inspector-width);
-	grid-template-rows: var(--header-height) minmax(0, 1fr);
-	grid-template-areas:
-		'header header'
-		'workspace inspector';
+	grid-template-rows: minmax(0, 1fr);
+	grid-template-areas: 'workspace inspector';
 	background: var(--bg);
 }
 
@@ -36,7 +33,10 @@ body {
 	grid-area: workspace;
 	display: flex;
 	flex-direction: column;
+	justify-content: center;
 	gap: var(--spacing-4);
+	--stage-reserved-height: 6rem;
+	container-type: size;
 	min-width: 0;
 	min-height: 0;
 	padding: var(--spacing-5);
@@ -90,6 +90,14 @@ body {
 	body,
 	#root {
 		overflow: auto;
+	}
+
+	.app-workspace {
+		container-type: inline-size;
+	}
+
+	.app-workspace .stage-frame {
+		width: 100cqw;
 	}
 
 	.app-inspector {

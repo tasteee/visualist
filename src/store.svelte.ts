@@ -30,6 +30,8 @@ type AppStateT = {
 	title: string
 	isTitleEdited: boolean
 	bpm: number
+	musicalKey: string
+	musicalScale: string
 	fileName: string
 	hasAudio: boolean
 	duration: number
@@ -55,6 +57,8 @@ export const app = $state<AppStateT>({
 	title: '',
 	isTitleEdited: false,
 	bpm: 120,
+	musicalKey: '',
+	musicalScale: '',
 	fileName: '',
 	hasAudio: false,
 	duration: 0,

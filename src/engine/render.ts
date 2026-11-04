@@ -1,8 +1,8 @@
 import { findFirstHitIndex, getLevels } from './analysis'
 import { collectEchoes } from './echoes'
 import type { EchoT } from './echoes'
-import { FRAME_HEIGHT, FRAME_WIDTH, LOGO_CENTER_X, LOGO_CENTER_Y, getTinted } from './logoLayers'
-import type { LogoLayersT } from './logoLayers'
+import { FRAME_HEIGHT, FRAME_WIDTH, LOGO_CENTER_X, LOGO_CENTER_Y, getTinted, paintMask } from './logoLayers'
+import type { LogoLayersT, VectorMaskT } from './logoLayers'
 import { createRandom } from './rng'
 import { FLICKER_RATE, clamp } from './settings'
 import type { FrameInputT } from './types'
@@ -56,7 +56,7 @@ const getScenePalette = (input: FrameInputT): ScenePaletteT => {
 
 const getGlitchAmount = (input: FrameInputT, high: number, energy: number): number => {
 	const settings = input.settings
-	if (!settings.isGlitchOn) return 0
+	if (settings.glitchAmount <= 0) return 0
 
 	const snaps = input.analysis.snaps
 	const startIndex = findFirstHitIndex(snaps, input.time - GLITCH_BURST_SECONDS)
@@ -105,7 +105,7 @@ const buildFrameState = (input: FrameInputT, layers: LogoLayersT): FrameStateT =
 
 	const wornRandom = createRandom(flickerStep * 104729 + 17)
 	const wornChance = clamp((1.1 * high + 0.5 * glitch - 0.25) * settings.textureAmount, 0, 0.9)
-	const isWorn = settings.isTextureOn && wornRandom() < wornChance
+	const isWorn = wornRandom() < wornChance
 	const wornVariant = isWorn ? Math.floor(wornRandom() * layers.coreVariants.length) : -1
 
 	const introAlpha = input.isIntroActive ? clamp(input.time / 1, 0, 1) : 1
@@ -130,18 +130,33 @@ const buildFrameState = (input: FrameInputT, layers: LogoLayersT): FrameStateT =
 	}
 }
 
-// Draws a mask layer, cut into the shared glitch strips when a
-// glitch is on so every layer stays aligned.
-const drawLayer = (context: CanvasRenderingContext2D, layer: HTMLCanvasElement, state: FrameStateT, extraShift = 0): void => {
+// Draws a raster layer (worn or gritty variants), cut into the
+// shared glitch strips when a glitch is on so layers stay aligned.
+const drawRasterLayer = (context: CanvasRenderingContext2D, layer: HTMLCanvasElement, state: FrameStateT, extraShift = 0): void => {
 	const hasStrips = state.strips.length > 0
 	if (!hasStrips) {
-		context.drawImage(layer, extraShift, 0)
+		context.drawImage(layer, extraShift, 0, FRAME_WIDTH, FRAME_HEIGHT)
+		return
+	}
+
+	const scale = layer.width / FRAME_WIDTH
+	for (const strip of state.strips) {
+		const sourceTop = strip.top * scale
+		const sourceHeight = strip.height * scale
+		context.drawImage(layer, 0, sourceTop, layer.width, sourceHeight, strip.shift + extraShift, strip.top, FRAME_WIDTH, strip.height)
+	}
+}
+
+// Draws a vector layer the same way. Crisp at any output size.
+const drawMaskLayer = (context: CanvasRenderingContext2D, mask: VectorMaskT, color: string, state: FrameStateT, extraShift = 0): void => {
+	const hasStrips = state.strips.length > 0
+	if (!hasStrips) {
+		paintMask(context, mask, color, extraShift)
 		return
 	}
 
 	for (const strip of state.strips) {
-		const width = layer.width
-		context.drawImage(layer, 0, strip.top, width, strip.height, strip.shift + extraShift, strip.top, width, strip.height)
+		paintMask(context, mask, color, strip.shift + extraShift, strip)
 	}
 }
 
@@ -165,14 +180,13 @@ const pickEchoColor = (echo: EchoT, palette: ScenePaletteT, slotOffset = 0): str
 	return palette.logo
 }
 
-const drawSlicedEcho = (context: CanvasRenderingContext2D, outline: HTMLCanvasElement, echo: EchoT, state: FrameStateT): void => {
+const drawSlicedEcho = (context: CanvasRenderingContext2D, outline: VectorMaskT, color: string, echo: EchoT, state: FrameStateT): void => {
 	const random = createRandom(echo.seed * 31 + state.flickerStep)
 	const maxShift = 18 + 34 * echo.strength
-	const stripHeight = outline.height / STRIP_COUNT
+	const stripHeight = FRAME_HEIGHT / STRIP_COUNT
 	for (let index = 0; index < STRIP_COUNT; index++) {
 		const shift = (random() * 2 - 1) * maxShift
-		const top = index * stripHeight
-		context.drawImage(outline, 0, top, outline.width, stripHeight, shift, top, outline.width, stripHeight)
+		paintMask(context, outline, color, shift, { top: index * stripHeight, height: stripHeight })
 	}
 }
 
@@ -183,32 +197,32 @@ const drawEcho = (context: CanvasRenderingContext2D, echo: EchoT, layers: LogoLa
 	context.globalAlpha = echo.alpha * state.introAlpha
 	scaleAroundLogo(context, echo.scale)
 
-	if (echo.style === 'hollow') context.drawImage(getTinted(layers.outline, color), 0, 0)
+	if (echo.style === 'hollow') paintMask(context, layers.outline, color)
 
 	if (echo.style === 'faintFill') {
 		const fillStrength = clamp(0.06 + 0.2 * echo.strength, 0.06, 0.26)
 		const alphaBefore = context.globalAlpha
-		const canFill = settings.isSolidOn
+		const canFill = settings.solidAmount > 0
 		if (canFill) context.globalAlpha = alphaBefore * fillStrength
-		if (canFill) context.drawImage(getTinted(layers.silhouette, color), 0, 0)
+		if (canFill) paintMask(context, layers.silhouette, color)
 		context.globalAlpha = alphaBefore
-		context.drawImage(getTinted(layers.outline, color), 0, 0)
+		paintMask(context, layers.outline, color)
 	}
 
 	if (echo.style === 'double') {
 		const spread = 16 * (1 - echo.progress)
 		const secondColor = pickEchoColor(echo, palette, 1)
-		context.drawImage(getTinted(layers.outline, color), -spread, 0)
-		context.drawImage(getTinted(layers.outline, secondColor), spread, 0)
+		paintMask(context, layers.outline, color, -spread)
+		paintMask(context, layers.outline, secondColor, spread)
 	}
 
-	if (echo.style === 'sliced') drawSlicedEcho(context, getTinted(layers.outline, color), echo, state)
+	if (echo.style === 'sliced') drawSlicedEcho(context, layers.outline, color, echo, state)
 
 	if (echo.style === 'gritty') {
 		const flickerRandom = createRandom(echo.seed * 17 + state.flickerStep)
 		const flicker = 0.2 + 0.7 * flickerRandom()
 		context.globalAlpha = context.globalAlpha * flicker
-		context.drawImage(getTinted(layers.outlineGritty, color), 0, 0)
+		context.drawImage(getTinted(layers.outlineGritty, color), 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
 	}
 
 	context.restore()
@@ -227,8 +241,6 @@ const getGrainPattern = (context: CanvasRenderingContext2D, tile: HTMLCanvasElem
 
 const drawGrain = (context: CanvasRenderingContext2D, layers: LogoLayersT, palette: ScenePaletteT, state: FrameStateT): void => {
 	const settings = state.input.settings
-	if (!settings.isTextureOn) return
-
 	const alpha = Math.min(0.9, (0.3 + 0.55 * state.high) * settings.textureAmount)
 	const tinted = getTinted(layers.grainTile, palette.logo)
 	const pattern = getGrainPattern(context, tinted)
@@ -247,13 +259,11 @@ const drawGrain = (context: CanvasRenderingContext2D, layers: LogoLayersT, palet
 
 const drawSolidLayers = (context: CanvasRenderingContext2D, layers: LogoLayersT, palette: ScenePaletteT, state: FrameStateT): void => {
 	const settings = state.input.settings
-	if (!settings.isSolidOn) return
-
 	const glowAlpha = clamp((0.2 * state.bass + 0.25 * state.energy) * settings.solidAmount, 0, 0.65)
 	context.save()
 	context.globalAlpha = glowAlpha
 	scaleAroundLogo(context, 1.025 + 0.02 * state.bass)
-	drawLayer(context, getTinted(layers.silhouette, palette.accent1), state)
+	drawMaskLayer(context, layers.silhouette, palette.accent1, state)
 	context.restore()
 
 	const splitDistance = (7 * state.bass + 16 * state.glitch) * settings.solidAmount
@@ -263,8 +273,8 @@ const drawSolidLayers = (context: CanvasRenderingContext2D, layers: LogoLayersT,
 
 	context.save()
 	context.globalAlpha = splitAlpha
-	drawLayer(context, getTinted(layers.silhouette, palette.accent1), state, splitDistance)
-	drawLayer(context, getTinted(layers.silhouette, palette.accent2), state, -splitDistance)
+	drawMaskLayer(context, layers.silhouette, palette.accent1, state, splitDistance)
+	drawMaskLayer(context, layers.silhouette, palette.accent2, state, -splitDistance)
 	context.restore()
 }
 
@@ -297,12 +307,12 @@ const drawLogo = (context: CanvasRenderingContext2D, layers: LogoLayersT, palett
 	context.globalAlpha = state.introAlpha
 
 	drawSolidLayers(context, layers, palette, state)
-	drawLayer(context, getTinted(layers.fringeA, palette.accent1), state)
-	drawLayer(context, getTinted(layers.fringeB, palette.accent2), state)
+	drawMaskLayer(context, layers.fringeA, palette.accent1, state)
+	drawMaskLayer(context, layers.fringeB, palette.accent2, state)
 
 	const isWorn = state.wornVariant >= 0
-	const coreMask = isWorn ? layers.coreVariants[state.wornVariant] : layers.core
-	drawLayer(context, getTinted(coreMask, palette.logo), state)
+	if (isWorn) drawRasterLayer(context, getTinted(layers.coreVariants[state.wornVariant], palette.logo), state)
+	if (!isWorn) drawMaskLayer(context, layers.core, palette.logo, state)
 	drawTearBars(context, layers, palette, state)
 	context.restore()
 }

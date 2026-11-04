@@ -25,8 +25,8 @@ const getEnabledStyles = (settings: SettingsT): EchoStyleNameT[] => {
 	const enabled: EchoStyleNameT[] = []
 	for (const name of names) {
 		const isSwitchedOn = settings.echoStyles[name]
-		const isBlockedByGlitch = name === 'sliced' && !settings.isGlitchOn
-		const isBlockedByTexture = name === 'gritty' && !settings.isTextureOn
+		const isBlockedByGlitch = name === 'sliced' && settings.glitchAmount <= 0
+		const isBlockedByTexture = name === 'gritty' && settings.textureAmount <= 0
 		const isAvailable = isSwitchedOn && !isBlockedByGlitch && !isBlockedByTexture
 		if (isAvailable) enabled.push(name)
 	}
@@ -166,7 +166,7 @@ const collectKickEchoes = (input: FrameInputT, enabled: EchoStyleNameT[]): EchoT
 // stays bounded. Oldest first, so the newest draws on top.
 export const collectEchoes = (input: FrameInputT): EchoT[] => {
 	const settings = input.settings
-	if (!settings.isEchoesOn) return []
+	if (settings.echoAmount <= 0) return []
 
 	const enabled = getEnabledStyles(settings)
 	const hasNoStyles = enabled.length === 0

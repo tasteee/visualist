@@ -13,10 +13,6 @@ export type SettingsT = {
 	background: string
 	foreground: string
 	reactivity: number
-	isEchoesOn: boolean
-	isGlitchOn: boolean
-	isTextureOn: boolean
-	isSolidOn: boolean
 	echoAmount: number
 	echoSize: number
 	echoSpeed: number

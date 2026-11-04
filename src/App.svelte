@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { app, loadAudioFile, startApp, togglePlay } from './store.svelte'
-	import Header from './ui/Header.svelte'
+	import DropZone from './ui/DropZone.svelte'
 	import Inspector from './ui/Inspector.svelte'
 	import Stage from './ui/Stage.svelte'
 	import Transport from './ui/Transport.svelte'
@@ -56,10 +56,14 @@
 <svelte:window onkeydown={handleKeyDown} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop} />
 
 <main class="app-shell">
-	<Header />
 	<section class="app-workspace">
 		<Stage />
-		<Transport />
+		{#if app.hasAudio}
+			<Transport />
+		{/if}
+		{#if !app.hasAudio}
+			<DropZone />
+		{/if}
 	</section>
 	<aside class="app-inspector">
 		<Inspector />

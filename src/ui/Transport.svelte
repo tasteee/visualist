@@ -1,11 +1,14 @@
 <script lang="ts">
 	import PauseIcon from 'phosphor-svelte/lib/PauseIcon'
 	import PlayIcon from 'phosphor-svelte/lib/PlayIcon'
+	import MusicNotesIcon from 'phosphor-svelte/lib/MusicNotesIcon'
 	import { app, formatTime, togglePlay } from '../store.svelte'
+	import { openAudioPicker } from './filePicker'
 	import Timeline from './Timeline.svelte'
 	import './Transport.css'
 
 	const canPlay = $derived(app.hasAudio && !app.isRecording && !app.isAnalyzing)
+	const canChange = $derived(!app.isRecording && !app.isAnalyzing)
 	const playLabel = $derived(app.isPlaying ? 'Pause' : 'Play')
 	const elapsedLabel = $derived(app.hasAudio ? formatTime(app.currentTime) : '0:00')
 	const totalLabel = $derived(app.hasAudio ? formatTime(app.duration) : '0:00')
@@ -30,6 +33,10 @@
 	<Timeline />
 
 	<div class="transport-hints">
+		<z-button size="md" kind="outline" tone="neutral" isDisabled={!canChange} onclick={openAudioPicker}>
+			<MusicNotesIcon weight="bold" />
+			Change song
+		</z-button>
 		<z-kbd>Space</z-kbd>
 	</div>
 </div>
