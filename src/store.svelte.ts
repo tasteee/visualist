@@ -17,6 +17,8 @@ import { startRecorder, pickRecorderFormat } from './engine/recorder'
 import type { ActiveRecordingT, RecorderFormatT } from './engine/recorder'
 import { drawFrame } from './engine/render'
 import { getFadeLevel } from './engine/fades'
+import { getSizeForShortSide } from './engine/formats'
+import type { SizeT } from './engine/formats'
 import {
 	DEMO_LOOP_SECONDS,
 	MIN_CLIP_SECONDS,
@@ -58,7 +60,7 @@ type AppStateT = {
 const PALETTE_DELAY = 120
 // The live preview draws smaller than the export, so heavy
 // effects stay smooth. Recording always uses the export size.
-const PREVIEW_SIZE = { width: 1440, height: 810 }
+const PREVIEW_SHORT_SIDE = 810
 const DEMO_STATUS = 'Previewing the built-in demo beat. Drop a song to begin.'
 
 export const app = $state<AppStateT>({
@@ -126,15 +128,14 @@ export const formatTime = (seconds: number): string => {
 	return `${minutes}:${paddedSeconds}`
 }
 
-export const getCanvasSize = (): { width: number; height: number } => {
-	if (app.isRecording) return getOutputSize()
-	return PREVIEW_SIZE
+export const getOutputSize = (): SizeT => {
+	const shortSide = Number(app.settings.resolution)
+	return getSizeForShortSide(app.settings.aspectRatio, shortSide)
 }
 
-export const getOutputSize = (): { width: number; height: number } => {
-	const is720 = app.settings.resolution === '720'
-	if (is720) return { width: 1280, height: 720 }
-	return { width: 1920, height: 1080 }
+export const getCanvasSize = (): SizeT => {
+	if (app.isRecording) return getOutputSize()
+	return getSizeForShortSide(app.settings.aspectRatio, PREVIEW_SHORT_SIDE)
 }
 
 const getFrameTime = (): number => {
@@ -194,6 +195,8 @@ const drawVideoFade = (context: CanvasRenderingContext2D, width: number, height:
 	const level = getFadeLevel(elapsed, getRecordingLength(), fadeIn, fadeOut)
 	const coverAlpha = 1 - level
 	if (coverAlpha <= 0) return
+	// The cover is sized in canvas pixels, not scene units.
+	context.setTransform(1, 0, 0, 1, 0, 0)
 	context.globalAlpha = coverAlpha
 	context.fillStyle = appliedPalette.background
 	context.fillRect(0, 0, width, height)

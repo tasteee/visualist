@@ -1,7 +1,8 @@
 # vink
 
 The tasteink visualizer. Load a finished song, tune the look, and record
-a 16:9 video ready for YouTube. The logo pulses, glitches and reacts to
+a video for YouTube, TikTok, Reels, Shorts or the Instagram and
+Facebook feeds. The logo pulses, glitches and reacts to
 the real audio (bass, mids, highs, kicks, snares, energy and tempo), can
 be taken over by spreading ink, and carries the track title.
 
@@ -26,6 +27,7 @@ pnpm build:vink
 src/
   engine/   no UI. Pure functions of time + settings
     analysis.ts    decode -> bands, hits, energy, tempo, beat grid (10 ms grid)
+    formats.ts     frame shapes (16:9, 9:16, 1:1, 4:5) and output sizes
     logoLayers.ts  splits the logo raster into masks, tints and distresses them
     echoes.ts      which echoes exist at time t, and how they look
     render.ts      one frame, back to front
@@ -38,6 +40,19 @@ src/
 Every frame is a pure function of playback time and settings, so preview,
 scrubbing and recording draw identical frames. All randomness is seeded
 from time, stepped at 14 flickers per second.
+
+## Formats
+
+| Format | Ratio | 1080 export | For |
+| --- | --- | --- | --- |
+| Landscape | 16:9 | 1920 × 1080 | YouTube, Facebook, X |
+| Vertical | 9:16 | 1080 × 1920 | TikTok, Reels, Shorts, Stories |
+| Square | 1:1 | 1080 × 1080 | Instagram and Facebook feed |
+| Portrait | 4:5 | 1080 × 1350 | Instagram and Facebook feed |
+
+The scene is designed at 16:9. Other shapes fill the whole frame
+with the background, lyric pattern and grain, and scale the logo,
+echoes and title down around the center until they fit the width.
 
 ## The logo
 
@@ -69,6 +84,6 @@ layout.json (pivot and size). It is never retyped in a font.
 - The overview at the bottom shows the whole song: drag the window
   to scroll, drag its edges to zoom, double-click to fit.
 - Drag the grip above the editor to resize it. The video keeps its
-  16:9 frame in the space left over.
+  frame shape in the space left over.
 
 Spec: product spec for the tasteink visualizer (behavior only).

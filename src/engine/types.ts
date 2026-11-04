@@ -1,5 +1,6 @@
 export type ModeT = 'light' | 'dark'
 export type ResolutionT = '1080' | '720'
+export type AspectRatioT = '16:9' | '9:16' | '1:1' | '4:5'
 export type FrameRateT = 30 | 60
 export type EchoStyleNameT = 'hollow' | 'faintFill' | 'double' | 'sliced' | 'gritty'
 
@@ -22,6 +23,7 @@ export type SettingsT = {
 	textureAmount: number
 	solidAmount: number
 	echoStyles: EchoStylesT
+	aspectRatio: AspectRatioT
 	resolution: ResolutionT
 	frameRate: FrameRateT
 	audioFadeIn: number

@@ -1,5 +1,7 @@
 import { findFirstHitIndex, getLevels } from './analysis'
 import { collectEchoes } from './echoes'
+import { getFrameLayout } from './formats'
+import type { FrameLayoutT } from './formats'
 import type { EchoT } from './echoes'
 import { FRAME_HEIGHT, FRAME_WIDTH, LOGO_CENTER_X, LOGO_CENTER_Y, getLayerHeight, getLayerWidth, getTinted, tintLayer } from './logoLayers'
 import type { LayerT, LogoLayersT } from './logoLayers'
@@ -24,6 +26,7 @@ type StripT = {
 
 type FrameStateT = {
 	input: FrameInputT
+	frame: FrameLayoutT
 	bass: number
 	mid: number
 	high: number
@@ -115,6 +118,7 @@ const buildFrameState = (input: FrameInputT, layers: LogoLayersT): FrameStateT =
 
 	return {
 		input,
+		frame: getFrameLayout(input.settings.aspectRatio),
 		bass,
 		mid,
 		high,
@@ -167,10 +171,30 @@ const scaleAroundLogo = (context: CanvasRenderingContext2D, scale: number): void
 	context.translate(-LOGO_CENTER_X, -LOGO_CENTER_Y)
 }
 
-const drawBackground = (context: CanvasRenderingContext2D, layers: LogoLayersT, palette: ScenePaletteT): void => {
+// Fits the 16:9 scene into the frame, centered and scaled.
+const applySceneTransform = (context: CanvasRenderingContext2D, frame: FrameLayoutT): void => {
+	context.translate(frame.width / 2, frame.height / 2)
+	context.scale(frame.sceneScale, frame.sceneScale)
+	context.translate(-FRAME_WIDTH / 2, -FRAME_HEIGHT / 2)
+}
+
+// The lyric pattern covers the whole frame, cropped evenly
+// on the long side, so no shape ever shows an empty edge.
+const drawLyricPattern = (context: CanvasRenderingContext2D, pattern: HTMLCanvasElement, frame: FrameLayoutT): void => {
+	const widthCover = frame.width / FRAME_WIDTH
+	const heightCover = frame.height / FRAME_HEIGHT
+	const coverScale = Math.max(widthCover, heightCover)
+	const coverWidth = FRAME_WIDTH * coverScale
+	const coverHeight = FRAME_HEIGHT * coverScale
+	const left = (frame.width - coverWidth) / 2
+	const top = (frame.height - coverHeight) / 2
+	context.drawImage(pattern, left, top, coverWidth, coverHeight)
+}
+
+const drawBackground = (context: CanvasRenderingContext2D, layers: LogoLayersT, palette: ScenePaletteT, frame: FrameLayoutT): void => {
 	context.fillStyle = palette.background
-	context.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
-	context.drawImage(getTinted(layers.lyricPattern, palette.logo), 0, 0)
+	context.fillRect(0, 0, frame.width, frame.height)
+	drawLyricPattern(context, getTinted(layers.lyricPattern, palette.logo), frame)
 	context.globalAlpha = 1
 }
 
@@ -256,7 +280,7 @@ const drawGrain = (context: CanvasRenderingContext2D, layers: LogoLayersT, palet
 	context.globalAlpha = alpha
 	context.translate(shiftX, shiftY)
 	context.fillStyle = pattern
-	context.fillRect(-shiftX, -shiftY, FRAME_WIDTH, FRAME_HEIGHT)
+	context.fillRect(-shiftX, -shiftY, state.frame.width, state.frame.height)
 	context.restore()
 }
 
@@ -358,14 +382,24 @@ const drawTitle = (context: CanvasRenderingContext2D, palette: ScenePaletteT, st
 	context.restore()
 }
 
-// One full frame in one mode, back to front.
+// One full frame in one mode, back to front. Background and
+// grain fill the frame. Everything else lives in the scene.
 const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT): void => {
 	const palette = getScenePalette(state.input)
-	drawBackground(context, layers, palette)
+	drawBackground(context, layers, palette, state.frame)
+
+	context.save()
+	applySceneTransform(context, state.frame)
 	for (const echo of state.echoes) drawEcho(context, echo, layers, palette, state)
+	context.restore()
+
 	drawGrain(context, layers, palette, state)
+
+	context.save()
+	applySceneTransform(context, state.frame)
 	drawLogo(context, layers, palette, state)
 	drawTitle(context, palette, state)
+	context.restore()
 }
 
 // Every frame is a pure function of the time and the settings,
@@ -377,10 +411,11 @@ export const drawFrame = (
 	outputWidth: number,
 	outputHeight: number
 ): void => {
-	context.setTransform(outputWidth / FRAME_WIDTH, 0, 0, outputHeight / FRAME_HEIGHT, 0, 0)
+	const state = buildFrameState(input, layers)
+	const scaleX = outputWidth / state.frame.width
+	const scaleY = outputHeight / state.frame.height
+	context.setTransform(scaleX, 0, 0, scaleY, 0, 0)
 	context.globalAlpha = 1
 	context.globalCompositeOperation = 'source-over'
-
-	const state = buildFrameState(input, layers)
 	drawScene(context, layers, state)
 }

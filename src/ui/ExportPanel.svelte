@@ -1,22 +1,31 @@
 <script lang="ts">
 	import RecordIcon from 'phosphor-svelte/lib/RecordIcon'
 	import { app, cancelRecording, formatTime, getClipLength, startRecording } from '../store.svelte'
+	import { getFormatPreset, getSizeForShortSide } from '../engine/formats'
 	import { MAX_FADE_SECONDS, TAIL_SECONDS } from '../engine/settings'
-	import type { FadeSettingNameT, FrameRateT, ResolutionT } from '../engine/types'
+	import type { AspectRatioT, FadeSettingNameT, FrameRateT, ResolutionT } from '../engine/types'
+	import FormatPicker from './FormatPicker.svelte'
 	import Section from './Section.svelte'
 	import Segmented from './Segmented.svelte'
 	import './ExportPanel.css'
 
-	const RESOLUTION_OPTIONS = [
-		{ value: '1080', label: '1920 × 1080' },
-		{ value: '720', label: '1280 × 720' }
-	]
+	const getResolutionLabel = (aspectRatio: AspectRatioT, shortSide: number): string => {
+		const size = getSizeForShortSide(aspectRatio, shortSide)
+		return `${size.width} × ${size.height}`
+	}
 
 	const FRAME_RATE_OPTIONS = [
 		{ value: '30', label: '30 fps' },
 		{ value: '60', label: '60 fps' }
 	]
 
+	const resolutionOptions = $derived([
+		{ value: '1080', label: getResolutionLabel(app.settings.aspectRatio, 1080) },
+		{ value: '720', label: getResolutionLabel(app.settings.aspectRatio, 720) }
+	])
+	const formatPreset = $derived(getFormatPreset(app.settings.aspectRatio))
+	const formatDescription = $derived(`${formatPreset.value} for ${formatPreset.platforms}. Locked while recording.`)
+	const outputSizeLabel = $derived(getResolutionLabel(app.settings.aspectRatio, Number(app.settings.resolution)))
 	const canRecord = $derived(app.hasAudio && app.isLayersReady && !app.isAnalyzing)
 	const lengthLabel = $derived(app.hasAudio ? formatTime(getClipLength() + TAIL_SECONDS) : '–')
 	const rangeLabel = $derived(app.hasAudio ? `${formatTime(app.trimStart)} – ${formatTime(app.trimEnd)}` : '–')
@@ -26,6 +35,11 @@
 			? `Recording runs in real time, so it takes about ${formatTime(getClipLength() + TAIL_SECONDS)}.`
 			: 'Load a song to record. Recording runs in real time.'
 	)
+
+	const handleFormat = (value: AspectRatioT) => {
+		if (app.isRecording) return
+		app.settings.aspectRatio = value
+	}
 
 	const handleResolution = (value: string) => {
 		if (app.isRecording) return
@@ -50,8 +64,12 @@
 	}
 </script>
 
-<Section title="Resolution" description="16:9. Locked while recording.">
-	<Segmented label="Resolution" options={RESOLUTION_OPTIONS} value={app.settings.resolution} isDisabled={app.isRecording} onchange={handleResolution} />
+<Section title="Format" description={formatDescription}>
+	<FormatPicker value={app.settings.aspectRatio} isDisabled={app.isRecording} onchange={handleFormat} />
+</Section>
+
+<Section title="Resolution" description="Locked while recording.">
+	<Segmented label="Resolution" options={resolutionOptions} value={app.settings.resolution} isDisabled={app.isRecording} onchange={handleResolution} />
 </Section>
 
 <Section title="Frame rate" description="60 fps is best effort on slower machines.">
@@ -83,6 +101,7 @@
 <Section title="File">
 	<dl class="export-facts">
 		<div class="export-fact"><dt>Format</dt><dd>{formatLabel}</dd></div>
+		<div class="export-fact"><dt>Size</dt><dd>{outputSizeLabel} · {formatPreset.value}</dd></div>
 		<div class="export-fact"><dt>Bitrate</dt><dd>16 Mbps video · 256 kbps audio</dd></div>
 		<div class="export-fact"><dt>Range</dt><dd>{rangeLabel}</dd></div>
 		<div class="export-fact"><dt>Length</dt><dd>{lengthLabel}</dd></div>

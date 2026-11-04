@@ -1,3 +1,4 @@
+import { DEFAULT_ASPECT_RATIO, checkIsAspectRatio } from './formats'
 import type { SettingsT, EchoStylesT } from './types'
 
 export const GRID_STEP = 0.01
@@ -30,6 +31,7 @@ export const createDefaultSettings = (): SettingsT => ({
 	textureAmount: 0.75,
 	solidAmount: 1,
 	echoStyles: allEchoStyles(),
+	aspectRatio: DEFAULT_ASPECT_RATIO,
 	resolution: '1080',
 	frameRate: 30,
 	audioFadeIn: 0,
@@ -47,7 +49,10 @@ export const loadSettings = (): SettingsT => {
 		if (stored === null) return defaults
 		const parsed = JSON.parse(stored) as Partial<SettingsT>
 		const echoStyles = { ...defaults.echoStyles, ...parsed.echoStyles }
-		return { ...defaults, ...parsed, echoStyles }
+		const storedAspectRatio = parsed.aspectRatio
+		const hasValidAspectRatio = checkIsAspectRatio(storedAspectRatio)
+		const aspectRatio = hasValidAspectRatio ? storedAspectRatio : defaults.aspectRatio
+		return { ...defaults, ...parsed, echoStyles, aspectRatio }
 	} catch {
 		return defaults
 	}

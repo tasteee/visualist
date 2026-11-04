@@ -1,0 +1,124 @@
+.format-picker {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--spacing-2);
+}
+
+.format-option {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--spacing-3);
+	min-width: 0;
+	padding: var(--spacing-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg);
+	color: var(--foreground);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition:
+		border-color var(--motion-fast) ease,
+		background-color var(--motion-fast) ease;
+}
+
+.format-option:hover {
+	border-color: color-mix(in oklch, var(--foreground) 28%, var(--border));
+}
+
+.format-option:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.format-option.isSelected {
+	border-color: var(--accent);
+	background: color-mix(in oklch, var(--accent) 6%, var(--bg));
+}
+
+.format-option:disabled {
+	opacity: var(--control-disabled-opacity);
+	cursor: not-allowed;
+}
+
+/* Every shape sits in the same square, so labels line up. */
+.format-glyph {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-8);
+	height: var(--spacing-8);
+}
+
+.format-glyph-shape {
+	display: block;
+	border: 1.5px solid var(--muted);
+	border-radius: var(--radius-sm);
+	transition:
+		border-color var(--motion-fast) ease,
+		background-color var(--motion-fast) ease;
+}
+
+.format-glyph-shape.isLandscape {
+	width: var(--spacing-8);
+	height: calc(var(--spacing-8) * 9 / 16);
+}
+
+.format-glyph-shape.isVertical {
+	width: calc(var(--spacing-8) * 9 / 16);
+	height: var(--spacing-8);
+}
+
+.format-glyph-shape.isSquare {
+	width: calc(var(--spacing-8) * 0.75);
+	height: calc(var(--spacing-8) * 0.75);
+}
+
+.format-glyph-shape.isPortrait {
+	width: calc(var(--spacing-8) * 0.7);
+	height: calc(var(--spacing-8) * 0.875);
+}
+
+.format-option.isSelected .format-glyph-shape {
+	border-color: var(--accent);
+	background: color-mix(in oklch, var(--accent) 16%, transparent);
+}
+
+.format-text {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-1);
+	min-width: 0;
+	width: 100%;
+}
+
+.format-heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--spacing-2);
+}
+
+.format-name {
+	font-size: var(--font-size-small);
+	font-weight: var(--font-weight-semibold);
+	line-height: 1.2;
+}
+
+.format-ratio {
+	color: var(--muted);
+	font-size: var(--font-size-caption);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-weight-medium);
+}
+
+.format-option.isSelected .format-ratio {
+	color: var(--accent);
+}
+
+.format-platforms {
+	color: var(--secondary);
+	font-size: var(--font-size-caption);
+	line-height: 1.35;
+}

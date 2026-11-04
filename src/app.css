@@ -40,7 +40,7 @@ body {
 }
 
 /* The stage takes whatever the editor dock leaves, and keeps
-   16:9 inside it, so adding lanes never squeezes the video. */
+   the video's shape inside it, so lanes never squeeze it. */
 .app-stage-area {
 	display: flex;
 	flex: 1;
@@ -107,6 +107,20 @@ body {
 
 	.app-stage-area .stage-frame {
 		width: 100cqw;
+	}
+
+	/* Tall frames cap at most of the screen height, so the
+	   inspector stays in reach below them. */
+	.app-stage-area .stage-frame.isVertical {
+		width: min(100cqw, 75svh * 9 / 16);
+	}
+
+	.app-stage-area .stage-frame.isSquare {
+		width: min(100cqw, 75svh);
+	}
+
+	.app-stage-area .stage-frame.isPortrait {
+		width: min(100cqw, 75svh * 4 / 5);
 	}
 
 	.app-inspector {

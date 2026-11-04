@@ -8,6 +8,21 @@
 	background: var(--bg);
 }
 
+.stage-frame.isVertical {
+	aspect-ratio: 9 / 16;
+	width: min(100cqw, 100cqh * 9 / 16);
+}
+
+.stage-frame.isSquare {
+	aspect-ratio: 1 / 1;
+	width: min(100cqw, 100cqh);
+}
+
+.stage-frame.isPortrait {
+	aspect-ratio: 4 / 5;
+	width: min(100cqw, 100cqh * 4 / 5);
+}
+
 .stage-frame.isRecording {
 	border-color: var(--destructive);
 }
