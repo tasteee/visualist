@@ -8,6 +8,8 @@ import {
 	setPausedPosition,
 	startPlayback
 } from './engine/audio'
+import { automation, clampLanesToDuration } from './automation.svelte'
+import { applyAutomation } from './engine/automation'
 import { buildDemoAnalysis } from './engine/demo'
 import { buildLogoLayers } from './engine/logoLayers'
 import type { LogoLayersT } from './engine/logoLayers'
@@ -144,7 +146,7 @@ const getFrameTime = (): number => {
 const buildFrameInput = (time: number): FrameInputT => ({
 	time,
 	analysis,
-	settings: app.settings,
+	settings: applyAutomation(app.settings, automation.lanes, time),
 	palette: appliedPalette,
 	bpm: analysis.bpm,
 	beatOffset: analysis.beatOffset,
@@ -389,6 +391,7 @@ export const loadAudioFile = async (file: File): Promise<void> => {
 		app.duration = decoded.duration
 		app.trimStart = 0
 		app.trimEnd = decoded.duration
+		clampLanesToDuration(decoded.duration)
 		app.fileName = file.name
 		app.kickCount = result.kicks.length
 		app.currentTime = 0
@@ -440,6 +443,7 @@ const startWatchers = (): void => {
 	$effect.root(() => {
 		$effect(() => {
 			JSON.stringify(app.settings)
+			JSON.stringify(automation.lanes)
 			void app.title
 			void app.bpm
 			void appliedPalette

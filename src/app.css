@@ -42,6 +42,31 @@ body {
 	padding: var(--spacing-5);
 }
 
+.app-console {
+	display: grid;
+	grid-template-columns: 11rem minmax(0, 1fr) auto;
+	column-gap: var(--spacing-4);
+	row-gap: var(--spacing-2);
+}
+
+/* Room for the transport, the automation header, and each
+   visible lane, so the stage shrinks instead of overflowing. */
+.app-workspace[data-lane-rows='0'] {
+	--stage-reserved-height: 10rem;
+}
+
+.app-workspace[data-lane-rows='1'] {
+	--stage-reserved-height: 13.75rem;
+}
+
+.app-workspace[data-lane-rows='2'] {
+	--stage-reserved-height: 17.5rem;
+}
+
+.app-workspace[data-lane-rows='3'] {
+	--stage-reserved-height: 21.25rem;
+}
+
 .app-inspector {
 	grid-area: inspector;
 	min-height: 0;

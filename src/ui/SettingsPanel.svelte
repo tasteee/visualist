@@ -1,7 +1,9 @@
 <script lang="ts">
 	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
+	import { automation } from '../automation.svelte'
+	import { checkIsAutomated, findControl, getLiveControlValue } from '../engine/automation'
 	import { app, detectBpm, getAnalysis, setBpm, setTheme, setTitle } from '../store.svelte'
-	import type { EchoStyleNameT, ModeT } from '../engine/types'
+	import type { AutomatableKeyT, EchoStyleNameT, ModeT } from '../engine/types'
 	import ColorRow from './ColorRow.svelte'
 	import Segmented from './Segmented.svelte'
 	import SettingSlider from './SettingSlider.svelte'
@@ -40,6 +42,25 @@
 		const isBlockedByGlitch = name === 'sliced' && app.settings.glitchAmount <= 0
 		const isBlockedByTexture = name === 'gritty' && app.settings.textureAmount <= 0
 		return isEchoOn && !isBlockedByGlitch && !isBlockedByTexture
+	}
+
+	const checkIsKeyAutomated = (key: AutomatableKeyT): boolean => checkIsAutomated(automation.lanes, key)
+
+	// Automated sliders follow the playhead and lock until the
+	// lane's points are removed.
+	const getSliderValue = (key: AutomatableKeyT): number => {
+		const lane = automation.lanes.find((candidate) => candidate.controlKey === key)
+		const isAutomated = lane !== undefined && lane.points.length > 0
+		if (!isAutomated) return app.settings[key]
+		const liveValue = getLiveControlValue(lane, app.settings, app.currentTime)
+		return liveValue ?? app.settings[key]
+	}
+
+	const getSliderHint = (key: AutomatableKeyT): string | undefined => {
+		const control = findControl(key)
+		const isAutomated = checkIsKeyAutomated(key)
+		if (!isAutomated || control === null) return undefined
+		return `${control.label} is driven by an automation lane`
 	}
 
 	const handleTitleInput = (event: Event) => {
@@ -87,17 +108,17 @@
 	</div>
 
 	<Segmented label="Theme" options={THEME_OPTIONS} value={app.settings.mode} onchange={(value) => setTheme(value as ModeT)} />
-	<SettingSlider label="Logo border" value={app.settings.logoBorder} min={0} max={1} step={0.05} onchange={(value) => (app.settings.logoBorder = value)} />
-	<SettingSlider label="Reactivity" value={app.settings.reactivity} min={0} max={2} step={0.05} onchange={(value) => (app.settings.reactivity = value)} />
+	<SettingSlider label="Logo border" value={getSliderValue('logoBorder')} hint={getSliderHint('logoBorder')} isDisabled={checkIsKeyAutomated('logoBorder')} min={0} max={1} step={0.05} onchange={(value) => (app.settings.logoBorder = value)} />
+	<SettingSlider label="Reactivity" value={getSliderValue('reactivity')} hint={getSliderHint('reactivity')} isDisabled={checkIsKeyAutomated('reactivity')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.reactivity = value)} />
 
 	<ColorRow label="Accent 1" value={app.settings.accent1} onchange={(value) => (app.settings.accent1 = value)} />
 	<ColorRow label="Accent 2" value={app.settings.accent2} onchange={(value) => (app.settings.accent2 = value)} />
 	<ColorRow label="Background" value={app.settings.background} onchange={(value) => (app.settings.background = value)} />
 	<ColorRow label="Foreground" value={app.settings.foreground} onchange={(value) => (app.settings.foreground = value)} />
 
-	<SettingSlider label="Echoes Amount" value={app.settings.echoAmount} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoAmount = value)} />
-	<SettingSlider label="Echoes Size" value={app.settings.echoSize} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoSize = value)} />
-	<SettingSlider label="Echoes Speed" value={app.settings.echoSpeed} min={0.4} max={3} step={0.05} onchange={(value) => (app.settings.echoSpeed = value)} />
+	<SettingSlider label="Echoes Amount" value={getSliderValue('echoAmount')} hint={getSliderHint('echoAmount')} isDisabled={checkIsKeyAutomated('echoAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoAmount = value)} />
+	<SettingSlider label="Echoes Size" value={getSliderValue('echoSize')} hint={getSliderHint('echoSize')} isDisabled={checkIsKeyAutomated('echoSize')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoSize = value)} />
+	<SettingSlider label="Echoes Speed" value={getSliderValue('echoSpeed')} hint={getSliderHint('echoSpeed')} isDisabled={checkIsKeyAutomated('echoSpeed')} min={0.4} max={3} step={0.05} onchange={(value) => (app.settings.echoSpeed = value)} />
 	<div class="settings-chips">
 		{#each STYLE_CHIPS as chip (chip.name)}
 			<z-badge
@@ -114,7 +135,7 @@
 		{/each}
 	</div>
 
-	<SettingSlider label="Glitch Amount" value={app.settings.glitchAmount} min={0} max={2} step={0.05} onchange={(value) => (app.settings.glitchAmount = value)} />
-	<SettingSlider label="Texture Amount" value={app.settings.textureAmount} min={0} max={2} step={0.05} onchange={(value) => (app.settings.textureAmount = value)} />
-	<SettingSlider label="Solids Amount" value={app.settings.solidAmount} min={0} max={2} step={0.05} onchange={(value) => (app.settings.solidAmount = value)} />
+	<SettingSlider label="Glitch Amount" value={getSliderValue('glitchAmount')} hint={getSliderHint('glitchAmount')} isDisabled={checkIsKeyAutomated('glitchAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.glitchAmount = value)} />
+	<SettingSlider label="Texture Amount" value={getSliderValue('textureAmount')} hint={getSliderHint('textureAmount')} isDisabled={checkIsKeyAutomated('textureAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.textureAmount = value)} />
+	<SettingSlider label="Solids Amount" value={getSliderValue('solidAmount')} hint={getSliderHint('solidAmount')} isDisabled={checkIsKeyAutomated('solidAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.solidAmount = value)} />
 </div>

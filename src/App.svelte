@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
+	import { automation } from './automation.svelte'
 	import { app, loadAudioFile, startApp, togglePlay } from './store.svelte'
+	import AutomationBar from './ui/AutomationBar.svelte'
 	import DropZone from './ui/DropZone.svelte'
 	import Inspector from './ui/Inspector.svelte'
 	import Stage from './ui/Stage.svelte'
@@ -48,6 +50,9 @@
 		void loadAudioFile(file)
 	}
 
+	const MAX_VISIBLE_LANES = 3
+	const visibleLaneRows = $derived(Math.min(automation.lanes.length, MAX_VISIBLE_LANES))
+
 	onMount(() => {
 		void startApp()
 	})
@@ -56,10 +61,13 @@
 <svelte:window onkeydown={handleKeyDown} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop} />
 
 <main class="app-shell">
-	<section class="app-workspace">
+	<section class="app-workspace" data-lane-rows={app.hasAudio ? visibleLaneRows : undefined}>
 		<Stage />
 		{#if app.hasAudio}
-			<Transport />
+			<div class="app-console">
+				<Transport />
+				<AutomationBar />
+			</div>
 		{/if}
 		{#if !app.hasAudio}
 			<DropZone />

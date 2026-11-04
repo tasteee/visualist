@@ -1,0 +1,203 @@
+.automation-lane {
+	display: grid;
+	grid-template-columns: subgrid;
+	grid-column: 1 / -1;
+	align-items: center;
+	height: var(--automation-lane-height);
+}
+
+.automation-lane-control {
+	min-width: 0;
+}
+
+.automation-lane-control z-select {
+	width: 100%;
+}
+
+.automation-lane-meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--spacing-2);
+	min-width: 0;
+}
+
+.automation-value {
+	color: var(--foreground);
+	font-size: var(--font-size-3);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.automation-value.isMuted {
+	color: var(--secondary);
+	font-weight: 400;
+}
+
+.automation-track {
+	position: relative;
+	align-self: stretch;
+	min-width: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg);
+	cursor: crosshair;
+	touch-action: none;
+	user-select: none;
+}
+
+.automation-track.isDisabled {
+	border-style: dashed;
+	cursor: default;
+}
+
+.automation-plot {
+	position: absolute;
+	inset: var(--spacing-2) 0;
+}
+
+.automation-graph {
+	display: block;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.automation-guide {
+	stroke: var(--border);
+	stroke-width: 1;
+	vector-effect: non-scaling-stroke;
+	opacity: 0.6;
+}
+
+.automation-area {
+	fill: color-mix(in oklab, var(--foreground) 18%, transparent);
+}
+
+.automation-line {
+	fill: none;
+	stroke: var(--foreground);
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.automation-line.isIdle {
+	stroke: var(--secondary);
+	stroke-dasharray: 3 4;
+}
+
+.automation-shade {
+	position: absolute;
+	top: calc(-1 * var(--spacing-2));
+	bottom: calc(-1 * var(--spacing-2));
+	background: var(--bg);
+	opacity: 0.6;
+	pointer-events: none;
+}
+
+.automation-shade.isStart {
+	left: 0;
+	width: var(--automation-position);
+}
+
+.automation-shade.isEnd {
+	right: 0;
+	width: var(--automation-position);
+}
+
+.automation-playhead {
+	position: absolute;
+	top: calc(-1 * var(--spacing-2));
+	bottom: calc(-1 * var(--spacing-2));
+	left: var(--automation-position);
+	width: 1px;
+	background: var(--foreground);
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+.automation-hint {
+	position: absolute;
+	top: var(--spacing-1);
+	left: var(--spacing-3);
+	color: var(--secondary);
+	font-size: var(--font-size-1);
+	pointer-events: none;
+}
+
+.automation-hint.isLow {
+	top: auto;
+	bottom: var(--spacing-1);
+}
+
+.automation-empty {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--secondary);
+	font-size: var(--font-size-2);
+	pointer-events: none;
+}
+
+.automation-point {
+	position: absolute;
+	top: var(--automation-y);
+	left: var(--automation-x);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-5);
+	height: var(--spacing-5);
+	border-radius: 50%;
+	cursor: grab;
+	outline: none;
+	transform: translate(-50%, -50%);
+}
+
+.automation-point:active {
+	cursor: grabbing;
+}
+
+.automation-point::before {
+	content: '';
+	position: absolute;
+	inset: var(--spacing-1);
+	border: 1.5px solid transparent;
+	border-radius: 50%;
+	transition: border-color 120ms ease, inset 120ms ease;
+}
+
+.automation-point::after {
+	content: '';
+	width: var(--spacing-2);
+	height: var(--spacing-2);
+	border: 2px solid var(--bg);
+	border-radius: 50%;
+	background: var(--foreground);
+	box-sizing: content-box;
+	transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.automation-point:hover::before {
+	border-color: var(--secondary);
+}
+
+.automation-point:hover::after {
+	transform: scale(1.1);
+}
+
+.automation-point:focus-visible::before,
+.automation-point.isSelected::before {
+	inset: 0;
+	border-color: var(--accent);
+}
+
+.automation-point.isSelected::after {
+	background: var(--accent);
+}

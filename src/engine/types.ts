@@ -75,3 +75,36 @@ export type FrameInputT = {
 	title: string
 	isIntroActive: boolean
 }
+
+export type AutomatableKeyT =
+	| 'logoBorder'
+	| 'reactivity'
+	| 'echoAmount'
+	| 'echoSize'
+	| 'echoSpeed'
+	| 'glitchAmount'
+	| 'textureAmount'
+	| 'solidAmount'
+
+export type AutomationControlT = {
+	key: AutomatableKeyT
+	label: string
+	min: number
+	max: number
+	step: number
+}
+
+// value is normalized 0-1 across the control's range. bend
+// shapes the segment that runs from this point to the next.
+export type AutomationPointT = {
+	id: string
+	time: number
+	value: number
+	bend: number
+}
+
+export type AutomationLaneT = {
+	id: string
+	controlKey: AutomatableKeyT | null
+	points: AutomationPointT[]
+}

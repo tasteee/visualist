@@ -15,19 +15,21 @@
 </script>
 
 <div class="transport">
-	<z-tooltip content={playLabel} placement="top">
-		<z-button size="lg" kind="solid" tone="neutral" isDisabled={!canPlay} onclick={togglePlay} aria-label={playLabel}>
-			{#if app.isPlaying}
-				<PauseIcon weight="fill" />
-			{:else}
-				<PlayIcon weight="fill" />
-			{/if}
-		</z-button>
-	</z-tooltip>
+	<div class="transport-lead">
+		<z-tooltip content={playLabel} placement="top">
+			<z-button size="lg" kind="solid" tone="neutral" isDisabled={!canPlay} onclick={togglePlay} aria-label={playLabel}>
+				{#if app.isPlaying}
+					<PauseIcon weight="fill" />
+				{:else}
+					<PlayIcon weight="fill" />
+				{/if}
+			</z-button>
+		</z-tooltip>
 
-	<div class="transport-time">
-		<span class="transport-elapsed">{elapsedLabel}</span>
-		<span class="transport-total">/ {totalLabel}</span>
+		<div class="transport-time">
+			<span class="transport-elapsed">{elapsedLabel}</span>
+			<span class="transport-total">/ {totalLabel}</span>
+		</div>
 	</div>
 
 	<Timeline />
