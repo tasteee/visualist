@@ -1,5 +1,4 @@
 export type ModeT = 'light' | 'dark'
-export type TitleColorT = 'auto' | 'accent1' | 'accent2'
 export type ResolutionT = '1080' | '720'
 export type FrameRateT = 30 | 60
 export type EchoStyleNameT = 'hollow' | 'faintFill' | 'double' | 'sliced' | 'gritty'
@@ -8,13 +7,12 @@ export type EchoStylesT = Record<EchoStyleNameT, boolean>
 
 export type SettingsT = {
 	mode: ModeT
-	logoSeparation: number
+	logoBorder: number
 	accent1: string
 	accent2: string
-	ink: string
-	paper: string
+	background: string
+	foreground: string
 	reactivity: number
-	isBeatBounceOn: boolean
 	isEchoesOn: boolean
 	isGlitchOn: boolean
 	isTextureOn: boolean
@@ -25,13 +23,7 @@ export type SettingsT = {
 	glitchAmount: number
 	textureAmount: number
 	solidAmount: number
-	bassBounce: number
 	echoStyles: EchoStylesT
-	isInkOn: boolean
-	inkStart: number
-	inkDoneBeforeEnd: number
-	titleSize: number
-	titleColor: TitleColorT
 	resolution: ResolutionT
 	frameRate: FrameRateT
 }
@@ -67,8 +59,8 @@ export type AudioLevelsT = {
 export type PaletteT = {
 	accent1: string
 	accent2: string
-	ink: string
-	paper: string
+	background: string
+	foreground: string
 }
 
 export type FrameInputT = {
@@ -79,6 +71,5 @@ export type FrameInputT = {
 	bpm: number
 	beatOffset: number
 	title: string
-	inkFinishTime: number
 	isIntroActive: boolean
 }

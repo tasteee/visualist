@@ -1,18 +1,18 @@
 import { findFirstHitIndex, getLevels } from './analysis'
 import { collectEchoes } from './echoes'
 import type { EchoT } from './echoes'
-import { getInkPhase, traceInkBlob } from './ink'
 import { FRAME_HEIGHT, FRAME_WIDTH, LOGO_CENTER_X, LOGO_CENTER_Y, getTinted } from './logoLayers'
 import type { LogoLayersT } from './logoLayers'
 import { createRandom } from './rng'
 import { FLICKER_RATE, clamp } from './settings'
-import type { FrameInputT, ModeT } from './types'
+import type { FrameInputT } from './types'
 
 const STRIP_COUNT = 16
 const MAX_STRIP_SHIFT = 38
 const GLITCH_BURST_SECONDS = 0.18
-const BEAT_SPIKE_SECONDS = 0.12
 const TITLE_BASELINE_Y = 800
+const TITLE_FONT_SIZE = 40
+const TITLE_FONT_WEIGHT = 1000
 const TITLE_MAX_WIDTH = FRAME_WIDTH * 0.86
 const GRAIN_TILE_SIZE = 256
 
@@ -45,23 +45,13 @@ type ScenePaletteT = {
 	accent2: string
 }
 
-const getScenePalette = (input: FrameInputT, mode: ModeT): ScenePaletteT => {
-	const isLight = mode === 'light'
+const getScenePalette = (input: FrameInputT): ScenePaletteT => {
 	return {
-		background: isLight ? input.palette.paper : input.palette.ink,
-		logo: isLight ? input.palette.ink : input.palette.paper,
+		background: input.palette.background,
+		logo: input.palette.foreground,
 		accent1: input.palette.accent1,
 		accent2: input.palette.accent2
 	}
-}
-
-// Audio drivers. With beat bounce on, bass is 40% real audio and
-// 60% a spike that lands on every beat of the BPM grid.
-const getBeatSpike = (input: FrameInputT): number => {
-	const beatLength = 60 / input.bpm
-	const sinceBeat = (((input.time - input.beatOffset) % beatLength) + beatLength) % beatLength
-	const remaining = Math.max(0, 1 - sinceBeat / BEAT_SPIKE_SECONDS)
-	return remaining * remaining
 }
 
 const getGlitchAmount = (input: FrameInputT, high: number, energy: number): number => {
@@ -106,9 +96,7 @@ const buildFrameState = (input: FrameInputT, layers: LogoLayersT): FrameStateT =
 	const settings = input.settings
 	const reactivity = settings.reactivity
 	const levels = getLevels(input.analysis, input.time)
-	const audioBass = levels.low * reactivity
-	const spike = getBeatSpike(input) * reactivity
-	const bass = settings.isBeatBounceOn ? 0.4 * audioBass + 0.6 * spike : audioBass
+	const bass = levels.low * reactivity
 	const high = levels.high * reactivity
 	const mid = levels.mid * reactivity
 	const energy = levels.energy * reactivity
@@ -122,7 +110,7 @@ const buildFrameState = (input: FrameInputT, layers: LogoLayersT): FrameStateT =
 
 	const introAlpha = input.isIntroActive ? clamp(input.time / 1, 0, 1) : 1
 	const titleAlpha = input.isIntroActive ? clamp((input.time - 0.8) / 0.4, 0, 1) : 1
-	const bounceScale = 1 + 0.03 * clamp(bass, 0, 1.4) * settings.bassBounce
+	const bounceScale = 1 + 0.03 * clamp(bass, 0, 1.4)
 	const padding = 12
 
 	return {
@@ -163,11 +151,9 @@ const scaleAroundLogo = (context: CanvasRenderingContext2D, scale: number): void
 	context.translate(-LOGO_CENTER_X, -LOGO_CENTER_Y)
 }
 
-const drawBackground = (context: CanvasRenderingContext2D, layers: LogoLayersT, palette: ScenePaletteT, mode: ModeT): void => {
+const drawBackground = (context: CanvasRenderingContext2D, layers: LogoLayersT, palette: ScenePaletteT): void => {
 	context.fillStyle = palette.background
 	context.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
-	const textAlpha = mode === 'light' ? 0.06 : 0.08
-	context.globalAlpha = textAlpha
 	context.drawImage(getTinted(layers.lyricPattern, palette.logo), 0, 0)
 	context.globalAlpha = 1
 }
@@ -305,8 +291,8 @@ const drawLogo = (context: CanvasRenderingContext2D, layers: LogoLayersT, palett
 	context.globalAlpha = state.introAlpha
 	scaleAroundLogo(context, state.bounceScale)
 
-	const separation = clamp(settings.logoSeparation, 0, 1)
-	context.globalAlpha = separation * state.introAlpha
+	const border = clamp(settings.logoBorder, 0, 1)
+	context.globalAlpha = border * state.introAlpha
 	context.drawImage(getTinted(layers.halo, palette.background), 0, 0)
 	context.globalAlpha = state.introAlpha
 
@@ -321,29 +307,21 @@ const drawLogo = (context: CanvasRenderingContext2D, layers: LogoLayersT, palett
 	context.restore()
 }
 
-const getTitleColor = (state: FrameStateT, palette: ScenePaletteT): string => {
-	const titleColor = state.input.settings.titleColor
-	if (titleColor === 'accent1') return palette.accent1
-	if (titleColor === 'accent2') return palette.accent2
-	return palette.logo
-}
-
 const drawTitle = (context: CanvasRenderingContext2D, palette: ScenePaletteT, state: FrameStateT): void => {
 	const text = state.input.title.trim().toUpperCase()
 	const isEmpty = text.length === 0
 	if (isEmpty) return
 
-	const settings = state.input.settings
 	const setFont = (size: number) => {
-		context.font = `900 ${size}px "DM Sans", system-ui, sans-serif`
+		context.font = `${TITLE_FONT_WEIGHT} ${size}px "DM Sans", system-ui, sans-serif`
 		context.letterSpacing = `${size * 0.22}px`
 	}
 
-	setFont(settings.titleSize)
-	const trailingSpace = settings.titleSize * 0.22
+	setFont(TITLE_FONT_SIZE)
+	const trailingSpace = TITLE_FONT_SIZE * 0.22
 	const naturalWidth = context.measureText(text).width - trailingSpace
 	const fitScale = Math.min(1, TITLE_MAX_WIDTH / naturalWidth)
-	const fittedSize = settings.titleSize * fitScale
+	const fittedSize = TITLE_FONT_SIZE * fitScale
 	setFont(fittedSize)
 
 	const fittedWidth = naturalWidth * fitScale
@@ -362,15 +340,15 @@ const drawTitle = (context: CanvasRenderingContext2D, palette: ScenePaletteT, st
 		context.fillText(text, left + splitDistance, TITLE_BASELINE_Y)
 	}
 
-	context.fillStyle = getTitleColor(state, palette)
+	context.fillStyle = palette.logo
 	context.fillText(text, left, TITLE_BASELINE_Y)
 	context.restore()
 }
 
 // One full frame in one mode, back to front.
-const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT, mode: ModeT): void => {
-	const palette = getScenePalette(state.input, mode)
-	drawBackground(context, layers, palette, mode)
+const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT): void => {
+	const palette = getScenePalette(state.input)
+	drawBackground(context, layers, palette)
 	for (const echo of state.echoes) drawEcho(context, echo, layers, palette, state)
 	drawGrain(context, layers, palette, state)
 	drawLogo(context, layers, palette, state)
@@ -391,23 +369,5 @@ export const drawFrame = (
 	context.globalCompositeOperation = 'source-over'
 
 	const state = buildFrameState(input, layers)
-	const baseMode = input.settings.mode
-	const flippedMode: ModeT = baseMode === 'light' ? 'dark' : 'light'
-	const inkPhase = getInkPhase(input.time, input.settings, input.inkFinishTime)
-
-	const isFullyFlipped = inkPhase.kind === 'done'
-	if (isFullyFlipped) {
-		drawScene(context, layers, state, flippedMode)
-		return
-	}
-
-	drawScene(context, layers, state, baseMode)
-	const isSpreading = inkPhase.kind === 'spreading'
-	if (!isSpreading) return
-
-	context.save()
-	traceInkBlob(context, inkPhase.radius, input.time, state.bass)
-	context.clip()
-	drawScene(context, layers, state, flippedMode)
-	context.restore()
+	drawScene(context, layers, state)
 }

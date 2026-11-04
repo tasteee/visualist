@@ -1,28 +1,27 @@
+import coreUrl from '../assets/logo-layers/core.png'
+import fringeAUrl from '../assets/logo-layers/fringeA.png'
+import fringeBUrl from '../assets/logo-layers/fringeB.png'
+import silhouetteUrl from '../assets/logo-layers/sil.png'
+import outlineUrl from '../assets/logo-layers/outline.png'
+import haloUrl from '../assets/logo-layers/halo.png'
+import backgroundUrl from '../assets/logo-layers/bg.jpg'
+import layout from '../assets/logo-layers/layout.json'
 import { createRandom } from './rng'
 import { clamp } from './settings'
 
-export const FRAME_WIDTH = 1600
-export const FRAME_HEIGHT = 900
-export const LOGO_CENTER_X = FRAME_WIDTH / 2
-export const LOGO_CENTER_Y = 395
+export const FRAME_WIDTH = layout.W
+export const FRAME_HEIGHT = layout.H
+export const LOGO_CENTER_X = layout.cx
+export const LOGO_CENTER_Y = layout.cy
 
 const DISTRESSED_CORE_VARIANTS = 4
 const CORE_SPECK_COUNT = 9000
 const OUTLINE_SPECK_COUNT = 15000
-const OUTLINE_RADIUS = 2.5
-const HALO_GROW = 16
-const HALO_SOFTNESS = 6
-const FADE_ZONE_GROW = 110
-const FADE_ZONE_SOFTNESS = 60
-
-// Drop a file named logo.png (or .webp / .jpg) into src/assets and
-// it is used as the source. Without one, a generated wordmark in
-// the same colors goes through the very same pipeline.
-const bundledLogoUrls = import.meta.glob('../assets/logo.{png,webp,jpg,jpeg}', {
-	eager: true,
-	query: '?url',
-	import: 'default'
-}) as Record<string, string>
+const SOLID_ALPHA_THRESHOLD = 100
+// The background photo is the faint lyric pattern on near-white.
+// Darkness against these two levels becomes the pattern's alpha.
+const BACKGROUND_PAPER_LEVEL = 250
+const BACKGROUND_INK_LEVEL = 40
 
 export type BoundsT = {
 	left: number
@@ -43,7 +42,6 @@ export type LogoLayersT = {
 	lyricPattern: HTMLCanvasElement
 	grainTile: HTMLCanvasElement
 	bounds: BoundsT
-	isGenerated: boolean
 }
 
 const createCanvas = (width: number, height: number): HTMLCanvasElement => {
@@ -68,166 +66,57 @@ const loadImage = (url: string): Promise<HTMLImageElement> => {
 	})
 }
 
-const generateFallbackSource = async (): Promise<HTMLCanvasElement> => {
-	await document.fonts.load('900 300px "DM Sans"')
-	const width = 1600
-	const height = 1200
-	const canvas = createCanvas(width, height)
-	const context = getContext(canvas)
-	context.fillStyle = 'rgb(249, 249, 250)'
-	context.fillRect(0, 0, width, height)
+// Every layer PNG is the same size and centered on the logo
+// pivot, so each one lands in the shared frame at the same spot.
+const placeLayer = async (url: string): Promise<HTMLCanvasElement> => {
+	const image = await loadImage(url)
+	const placed = createCanvas(FRAME_WIDTH, FRAME_HEIGHT)
+	const left = Math.round(LOGO_CENTER_X - layout.w / 2)
+	const top = Math.round(LOGO_CENTER_Y - layout.h / 2)
+	getContext(placed).drawImage(image, left, top)
+	return placed
+}
 
-	const drawWordmark = (color: string, shiftX: number, shiftY: number) => {
-		context.save()
-		context.translate(width / 2 + shiftX, height / 2 + 40 + shiftY)
-		context.rotate(-0.045)
-		context.fillStyle = color
-		context.textBaseline = 'alphabetic'
-		context.font = '900 250px "DM Sans", Arial Black, sans-serif'
-		context.letterSpacing = '-14px'
-		const tasteWidth = context.measureText('taste').width
-		context.fillText('taste', -430, 0)
-		context.font = 'italic 300 330px "Georgia", "Times New Roman", serif'
-		context.letterSpacing = '-10px'
-		context.fillText('ink', -430 + tasteWidth + 10, 10)
-		context.restore()
+// The faint lyric rows, as a white alpha mask that can be tinted
+// with the foreground color. Already faded out around the logo.
+const buildLyricPattern = async (): Promise<HTMLCanvasElement> => {
+	const image = await loadImage(backgroundUrl)
+	const pattern = createCanvas(FRAME_WIDTH, FRAME_HEIGHT)
+	const context = getContext(pattern)
+	context.drawImage(image, 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+	const pixels = context.getImageData(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+	const levelRange = BACKGROUND_PAPER_LEVEL - BACKGROUND_INK_LEVEL
+
+	for (let offset = 0; offset < pixels.data.length; offset += 4) {
+		const brightest = Math.max(pixels.data[offset], pixels.data[offset + 1], pixels.data[offset + 2])
+		const darkness = clamp((BACKGROUND_PAPER_LEVEL - brightest) / levelRange, 0, 1)
+		pixels.data[offset] = 255
+		pixels.data[offset + 1] = 255
+		pixels.data[offset + 2] = 255
+		pixels.data[offset + 3] = Math.round(darkness * 255)
 	}
 
-	drawWordmark('rgb(245, 70, 205)', 5, 4)
-	drawWordmark('rgb(10, 245, 180)', -4, -3)
-	drawWordmark('rgb(40, 0, 28)', 0, 0)
-	return canvas
+	context.putImageData(pixels, 0, 0)
+	return pattern
 }
 
-const loadLogoSource = async (): Promise<{ canvas: HTMLCanvasElement; isGenerated: boolean }> => {
-	const urls = Object.values(bundledLogoUrls)
-	const firstUrl = urls[0]
-	if (firstUrl === undefined) return { canvas: await generateFallbackSource(), isGenerated: true }
+const findBounds = (mask: HTMLCanvasElement): BoundsT => {
+	const pixels = getContext(mask).getImageData(0, 0, mask.width, mask.height)
+	const bounds: BoundsT = { left: mask.width, top: mask.height, right: 0, bottom: 0 }
 
-	const image = await loadImage(firstUrl)
-	const canvas = createCanvas(image.naturalWidth, image.naturalHeight)
-	getContext(canvas).drawImage(image, 0, 0)
-	return { canvas, isGenerated: false }
-}
-
-type MaskPixelsT = {
-	core: ImageData
-	fringeA: ImageData
-	fringeB: ImageData
-	silhouette: ImageData
-	bounds: BoundsT
-}
-
-// Splits the raster into masks by color. The near-black core has
-// the lowest brightest-channel, magenta and cyan are saturated
-// and bright, and the paper and lyric text are bright and gray.
-const splitByColor = (source: ImageData): MaskPixelsT => {
-	const width = source.width
-	const height = source.height
-	const pixels = source.data
-	const core = new ImageData(width, height)
-	const fringeA = new ImageData(width, height)
-	const fringeB = new ImageData(width, height)
-	const silhouette = new ImageData(width, height)
-	const backgroundBrightness = 250
-	const inkBrightness = 40
-	const coreFloor = 25
-	const bounds: BoundsT = { left: width, top: height, right: 0, bottom: 0 }
-
-	for (let index = 0; index < width * height; index++) {
-		const offset = index * 4
-		const red = pixels[offset]
-		const green = pixels[offset + 1]
-		const blue = pixels[offset + 2]
-		const brightest = Math.max(red, green, blue)
-		const magentaness = (red + blue) / 2 - green
-		const cyanness = (green + blue) / 2 - red
-
-		const coreRange = backgroundBrightness - inkBrightness - coreFloor
-		const coreAlpha = clamp((backgroundBrightness - brightest - coreFloor) / coreRange, 0, 1)
-		const fringeAAlpha = clamp((magentaness - 45) / 105, 0, 1)
-		const fringeBAlpha = clamp((cyanness - 30) / 170, 0, 1)
-		const silhouetteAlpha = Math.max(coreAlpha, fringeAAlpha, fringeBAlpha)
-
-		const writeAlpha = (target: ImageData, alpha: number) => {
-			target.data[offset] = 255
-			target.data[offset + 1] = 255
-			target.data[offset + 2] = 255
-			target.data[offset + 3] = Math.round(alpha * 255)
-		}
-		writeAlpha(core, coreAlpha)
-		writeAlpha(fringeA, fringeAAlpha)
-		writeAlpha(fringeB, fringeBAlpha)
-		writeAlpha(silhouette, silhouetteAlpha)
-
-		const isSolid = silhouetteAlpha > 0.4
+	for (let index = 0; index < mask.width * mask.height; index++) {
+		const alpha = pixels.data[index * 4 + 3]
+		const isSolid = alpha > SOLID_ALPHA_THRESHOLD
 		if (!isSolid) continue
-		const column = index % width
-		const row = Math.floor(index / width)
+		const column = index % mask.width
+		const row = Math.floor(index / mask.width)
 		bounds.left = Math.min(bounds.left, column)
 		bounds.right = Math.max(bounds.right, column)
 		bounds.top = Math.min(bounds.top, row)
 		bounds.bottom = Math.max(bounds.bottom, row)
 	}
 
-	return { core, fringeA, fringeB, silhouette, bounds }
-}
-
-// Puts a mask into the shared 1600x900 frame, with the logo's
-// bounding box centered on the logo pivot.
-const placeMask = (mask: ImageData, shiftX: number, shiftY: number): HTMLCanvasElement => {
-	const staging = createCanvas(mask.width, mask.height)
-	getContext(staging).putImageData(mask, 0, 0)
-	const placed = createCanvas(FRAME_WIDTH, FRAME_HEIGHT)
-	getContext(placed).drawImage(staging, shiftX, shiftY)
-	return placed
-}
-
-const ringOffsets = (radius: number, count: number): [number, number][] => {
-	const offsets: [number, number][] = []
-	for (let step = 0; step < count; step++) {
-		const angle = (step / count) * Math.PI * 2
-		offsets.push([Math.cos(angle) * radius, Math.sin(angle) * radius])
-	}
-	return offsets
-}
-
-const dilate = (mask: HTMLCanvasElement, radius: number): HTMLCanvasElement => {
-	const grown = createCanvas(mask.width, mask.height)
-	const context = getContext(grown)
-	context.drawImage(mask, 0, 0)
-	const rings = [radius, radius * 0.66, radius * 0.33]
-	for (const ringRadius of rings) {
-		const count = Math.max(8, Math.round(ringRadius * 0.6))
-		for (const offset of ringOffsets(ringRadius, count)) context.drawImage(mask, offset[0], offset[1])
-	}
-	return grown
-}
-
-const erode = (mask: HTMLCanvasElement, radius: number): HTMLCanvasElement => {
-	const shrunk = createCanvas(mask.width, mask.height)
-	const context = getContext(shrunk)
-	context.drawImage(mask, 0, 0)
-	context.globalCompositeOperation = 'destination-in'
-	for (const offset of ringOffsets(radius, 12)) context.drawImage(mask, offset[0], offset[1])
-	return shrunk
-}
-
-const soften = (mask: HTMLCanvasElement, blurRadius: number): HTMLCanvasElement => {
-	const softened = createCanvas(mask.width, mask.height)
-	const context = getContext(softened)
-	context.filter = `blur(${blurRadius}px)`
-	context.drawImage(mask, 0, 0)
-	return softened
-}
-
-const buildOutline = (silhouette: HTMLCanvasElement): HTMLCanvasElement => {
-	const outer = dilate(silhouette, OUTLINE_RADIUS)
-	const inner = erode(silhouette, OUTLINE_RADIUS)
-	const context = getContext(outer)
-	context.globalCompositeOperation = 'destination-out'
-	context.drawImage(inner, 0, 0)
-	return outer
+	return bounds
 }
 
 // Knocks random specks and short scratches out of a mask.
@@ -264,39 +153,6 @@ const distress = (mask: HTMLCanvasElement, bounds: BoundsT, count: number, seed:
 	return worn
 }
 
-const LYRICS = [
-	'promise i will take you there',
-	'so here i am alive at last',
-	'and i will savor every moment of this',
-	'as long as you are alive',
-	'when i am standing on top of the world',
-	'i will take your hand and keep you there'
-]
-
-// Faint rows of lyric text, fading to clean space around the logo.
-const buildLyricPattern = (silhouette: HTMLCanvasElement): HTMLCanvasElement => {
-	const pattern = createCanvas(FRAME_WIDTH, FRAME_HEIGHT)
-	const context = getContext(pattern)
-	const random = createRandom(7)
-	context.fillStyle = '#fff'
-	context.textBaseline = 'middle'
-	context.font = '400 64px "DM Sans", Arial, sans-serif'
-	context.letterSpacing = '26px'
-	const rowHeight = 92
-	const rowCount = Math.ceil(FRAME_HEIGHT / rowHeight) + 1
-
-	for (let row = 0; row < rowCount; row++) {
-		const line = LYRICS[row % LYRICS.length]
-		const startX = -random() * 600
-		context.fillText(line, startX, row * rowHeight + 20)
-	}
-
-	const fadeZone = soften(dilate(silhouette, FADE_ZONE_GROW), FADE_ZONE_SOFTNESS)
-	context.globalCompositeOperation = 'destination-out'
-	context.drawImage(fadeZone, 0, 0)
-	return pattern
-}
-
 const buildGrainTile = (): HTMLCanvasElement => {
 	const size = 256
 	const tile = createCanvas(size, size)
@@ -328,28 +184,13 @@ const buildGrainTile = (): HTMLCanvasElement => {
 }
 
 export const buildLogoLayers = async (): Promise<LogoLayersT> => {
-	const source = await loadLogoSource()
-	const sourceContext = getContext(source.canvas)
-	const sourcePixels = sourceContext.getImageData(0, 0, source.canvas.width, source.canvas.height)
-	const masks = splitByColor(sourcePixels)
-
-	const centerX = (masks.bounds.left + masks.bounds.right) / 2
-	const centerY = (masks.bounds.top + masks.bounds.bottom) / 2
-	const shiftX = Math.round(LOGO_CENTER_X - centerX)
-	const shiftY = Math.round(LOGO_CENTER_Y - centerY)
-	const bounds: BoundsT = {
-		left: masks.bounds.left + shiftX,
-		right: masks.bounds.right + shiftX,
-		top: masks.bounds.top + shiftY,
-		bottom: masks.bounds.bottom + shiftY
-	}
-
-	const core = placeMask(masks.core, shiftX, shiftY)
-	const fringeA = placeMask(masks.fringeA, shiftX, shiftY)
-	const fringeB = placeMask(masks.fringeB, shiftX, shiftY)
-	const silhouette = placeMask(masks.silhouette, shiftX, shiftY)
-	const outline = buildOutline(silhouette)
-	const halo = soften(dilate(silhouette, HALO_GROW), HALO_SOFTNESS)
+	const core = await placeLayer(coreUrl)
+	const fringeA = await placeLayer(fringeAUrl)
+	const fringeB = await placeLayer(fringeBUrl)
+	const silhouette = await placeLayer(silhouetteUrl)
+	const outline = await placeLayer(outlineUrl)
+	const halo = await placeLayer(haloUrl)
+	const bounds = findBounds(silhouette)
 
 	const coreVariants: HTMLCanvasElement[] = []
 	for (let variant = 0; variant < DISTRESSED_CORE_VARIANTS; variant++) {
@@ -365,10 +206,9 @@ export const buildLogoLayers = async (): Promise<LogoLayersT> => {
 		halo,
 		coreVariants,
 		outlineGritty: distress(outline, bounds, OUTLINE_SPECK_COUNT, 211),
-		lyricPattern: buildLyricPattern(silhouette),
+		lyricPattern: await buildLyricPattern(),
 		grainTile: buildGrainTile(),
-		bounds,
-		isGenerated: source.isGenerated
+		bounds
 	}
 }
 

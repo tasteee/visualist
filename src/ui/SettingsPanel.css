@@ -1,0 +1,16 @@
+.settings-bpm {
+	display: flex;
+	align-items: flex-end;
+	gap: var(--spacing-3);
+}
+
+.settings-bpm z-field {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--spacing-2);
+}

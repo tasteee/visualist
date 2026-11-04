@@ -96,15 +96,16 @@
 	font-weight: 500;
 }
 
-.color-row-description {
-	color: var(--secondary);
-	font-size: var(--font-size-2);
-}
-
 .segmented {
 	display: flex;
 }
 
 .segmented z-button-group {
+	display: flex;
 	width: 100%;
+}
+
+.segmented z-button {
+	flex: 1;
+	min-width: 0;
 }

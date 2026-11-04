@@ -1,20 +1,16 @@
 <script lang="ts">
-	import EffectsPanel from './EffectsPanel.svelte'
 	import ExportPanel from './ExportPanel.svelte'
-	import LookPanel from './LookPanel.svelte'
-	import MusicPanel from './MusicPanel.svelte'
+	import SettingsPanel from './SettingsPanel.svelte'
 	import './Inspector.css'
 
-	type TabNameT = 'look' | 'music' | 'effects' | 'export'
+	type TabNameT = 'settings' | 'export'
 
 	const TABS = [
-		{ value: 'look', label: 'Look' },
-		{ value: 'music', label: 'Music' },
-		{ value: 'effects', label: 'Effects' },
+		{ value: 'settings', label: 'Settings' },
 		{ value: 'export', label: 'Export' }
 	]
 
-	let activeTab = $state<TabNameT>('look')
+	let activeTab = $state<TabNameT>('settings')
 
 	const handleTabChange = (event: Event) => {
 		const detail = (event as CustomEvent<{ value: string }>).detail
@@ -29,14 +25,8 @@
 
 	<z-scroll-area class="inspector-scroll" height="100%">
 		<div class="inspector-panel">
-			{#if activeTab === 'look'}
-				<LookPanel />
-			{/if}
-			{#if activeTab === 'music'}
-				<MusicPanel />
-			{/if}
-			{#if activeTab === 'effects'}
-				<EffectsPanel />
+			{#if activeTab === 'settings'}
+				<SettingsPanel />
 			{/if}
 			{#if activeTab === 'export'}
 				<ExportPanel />

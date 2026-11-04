@@ -28,7 +28,6 @@ src/
     analysis.ts    decode -> bands, hits, energy, tempo, beat grid (10 ms grid)
     logoLayers.ts  splits the logo raster into masks, tints and distresses them
     echoes.ts      which echoes exist at time t, and how they look
-    ink.ts         the spreading ink blob
     render.ts      one frame, back to front
     audio.ts       the audio clock (visuals follow it, never drift)
     recorder.ts    format pick + MediaRecorder
@@ -42,12 +41,10 @@ from time, stepped at 14 flickers per second.
 
 ## The logo
 
-Drop `logo.png` (or `.webp` / `.jpg`) into `src/assets/`. The layers (core,
-two glitch fringes, silhouette, outline, halo) are split out at load time
-by color: near-black core, magenta and cyan fringes, light paper.
-
-Without a file, a wordmark is generated in the same colors and goes through
-the same pipeline, so the app always runs.
+The wordmark is used as image layers from `src/assets/logo-layers/`:
+core, fringeA, fringeB, sil, outline, halo (white alpha masks, tinted at
+draw time), bg.jpg (the faint lyric pattern, turned into a mask) and
+layout.json (pivot and size). It is never retyped in a font.
 
 ## Keys
 

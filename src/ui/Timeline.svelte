@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { app, getAnalysis, getInkFinish, seekTo } from '../store.svelte'
+	import { app, getAnalysis, seekTo } from '../store.svelte'
 	import './Timeline.css'
 
 	const BAR_WIDTH = 3
@@ -12,11 +12,11 @@
 	let pixelHeight = $state(0)
 
 	// Resolved colors are read back from CSS, so the canvas follows
-	// the tokens. caret-color and outline-color carry the extra two.
-	type TimelineColorsT = { idle: string; played: string; ink: string }
+	// the tokens. caret-color carries the played color.
+	type TimelineColorsT = { idle: string; played: string }
 	const readColors = (): TimelineColorsT => {
 		const style = getComputedStyle(canvas)
-		return { idle: style.color, played: style.caretColor, ink: style.outlineColor }
+		return { idle: style.color, played: style.caretColor }
 	}
 
 	// One height per bar: the louder of overall level and bass.
@@ -50,16 +50,6 @@
 		context.setTransform(ratio, 0, 0, ratio, 0, 0)
 		context.clearRect(0, 0, pixelWidth, pixelHeight)
 
-		const isInkVisible = app.settings.isInkOn && app.hasAudio
-		if (isInkVisible) {
-			const inkLeft = (app.settings.inkStart / duration) * pixelWidth
-			const inkRight = (getInkFinish() / duration) * pixelWidth
-			context.globalAlpha = 0.18
-			context.fillStyle = colors.ink
-			context.fillRect(inkLeft, 0, Math.max(0, inkRight - inkLeft), pixelHeight)
-			context.globalAlpha = 1
-		}
-
 		if (!app.hasAudio) return
 
 		const middle = pixelHeight / 2
@@ -77,9 +67,6 @@
 	$effect(() => {
 		void peaks
 		void progress
-		void app.settings.isInkOn
-		void app.settings.inkStart
-		void app.settings.inkDoneBeforeEnd
 		draw()
 	})
 

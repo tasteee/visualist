@@ -1,5 +1,5 @@
 import { toaster } from '@tasteee/zest'
-import { analyzeAudio, computeBeatOffset } from './engine/analysis'
+import { analyzeAudio } from './engine/analysis'
 import {
 	createRecordingTap,
 	decodeAudioFile,
@@ -15,17 +15,13 @@ import { startRecorder, pickRecorderFormat } from './engine/recorder'
 import type { ActiveRecordingT, RecorderFormatT } from './engine/recorder'
 import { drawFrame } from './engine/render'
 import {
-	DEFAULT_INK_DURATION,
+	DEMO_LOOP_SECONDS,
 	TAIL_SECONDS,
 	clamp,
-	createDefaultSettings,
-	getInkFinishTime,
-	getPreset,
 	loadSettings,
 	saveSettings
 } from './engine/settings'
-import type { PresetNameT } from './engine/settings'
-import type { AnalysisT, FrameInputT, PaletteT, SettingsT } from './engine/types'
+import type { AnalysisT, FrameInputT, ModeT, PaletteT, SettingsT } from './engine/types'
 
 export type StatusToneT = 'neutral' | 'success' | 'warning' | 'danger'
 
@@ -78,7 +74,6 @@ export const app = $state<AppStateT>({
 
 // Big typed arrays stay out of the deep proxy.
 let analysis = $state.raw<AnalysisT>(buildDemoAnalysis())
-let beatOffset = $state.raw(0)
 let appliedPalette = $state.raw<PaletteT>(readPalette(app.settings))
 
 let audioBuffer: AudioBuffer | null = null
@@ -92,11 +87,15 @@ let activeRecording: ActiveRecordingT | null = null
 let recorderFormat: RecorderFormatT | null = null
 
 function readPalette(settings: SettingsT): PaletteT {
-	return { accent1: settings.accent1, accent2: settings.accent2, ink: settings.ink, paper: settings.paper }
+	return {
+		accent1: settings.accent1,
+		accent2: settings.accent2,
+		background: settings.background,
+		foreground: settings.foreground
+	}
 }
 
 export const getAnalysis = (): AnalysisT => analysis
-export const getBeatOffset = (): number => beatOffset
 export const getLogoLayers = (): LogoLayersT | null => layers
 
 export const setStatus = (text: string, tone: StatusToneT = 'neutral'): void => {
@@ -112,16 +111,6 @@ export const formatTime = (seconds: number): string => {
 	return `${minutes}:${paddedSeconds}`
 }
 
-// The span the ink takeover is planned against.
-export const getTimelineDuration = (): number => {
-	if (app.hasAudio) return app.duration
-	return DEFAULT_INK_DURATION
-}
-
-export const getInkFinish = (): number => {
-	return getInkFinishTime(app.settings, getTimelineDuration())
-}
-
 export const getOutputSize = (): { width: number; height: number } => {
 	const is720 = app.settings.resolution === '720'
 	if (is720) return { width: 1280, height: 720 }
@@ -131,7 +120,7 @@ export const getOutputSize = (): { width: number; height: number } => {
 const getFrameTime = (): number => {
 	if (app.hasAudio) return getPlaybackTime()
 	const elapsed = (performance.now() - demoStartedAt) / 1000
-	return elapsed % DEFAULT_INK_DURATION
+	return elapsed % DEMO_LOOP_SECONDS
 }
 
 const buildFrameInput = (time: number): FrameInputT => ({
@@ -139,10 +128,9 @@ const buildFrameInput = (time: number): FrameInputT => ({
 	analysis,
 	settings: app.settings,
 	palette: appliedPalette,
-	bpm: app.bpm,
-	beatOffset,
+	bpm: analysis.bpm,
+	beatOffset: analysis.beatOffset,
 	title: app.title,
-	inkFinishTime: getInkFinish(),
 	isIntroActive: app.isPlaying || app.isRecording
 })
 
@@ -328,8 +316,7 @@ export const startRecording = async (): Promise<void> => {
 
 const applyAnalysis = (nextAnalysis: AnalysisT): void => {
 	analysis = nextAnalysis
-	app.bpm = nextAnalysis.bpm
-	beatOffset = nextAnalysis.beatOffset
+	app.bpm = Math.round(nextAnalysis.bpm)
 }
 
 export const loadAudioFile = async (file: File): Promise<void> => {
@@ -356,7 +343,7 @@ export const loadAudioFile = async (file: File): Promise<void> => {
 		markDirty()
 
 		const length = formatTime(decoded.duration)
-		setStatus(`${file.name} · ${length} · ${result.kicks.length} kicks · ${result.bpm} BPM`, 'success')
+		setStatus(`${file.name} · ${length} · ${result.kicks.length} kicks · ${Math.round(result.bpm)} BPM`, 'success')
 	} catch {
 		const message = 'That file could not be read. Try a WAV, MP3 or M4A.'
 		setStatus(message, 'danger')
@@ -371,34 +358,27 @@ export const setTitle = (text: string): void => {
 	app.isTitleEdited = true
 }
 
-// A typed BPM outside 40 to 240, or not a number, is ignored.
+// The BPM control is display-only for now. Echo timing keeps
+// following the detected tempo.
 export const setBpm = (value: number): void => {
 	const isNumber = Number.isFinite(value)
 	const isInRange = value >= 40 && value <= 240
 	if (!isNumber || !isInRange) return
-	app.bpm = Math.round(value * 10) / 10
-	beatOffset = computeBeatOffset(analysis.flux, app.bpm)
-	markDirty()
+	app.bpm = Math.round(value)
 }
 
 export const detectBpm = (): void => {
-	app.bpm = analysis.bpm
-	beatOffset = analysis.beatOffset
-	markDirty()
+	app.bpm = Math.round(analysis.bpm)
 }
 
-export const applyPreset = (name: PresetNameT): void => {
-	const preset = getPreset(name)
-	Object.assign(app.settings, preset)
-	const hasStyles = preset.echoStyles !== undefined
-	if (hasStyles && preset.echoStyles !== undefined) app.settings.echoStyles = { ...preset.echoStyles }
-}
-
-// Restores every default except the title.
-export const resetAllSettings = (): void => {
-	const defaults = createDefaultSettings()
-	Object.assign(app.settings, defaults)
-	app.settings.echoStyles = { ...defaults.echoStyles }
+// Switching theme swaps the two colors, so custom colors survive.
+export const setTheme = (mode: ModeT): void => {
+	const isSameTheme = app.settings.mode === mode
+	if (isSameTheme) return
+	const previousBackground = app.settings.background
+	app.settings.background = app.settings.foreground
+	app.settings.foreground = previousBackground
+	app.settings.mode = mode
 }
 
 const startWatchers = (): void => {

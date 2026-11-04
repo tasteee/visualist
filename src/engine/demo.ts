@@ -1,4 +1,4 @@
-import { GRID_STEP, DEFAULT_INK_DURATION } from './settings'
+import { GRID_STEP, DEMO_LOOP_SECONDS } from './settings'
 import type { AnalysisT, HitT } from './types'
 
 const DEMO_BPM = 120
@@ -6,7 +6,7 @@ const DEMO_BPM = 120
 // Steady 120 BPM kicks, snares on 2 and 4, and hats. Lets every
 // effect be seen and tuned before a song is loaded.
 export const buildDemoAnalysis = (): AnalysisT => {
-	const frameCount = Math.round(DEFAULT_INK_DURATION / GRID_STEP)
+	const frameCount = Math.round(DEMO_LOOP_SECONDS / GRID_STEP)
 	const low = new Float32Array(frameCount)
 	const mid = new Float32Array(frameCount)
 	const high = new Float32Array(frameCount)
@@ -34,7 +34,7 @@ export const buildDemoAnalysis = (): AnalysisT => {
 		energy[frame] = Math.min(1, Math.max(0.08, slowWave * 1.1))
 	}
 
-	const beatCount = Math.floor(DEFAULT_INK_DURATION / beatLength)
+	const beatCount = Math.floor(DEMO_LOOP_SECONDS / beatLength)
 	for (let beat = 0; beat < beatCount; beat++) {
 		const time = beat * beatLength
 		const frame = Math.round(time / GRID_STEP)
@@ -47,7 +47,7 @@ export const buildDemoAnalysis = (): AnalysisT => {
 	}
 
 	return {
-		duration: DEFAULT_INK_DURATION,
+		duration: DEMO_LOOP_SECONDS,
 		low,
 		mid,
 		high,
