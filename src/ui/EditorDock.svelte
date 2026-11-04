@@ -22,7 +22,7 @@
 	import { GLOBAL_GROUP_ID } from '../engine/automation'
 	import { buildGrid, ratioToTime } from '../engine/timeline'
 	import type { LayerT } from '../engine/types'
-	import { focusLayer, layerStore, toggleLayerVisible } from '../layers.svelte'
+	import { focusLayer, layerStore, moveLayer, moveLayerToFrontIndex, toggleLayerVisible } from '../layers.svelte'
 	import { app, formatTime, getAnalysis, seekTo } from '../store.svelte'
 	import {
 		MAX_DOCK_SHARE,
@@ -57,6 +57,18 @@
 		anchorY: number
 	}
 
+	type ReorderDragT = {
+		layerId: string
+		startY: number
+		isActive: boolean
+		frontIndex: number
+	}
+
+	type DropMarkerT = {
+		layerId: string
+		edge: 'before' | 'after'
+	}
+
 	type ResizeDragT = {
 		startY: number
 		startHeight: number
@@ -66,12 +78,16 @@
 	const WHEEL_ZOOM_RATE = 0.0025
 	const PINCH_ZOOM_RATE = 0.01
 	const RESIZE_KEY_PX = 24
+	const REORDER_START_PX = 4
 	const ZOOMING_ZONES = ['ruler', 'wave', 'overview']
 
 	let dock: HTMLDivElement
 	let frame: HTMLDivElement
 	let editor = $state<PointEditorT | null>(null)
 	let resizeDrag: ResizeDragT | null = null
+	let reorder = $state<ReorderDragT | null>(null)
+	let dropMarker = $state<DropMarkerT | null>(null)
+	let shouldSkipSelect = false
 
 	const analysis = $derived(getAnalysis())
 
@@ -270,6 +286,89 @@
 		focusLayer(layerId)
 	}
 
+	// ---- Reordering layers by dragging their header ----------
+
+	const readOtherGroups = (layerId: string): HTMLElement[] => {
+		const groups = Array.from(frame.querySelectorAll<HTMLElement>('[data-layer-group]'))
+		return groups.filter((group) => group.dataset.layerGroup !== layerId)
+	}
+
+	const checkIsAbovePointer = (group: HTMLElement, clientY: number): boolean => {
+		const bounds = group.getBoundingClientRect()
+		const middle = bounds.top + bounds.height / 2
+		return middle < clientY
+	}
+
+	// The landing spot among the other layers, front to back,
+	// and the edge of the neighbor that shows the drop rule.
+	const updateDropTarget = (activeReorder: ReorderDragT, clientY: number) => {
+		const others = readOtherGroups(activeReorder.layerId)
+		const groupsAbove = others.filter((group) => checkIsAbovePointer(group, clientY))
+		const frontIndex = groupsAbove.length
+		activeReorder.frontIndex = frontIndex
+		const hasNeighborBelow = frontIndex < others.length
+		const neighbor = hasNeighborBelow ? others[frontIndex] : others[others.length - 1]
+		if (neighbor === undefined) return
+		const neighborId = neighbor.dataset.layerGroup ?? ''
+		const edge = hasNeighborBelow ? 'before' : 'after'
+		dropMarker = { layerId: neighborId, edge }
+	}
+
+	const handleReorderMove = (event: PointerEvent) => {
+		const activeReorder = reorder
+		if (activeReorder === null) return
+		const travel = Math.abs(event.clientY - activeReorder.startY)
+		const hasStarted = activeReorder.isActive || travel >= REORDER_START_PX
+		if (!hasStarted) return
+		activeReorder.isActive = true
+		updateDropTarget(activeReorder, event.clientY)
+	}
+
+	const stopReorder = () => {
+		window.removeEventListener('pointermove', handleReorderMove)
+		window.removeEventListener('pointerup', handleReorderUp)
+		window.removeEventListener('pointercancel', stopReorder)
+		reorder = null
+		dropMarker = null
+	}
+
+	// The click that ends a drag must not also open the layer,
+	// so it is skipped once, then the flag clears.
+	const handleReorderUp = () => {
+		const activeReorder = reorder
+		const wasDragging = activeReorder !== null && activeReorder.isActive
+		if (wasDragging) {
+			moveLayerToFrontIndex(activeReorder.layerId, activeReorder.frontIndex)
+			shouldSkipSelect = true
+			setTimeout(() => (shouldSkipSelect = false), 0)
+		}
+		stopReorder()
+	}
+
+	const handleReorderStart = (layerId: string, event: PointerEvent) => {
+		reorder = { layerId, startY: event.clientY, isActive: false, frontIndex: 0 }
+		window.addEventListener('pointermove', handleReorderMove)
+		window.addEventListener('pointerup', handleReorderUp)
+		window.addEventListener('pointercancel', stopReorder)
+	}
+
+	const handleGroupSelect = (layerId: string) => {
+		if (shouldSkipSelect) return
+		focusLayer(layerId)
+	}
+
+	const getDropEdge = (layerId: string): 'before' | 'after' | null => {
+		if (dropMarker === null) return null
+		const isTarget = dropMarker.layerId === layerId
+		if (!isTarget) return null
+		return dropMarker.edge
+	}
+
+	const checkIsDragSource = (layerId: string): boolean => {
+		if (reorder === null) return false
+		return reorder.isActive && reorder.layerId === layerId
+	}
+
 	const getLayerDetail = (layer: LayerT): string => {
 		const laneCount = getLanesInGroup(layer.id).length
 		const isHidden = !layer.isVisible
@@ -363,8 +462,13 @@
 					canAddLane={checkCanAddLayerLane(layer.id)}
 					ontoggle={() => toggleGroupCollapsed(layer.id)}
 					onadd={() => handleAddLayerLane(layer.id)}
-					onselect={() => focusLayer(layer.id)}
+					onselect={() => handleGroupSelect(layer.id)}
 					ontogglevisible={() => toggleLayerVisible(layer.id)}
+					layerId={layer.id}
+					isDragSource={checkIsDragSource(layer.id)}
+					dropEdge={getDropEdge(layer.id)}
+					onreorderstart={(event) => handleReorderStart(layer.id, event)}
+					onreorderkey={(direction) => moveLayer(layer.id, direction)}
 				>
 					{#snippet track()}
 						<LayerClip {layer} {grid} {isSelected} />

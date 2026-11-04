@@ -1,5 +1,5 @@
 import { toaster } from '@tasteee/zest'
-import { removeLanesForFx, removeLanesForLayer } from './automation.svelte'
+import { recordHistory, removeLanesForFx, removeLanesForLayer } from './automation.svelte'
 import { deleteAsset, importAssetFile, restoreAssets } from './engine/assets'
 import type { AssetRequestT } from './engine/assets'
 import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createTextLayer } from './engine/layers'
@@ -159,11 +159,28 @@ export const moveLayer = (layerId: string, direction: LayerDirectionT): void => 
 	const targetIndex = index + step
 	const isOutOfBounds = targetIndex < 0 || targetIndex >= layerStore.layers.length
 	if (isOutOfBounds) return
+	recordHistory()
 	const reordered = [...layerStore.layers]
 	const moving = reordered[index]
 	reordered[index] = reordered[targetIndex]
 	reordered[targetIndex] = moving
 	layerStore.layers = reordered
+}
+
+// Places a layer at a position in the front-to-back order the
+// timeline and the panel show, where 0 is the front.
+export const moveLayerToFrontIndex = (layerId: string, frontIndex: number): void => {
+	const frontToBack = [...layerStore.layers].reverse()
+	const currentIndex = frontToBack.findIndex((layer) => layer.id === layerId)
+	if (currentIndex === -1) return
+	const moving = frontToBack[currentIndex]
+	const others = frontToBack.filter((layer) => layer.id !== layerId)
+	const targetIndex = Math.max(0, Math.min(frontIndex, others.length))
+	const isSamePlace = targetIndex === currentIndex
+	if (isSamePlace) return
+	recordHistory()
+	const reordered = [...others.slice(0, targetIndex), moving, ...others.slice(targetIndex)]
+	layerStore.layers = reordered.reverse()
 }
 
 export const checkCanMove = (layerId: string, direction: LayerDirectionT): boolean => {

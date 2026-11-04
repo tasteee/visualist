@@ -75,12 +75,37 @@ export const automation = $state<AutomationStateT>({
 	redoDepth: 0
 })
 
+type LayerTimingT = {
+	startTime: number
+	endTime: number | null
+}
+
+// One undo step: every lane, plus each layer's timing and the
+// stack order, so clip drags and reorders undo with the lanes.
+type HistoryEntryT = {
+	lanes: AutomationLaneT[]
+	layerTimings: Record<string, LayerTimingT>
+	layerOrder: string[]
+}
+
 // History lives outside the proxy: plain snapshots, swapped in
 // whole on undo and redo.
-const undoStack: AutomationLaneT[][] = []
-const redoStack: AutomationLaneT[][] = []
+const undoStack: HistoryEntryT[] = []
+const redoStack: HistoryEntryT[] = []
 
-const takeSnapshot = (): AutomationLaneT[] => $state.snapshot(automation.lanes) as AutomationLaneT[]
+const readLayerTimings = (): Record<string, LayerTimingT> => {
+	const timings: Record<string, LayerTimingT> = {}
+	for (const layer of layerStore.layers) {
+		timings[layer.id] = { startTime: layer.startTime, endTime: layer.endTime }
+	}
+	return timings
+}
+
+const takeSnapshot = (): HistoryEntryT => ({
+	lanes: $state.snapshot(automation.lanes) as AutomationLaneT[],
+	layerTimings: readLayerTimings(),
+	layerOrder: layerStore.layers.map((layer) => layer.id)
+})
 
 const syncHistoryDepth = (): void => {
 	automation.undoDepth = undoStack.length
@@ -108,11 +133,35 @@ const restoreLanes = (lanes: AutomationLaneT[]): void => {
 	automation.collapsedLaneIds = automation.collapsedLaneIds.filter((laneId) => laneIds.includes(laneId))
 }
 
+const restoreLayerTimings = (timings: Record<string, LayerTimingT>): void => {
+	for (const layer of layerStore.layers) {
+		const timing = timings[layer.id]
+		if (timing === undefined) continue
+		layer.startTime = timing.startTime
+		layer.endTime = timing.endTime
+	}
+}
+
+// Layers added after the snapshot keep their place at the front,
+// in their current order, since the snapshot never saw them.
+const restoreLayerOrder = (order: string[]): void => {
+	const orderedLayers = order.map((layerId) => findLayer(layerId))
+	const knownLayers = orderedLayers.filter((layer): layer is LayerT => layer !== undefined)
+	const newerLayers = layerStore.layers.filter((layer) => !order.includes(layer.id))
+	layerStore.layers = [...knownLayers, ...newerLayers]
+}
+
+const restoreEntry = (entry: HistoryEntryT): void => {
+	restoreLanes(entry.lanes)
+	restoreLayerTimings(entry.layerTimings)
+	restoreLayerOrder(entry.layerOrder)
+}
+
 export const undo = (): void => {
 	const previous = undoStack.pop()
 	if (previous === undefined) return
 	redoStack.push(takeSnapshot())
-	restoreLanes(previous)
+	restoreEntry(previous)
 	syncHistoryDepth()
 }
 
@@ -120,7 +169,7 @@ export const redo = (): void => {
 	const next = redoStack.pop()
 	if (next === undefined) return
 	undoStack.push(takeSnapshot())
-	restoreLanes(next)
+	restoreEntry(next)
 	syncHistoryDepth()
 }
 

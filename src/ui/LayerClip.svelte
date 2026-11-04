@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { recordHistory } from '../automation.svelte'
 	import { clamp } from '../engine/settings'
 	import { formatPreciseTime, ratioToTime, snapToGrid, timeToPercent } from '../engine/timeline'
 	import type { TimelineGridT } from '../engine/timeline'
@@ -91,6 +92,10 @@
 		const travel = Math.abs(event.clientX - activeDrag.startX)
 		const hasStartedMoving = activeDrag.hasMoved || travel >= MOVE_THRESHOLD_PX
 		if (!hasStartedMoving) return
+		// One drag is one undo step, recorded when it really
+		// starts, so a plain click to select adds nothing.
+		const isFirstMove = !activeDrag.hasMoved
+		if (isFirstMove) recordHistory()
 		activeDrag.hasMoved = true
 		if (activeDrag.mode === 'move') return moveClip(event, activeDrag)
 		const edgeTime = snapTime(readTime(event), event, duration)
@@ -106,6 +111,8 @@
 	// Double-click fills the whole song again.
 	const handleDoubleClick = (event: MouseEvent) => {
 		event.stopPropagation()
+		if (isFullSong) return
+		recordHistory()
 		setLayerTimeRange(props.layer.id, 0, duration, duration)
 	}
 
@@ -115,6 +122,7 @@
 		const isRight = event.key === 'ArrowRight'
 		if (!isLeft && !isRight) return
 		event.preventDefault()
+		recordHistory()
 		const step = isLeft ? -KEY_STEP_SECONDS : KEY_STEP_SECONDS
 		if (event.shiftKey) return setLayerTimeRange(props.layer.id, startTime, endTime + step, duration)
 		const length = endTime - startTime

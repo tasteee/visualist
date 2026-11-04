@@ -32,6 +32,13 @@
 		onadd: () => void
 		onselect?: () => void
 		ontogglevisible?: () => void
+		// Layer groups can be dragged by their name to reorder,
+		// or moved with Alt+Up and Alt+Down.
+		layerId?: string
+		isDragSource?: boolean
+		dropEdge?: 'before' | 'after' | null
+		onreorderstart?: (event: PointerEvent) => void
+		onreorderkey?: (direction: 'forward' | 'backward') => void
 		track?: Snippet
 	}
 
@@ -55,17 +62,59 @@
 
 	const getGridX = (line: GridLineT): number => timeToRatio(line.time, view) * PATH_WIDTH
 
+	const canReorder = $derived(props.onreorderstart !== undefined)
+	const isDropBefore = $derived(props.dropEdge === 'before')
+	const isDropAfter = $derived(props.dropEdge === 'after')
+	const titleLabel = $derived(canReorder ? `Edit ${props.title}. Drag to reorder, or press Alt with an arrow key.` : `Edit ${props.title}`)
+
 	const handleSelect = () => props.onselect?.()
+
+	const handleTitleDown = (event: PointerEvent) => {
+		const isPrimaryButton = event.button === 0
+		if (!isPrimaryButton) return
+		props.onreorderstart?.(event)
+	}
+
+	// Up moves toward the front, which sits higher in the list.
+	const handleTitleKey = (event: KeyboardEvent) => {
+		if (!event.altKey) return
+		const isUp = event.key === 'ArrowUp'
+		const isDown = event.key === 'ArrowDown'
+		if (!isUp && !isDown) return
+		event.preventDefault()
+		const direction = isUp ? 'forward' : 'backward'
+		props.onreorderkey?.(direction)
+	}
 
 </script>
 
-<div class="lane-group" class:isSelected={props.isSelected} class:isHidden={props.isHidden} class:isLayer class:isCollapsed={props.isCollapsed}>
+<div
+	class="lane-group"
+	class:isSelected={props.isSelected}
+	class:isHidden={props.isHidden}
+	class:isLayer
+	class:isCollapsed={props.isCollapsed}
+	class:isDragSource={props.isDragSource}
+	class:isDropBefore
+	class:isDropAfter
+	data-layer-group={props.layerId}
+>
 	<div class="lane-group-header">
 		<button class="lane-group-caret" type="button" aria-expanded={!props.isCollapsed} aria-label={collapseLabel} onclick={props.ontoggle}>
 			<CaretRightIcon weight="bold" />
 		</button>
 
-		<button class="lane-group-title" class:canSelect type="button" disabled={!canSelect} aria-label="Edit {props.title}" onclick={handleSelect}>
+		<button
+			class="lane-group-title"
+			class:canSelect
+			class:canReorder
+			type="button"
+			disabled={!canSelect}
+			aria-label={titleLabel}
+			onclick={handleSelect}
+			onpointerdown={handleTitleDown}
+			onkeydown={handleTitleKey}
+		>
 			<span class="lane-group-icon" aria-hidden="true">
 				{#if isGlobal}
 					<SlidersHorizontalIcon weight="bold" />

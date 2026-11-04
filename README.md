@@ -131,7 +131,7 @@ layout.json (pivot and size). It is never retyped in a font.
 | `0` | Zoom to fit the whole song |
 | F | Follow the playhead while playing |
 | S | Snap points to the beat grid (hold Shift to move freely) |
-| Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z | Undo / redo automation edits |
+| Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z | Undo / redo lanes, clip timing and layer order |
 | Left / Right on the waveform | Seek 5 s |
 
 ## Timeline
@@ -149,6 +149,10 @@ layout.json (pivot and size). It is never retyped in a font.
 - Each layer's header row holds its **clip bar**: drag the body to
   move when the layer shows, drag an edge to trim it, double-click to
   fill the whole song. Arrow keys nudge it, Shift+arrows trim the end.
+- Drag a layer by its name to reorder the stack; a line shows where it
+  lands. Alt+Up and Alt+Down do the same from the keyboard.
+- Undo and redo cover lane edits, clip moves and trims, and layer
+  reordering, all on one history.
 - Clicking a layer's header, bar or lanes opens it in the Layers tab.
   Automated sliders lock and show their lane's color there. Hover a
   free slider and press the lightning icon to give it a lane.
