@@ -38,11 +38,43 @@ const detachSource = (): void => {
 	}
 }
 
+export type PlaybackClipT = {
+	duration: number
+	fadeIn: number
+	fadeOut: number
+}
+
+// Fades only shape the recorded tap. The speakers stay untouched.
+const connectTapWithFades = (
+	context: AudioContext,
+	source: AudioBufferSourceNode,
+	tap: MediaStreamAudioDestinationNode,
+	clip: PlaybackClipT | null
+): void => {
+	const gain = context.createGain()
+	source.connect(gain)
+	gain.connect(tap)
+	if (clip === null) return
+
+	const now = context.currentTime
+	const hasFadeIn = clip.fadeIn > 0
+	const hasFadeOut = clip.fadeOut > 0
+	const startLevel = hasFadeIn ? 0 : 1
+	gain.gain.setValueAtTime(startLevel, now)
+	if (hasFadeIn) gain.gain.linearRampToValueAtTime(1, now + clip.fadeIn)
+	if (!hasFadeOut) return
+
+	const fadeOutStart = Math.max(clip.fadeIn, clip.duration - clip.fadeOut)
+	gain.gain.setValueAtTime(1, now + fadeOutStart)
+	gain.gain.linearRampToValueAtTime(0, now + clip.duration)
+}
+
 export const startPlayback = (
 	buffer: AudioBuffer,
 	offset: number,
 	tap: MediaStreamAudioDestinationNode | null,
-	onEnded: () => void
+	onEnded: () => void,
+	clip: PlaybackClipT | null = null
 ): void => {
 	detachSource()
 	const context = getAudioContext()
@@ -51,7 +83,7 @@ export const startPlayback = (
 	const source = context.createBufferSource()
 	source.buffer = buffer
 	source.connect(context.destination)
-	if (tap !== null) source.connect(tap)
+	if (tap !== null) connectTapWithFades(context, source, tap, clip)
 	source.onended = () => {
 		const isCurrent = currentSource === source
 		if (isCurrent) onEnded()
@@ -61,7 +93,9 @@ export const startPlayback = (
 	offsetAtStart = offset
 	startedAtContextTime = context.currentTime
 	isClockRunning = true
-	source.start(0, offset)
+	const hasClip = clip !== null
+	if (hasClip) source.start(0, offset, clip.duration)
+	if (!hasClip) source.start(0, offset)
 }
 
 export const pausePlayback = (): number => {

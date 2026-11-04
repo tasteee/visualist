@@ -4,6 +4,8 @@ export const GRID_STEP = 0.01
 export const FLICKER_RATE = 14
 export const DEMO_LOOP_SECONDS = 90
 export const TAIL_SECONDS = 0.6
+export const MIN_CLIP_SECONDS = 1
+export const MAX_FADE_SECONDS = 10
 
 const allEchoStyles = (): EchoStylesT => ({
 	hollow: true,
@@ -29,7 +31,11 @@ export const createDefaultSettings = (): SettingsT => ({
 	solidAmount: 1,
 	echoStyles: allEchoStyles(),
 	resolution: '1080',
-	frameRate: 30
+	frameRate: 30,
+	audioFadeIn: 0,
+	audioFadeOut: 0,
+	videoFadeIn: 0,
+	videoFadeOut: 0
 })
 
 const STORAGE_KEY = 'vink.settings.v2'

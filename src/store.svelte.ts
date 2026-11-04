@@ -14,8 +14,10 @@ import type { LogoLayersT } from './engine/logoLayers'
 import { startRecorder, pickRecorderFormat } from './engine/recorder'
 import type { ActiveRecordingT, RecorderFormatT } from './engine/recorder'
 import { drawFrame } from './engine/render'
+import { getFadeLevel } from './engine/fades'
 import {
 	DEMO_LOOP_SECONDS,
+	MIN_CLIP_SECONDS,
 	TAIL_SECONDS,
 	clamp,
 	loadSettings,
@@ -35,6 +37,8 @@ type AppStateT = {
 	fileName: string
 	hasAudio: boolean
 	duration: number
+	trimStart: number
+	trimEnd: number
 	kickCount: number
 	isAnalyzing: boolean
 	analysisProgress: number
@@ -65,6 +69,8 @@ export const app = $state<AppStateT>({
 	fileName: '',
 	hasAudio: false,
 	duration: 0,
+	trimStart: 0,
+	trimEnd: 0,
 	kickCount: 0,
 	isAnalyzing: false,
 	analysisProgress: 0,
@@ -174,7 +180,35 @@ export const markDirty = (): void => {
 	isDirty = true
 }
 
-const getRecordingLength = (): number => app.duration + TAIL_SECONDS
+export const getClipLength = (): number => app.trimEnd - app.trimStart
+
+const getRecordingLength = (): number => getClipLength() + TAIL_SECONDS
+
+const drawVideoFade = (context: CanvasRenderingContext2D, width: number, height: number, elapsed: number): void => {
+	const fadeIn = app.settings.videoFadeIn
+	const fadeOut = app.settings.videoFadeOut
+	const hasFade = fadeIn > 0 || fadeOut > 0
+	if (!hasFade) return
+	const level = getFadeLevel(elapsed, getRecordingLength(), fadeIn, fadeOut)
+	const coverAlpha = 1 - level
+	if (coverAlpha <= 0) return
+	context.globalAlpha = coverAlpha
+	context.fillStyle = appliedPalette.background
+	context.fillRect(0, 0, width, height)
+	context.globalAlpha = 1
+}
+
+export const setTrimStart = (seconds: number): void => {
+	if (app.isRecording) return
+	const latest = app.trimEnd - MIN_CLIP_SECONDS
+	app.trimStart = clamp(seconds, 0, Math.max(0, latest))
+}
+
+export const setTrimEnd = (seconds: number): void => {
+	if (app.isRecording) return
+	const earliest = Math.min(app.duration, app.trimStart + MIN_CLIP_SECONDS)
+	app.trimEnd = clamp(seconds, earliest, app.duration)
+}
 
 const finishRecording = async (): Promise<void> => {
 	const recording = activeRecording
@@ -190,8 +224,8 @@ const finishRecording = async (): Promise<void> => {
 	app.isRecording = false
 	app.isPlaying = false
 	app.recordProgress = 0
-	setPausedPosition(0)
-	app.currentTime = 0
+	setPausedPosition(app.trimStart)
+	app.currentTime = app.trimStart
 	markDirty()
 
 	const summary = `Saved ${fileName} · ${formatBytes(blob.size)}`
@@ -205,11 +239,11 @@ export const cancelRecording = (): void => {
 	activeRecording = null
 	recording.cancel()
 	pausePlayback()
-	setPausedPosition(0)
+	setPausedPosition(app.trimStart)
 	app.isRecording = false
 	app.isPlaying = false
 	app.recordProgress = 0
-	app.currentTime = 0
+	app.currentTime = app.trimStart
 	markDirty()
 	setStatus('Recording cancelled. Nothing was saved.', 'warning')
 }
@@ -233,6 +267,8 @@ const tick = (): void => {
 	const isAnimating = app.isPlaying || app.isRecording || !app.hasAudio
 	const shouldDraw = isDirty || isAnimating
 	if (shouldDraw) drawFrame(context, buildFrameInput(time), currentLayers, size.width, size.height)
+	const recordingElapsed = time - app.trimStart
+	if (shouldDraw && app.isRecording) drawVideoFade(context, size.width, size.height, recordingElapsed)
 	isDirty = false
 
 	const visibleTime = app.hasAudio ? Math.min(time, app.duration) : time
@@ -240,8 +276,8 @@ const tick = (): void => {
 	if (hasTimeChanged) app.currentTime = visibleTime
 
 	if (!app.isRecording) return
-	app.recordProgress = clamp(time / getRecordingLength(), 0, 1)
-	const isRecordingDone = time >= getRecordingLength()
+	app.recordProgress = clamp(recordingElapsed / getRecordingLength(), 0, 1)
+	const isRecordingDone = recordingElapsed >= getRecordingLength()
 	if (isRecordingDone) void finishRecording()
 }
 
@@ -309,7 +345,7 @@ export const startRecording = async (): Promise<void> => {
 
 	pausePlayback()
 	app.isPlaying = false
-	setPausedPosition(0)
+	setPausedPosition(app.trimStart)
 	recorderFormat = format
 	app.recorderLabel = format.label
 
@@ -322,7 +358,12 @@ export const startRecording = async (): Promise<void> => {
 	await new Promise((resolve) => requestAnimationFrame(resolve))
 
 	activeRecording = startRecorder(canvas, frameRate, tap.stream, format)
-	startPlayback(buffer, 0, tap, handleEnded)
+	const clip = {
+		duration: getClipLength(),
+		fadeIn: app.settings.audioFadeIn,
+		fadeOut: app.settings.audioFadeOut
+	}
+	startPlayback(buffer, app.trimStart, tap, handleEnded, clip)
 	setStatus('Recording in real time. Keep this tab visible until it finishes.', 'warning')
 }
 
@@ -346,6 +387,8 @@ export const loadAudioFile = async (file: File): Promise<void> => {
 		app.isPlaying = false
 		app.hasAudio = true
 		app.duration = decoded.duration
+		app.trimStart = 0
+		app.trimEnd = decoded.duration
 		app.fileName = file.name
 		app.kickCount = result.kicks.length
 		app.currentTime = 0

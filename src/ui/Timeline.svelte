@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { app, getAnalysis, seekTo } from '../store.svelte'
+	import { app, getAnalysis, seekTo, setTrimEnd, setTrimStart } from '../store.svelte'
 	import './Timeline.css'
 
 	const BAR_WIDTH = 3
@@ -85,6 +85,53 @@
 		seekTo(ratio * duration)
 	}
 
+	const TRIM_KEY_SECONDS = 1
+
+	const startRatio = $derived(duration > 0 ? app.trimStart / duration : 0)
+	const endRatio = $derived(duration > 0 ? app.trimEnd / duration : 1)
+	const startPercent = $derived(startRatio * 100)
+	const endPercent = $derived(endRatio * 100)
+	const canTrim = $derived(app.hasAudio && !app.isRecording)
+	const trimStartText = $derived(`Start at ${app.trimStart.toFixed(1)} seconds`)
+	const trimEndText = $derived(`End at ${app.trimEnd.toFixed(1)} seconds`)
+
+	const getSecondsFromPointer = (event: PointerEvent): number => {
+		const bounds = wrapper.getBoundingClientRect()
+		const ratio = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width))
+		return ratio * duration
+	}
+
+	const handleHandleDown = (event: PointerEvent) => {
+		event.stopPropagation()
+		if (!canTrim) return
+		const handle = event.currentTarget as HTMLElement
+		handle.setPointerCapture(event.pointerId)
+	}
+
+	const handleStartMove = (event: PointerEvent) => {
+		const handle = event.currentTarget as HTMLElement
+		const isDragging = handle.hasPointerCapture(event.pointerId)
+		if (isDragging) setTrimStart(getSecondsFromPointer(event))
+	}
+
+	const handleEndMove = (event: PointerEvent) => {
+		const handle = event.currentTarget as HTMLElement
+		const isDragging = handle.hasPointerCapture(event.pointerId)
+		if (isDragging) setTrimEnd(getSecondsFromPointer(event))
+	}
+
+	const handleStartKey = (event: KeyboardEvent) => {
+		event.stopPropagation()
+		if (event.key === 'ArrowRight') setTrimStart(app.trimStart + TRIM_KEY_SECONDS)
+		if (event.key === 'ArrowLeft') setTrimStart(app.trimStart - TRIM_KEY_SECONDS)
+	}
+
+	const handleEndKey = (event: KeyboardEvent) => {
+		event.stopPropagation()
+		if (event.key === 'ArrowRight') setTrimEnd(app.trimEnd + TRIM_KEY_SECONDS)
+		if (event.key === 'ArrowLeft') setTrimEnd(app.trimEnd - TRIM_KEY_SECONDS)
+	}
+
 	const handlePointerDown = (event: PointerEvent) => {
 		if (duration === 0) return
 		wrapper.setPointerCapture(event.pointerId)
@@ -120,6 +167,40 @@
 	onkeydown={handleKeyDown}
 >
 	<canvas class="timeline-canvas" bind:this={canvas}></canvas>
+	{#if app.hasAudio}
+		<div class="timeline-shade isStart" style:--timeline-position="{startPercent}%"></div>
+		<div class="timeline-shade isEnd" style:--timeline-position="{100 - endPercent}%"></div>
+		<div
+			class="timeline-handle isStart"
+			class:isDisabled={!canTrim}
+			style:--timeline-position="{startPercent}%"
+			role="slider"
+			tabindex={canTrim ? 0 : -1}
+			aria-label="Export start"
+			aria-valuemin={0}
+			aria-valuemax={Math.round(app.trimEnd)}
+			aria-valuenow={Math.round(app.trimStart)}
+			aria-valuetext={trimStartText}
+			onpointerdown={handleHandleDown}
+			onpointermove={handleStartMove}
+			onkeydown={handleStartKey}
+		></div>
+		<div
+			class="timeline-handle isEnd"
+			class:isDisabled={!canTrim}
+			style:--timeline-position="{endPercent}%"
+			role="slider"
+			tabindex={canTrim ? 0 : -1}
+			aria-label="Export end"
+			aria-valuemin={Math.round(app.trimStart)}
+			aria-valuemax={Math.round(duration)}
+			aria-valuenow={Math.round(app.trimEnd)}
+			aria-valuetext={trimEndText}
+			onpointerdown={handleHandleDown}
+			onpointermove={handleEndMove}
+			onkeydown={handleEndKey}
+		></div>
+	{/if}
 	{#if !app.hasAudio}
 		<span class="timeline-empty">Load a song to see its shape</span>
 	{/if}

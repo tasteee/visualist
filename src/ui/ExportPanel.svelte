@@ -1,8 +1,8 @@
 <script lang="ts">
 	import RecordIcon from 'phosphor-svelte/lib/RecordIcon'
-	import { app, cancelRecording, formatTime, startRecording } from '../store.svelte'
-	import { TAIL_SECONDS } from '../engine/settings'
-	import type { FrameRateT, ResolutionT } from '../engine/types'
+	import { app, cancelRecording, formatTime, getClipLength, startRecording } from '../store.svelte'
+	import { MAX_FADE_SECONDS, TAIL_SECONDS } from '../engine/settings'
+	import type { FadeSettingNameT, FrameRateT, ResolutionT } from '../engine/types'
 	import Section from './Section.svelte'
 	import Segmented from './Segmented.svelte'
 	import './ExportPanel.css'
@@ -18,11 +18,12 @@
 	]
 
 	const canRecord = $derived(app.hasAudio && app.isLayersReady && !app.isAnalyzing)
-	const lengthLabel = $derived(app.hasAudio ? formatTime(app.duration + TAIL_SECONDS) : '–')
+	const lengthLabel = $derived(app.hasAudio ? formatTime(getClipLength() + TAIL_SECONDS) : '–')
+	const rangeLabel = $derived(app.hasAudio ? `${formatTime(app.trimStart)} – ${formatTime(app.trimEnd)}` : '–')
 	const formatLabel = $derived(app.recorderLabel === '' ? 'Checking…' : app.recorderLabel)
 	const realTimeNote = $derived(
 		app.hasAudio
-			? `Recording runs in real time, so it takes about ${formatTime(app.duration + TAIL_SECONDS)}.`
+			? `Recording runs in real time, so it takes about ${formatTime(getClipLength() + TAIL_SECONDS)}.`
 			: 'Load a song to record. Recording runs in real time.'
 	)
 
@@ -34,6 +35,13 @@
 	const handleFrameRate = (value: string) => {
 		if (app.isRecording) return
 		app.settings.frameRate = Number(value) as FrameRateT
+	}
+
+	const handleFadeChange = (name: FadeSettingNameT, event: Event) => {
+		const detail = (event as CustomEvent<{ value: number }>).detail
+		const isNumber = Number.isFinite(detail.value)
+		if (!isNumber) return
+		app.settings[name] = Math.min(MAX_FADE_SECONDS, Math.max(0, detail.value))
 	}
 
 	const handleRecord = () => {
@@ -50,10 +58,33 @@
 	<Segmented label="Frame rate" options={FRAME_RATE_OPTIONS} value={String(app.settings.frameRate)} isDisabled={app.isRecording} onchange={handleFrameRate} />
 </Section>
 
+<Section title="Audio fade" description="Seconds. Applies to the exported sound.">
+	<div class="export-pair">
+		<z-field label="Fade in">
+			<z-number-input value={app.settings.audioFadeIn} min={0} max={MAX_FADE_SECONDS} step={0.1} isFullWidth isDisabled={app.isRecording} onchange={(event: Event) => handleFadeChange('audioFadeIn', event)}></z-number-input>
+		</z-field>
+		<z-field label="Fade out">
+			<z-number-input value={app.settings.audioFadeOut} min={0} max={MAX_FADE_SECONDS} step={0.1} isFullWidth isDisabled={app.isRecording} onchange={(event: Event) => handleFadeChange('audioFadeOut', event)}></z-number-input>
+		</z-field>
+	</div>
+</Section>
+
+<Section title="Video fade" description="Seconds. Fades the picture to the background color.">
+	<div class="export-pair">
+		<z-field label="Fade in">
+			<z-number-input value={app.settings.videoFadeIn} min={0} max={MAX_FADE_SECONDS} step={0.1} isFullWidth isDisabled={app.isRecording} onchange={(event: Event) => handleFadeChange('videoFadeIn', event)}></z-number-input>
+		</z-field>
+		<z-field label="Fade out">
+			<z-number-input value={app.settings.videoFadeOut} min={0} max={MAX_FADE_SECONDS} step={0.1} isFullWidth isDisabled={app.isRecording} onchange={(event: Event) => handleFadeChange('videoFadeOut', event)}></z-number-input>
+		</z-field>
+	</div>
+</Section>
+
 <Section title="File">
 	<dl class="export-facts">
 		<div class="export-fact"><dt>Format</dt><dd>{formatLabel}</dd></div>
 		<div class="export-fact"><dt>Bitrate</dt><dd>16 Mbps video · 256 kbps audio</dd></div>
+		<div class="export-fact"><dt>Range</dt><dd>{rangeLabel}</dd></div>
 		<div class="export-fact"><dt>Length</dt><dd>{lengthLabel}</dd></div>
 		<div class="export-fact"><dt>Name</dt><dd>{app.hasAudio ? `${app.fileName.replace(/\.[^.]+$/, '')}-visualizer` : '–'}</dd></div>
 	</dl>

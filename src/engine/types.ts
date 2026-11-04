@@ -3,6 +3,8 @@ export type ResolutionT = '1080' | '720'
 export type FrameRateT = 30 | 60
 export type EchoStyleNameT = 'hollow' | 'faintFill' | 'double' | 'sliced' | 'gritty'
 
+export type FadeSettingNameT = 'audioFadeIn' | 'audioFadeOut' | 'videoFadeIn' | 'videoFadeOut'
+
 export type EchoStylesT = Record<EchoStyleNameT, boolean>
 
 export type SettingsT = {
@@ -22,6 +24,10 @@ export type SettingsT = {
 	echoStyles: EchoStylesT
 	resolution: ResolutionT
 	frameRate: FrameRateT
+	audioFadeIn: number
+	audioFadeOut: number
+	videoFadeIn: number
+	videoFadeOut: number
 }
 
 export type HitT = {
