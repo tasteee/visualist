@@ -1,0 +1,321 @@
+.editor-dock {
+	--editor-header-width: 15rem;
+	position: relative;
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	height: var(--editor-dock-height);
+	min-height: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--paper);
+	container-type: inline-size;
+}
+
+/* Resize */
+
+.editor-resize {
+	position: absolute;
+	top: calc(-1 * var(--spacing-4));
+	right: var(--spacing-10);
+	left: var(--spacing-10);
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: var(--spacing-4);
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: ns-resize;
+	outline: none;
+	touch-action: none;
+}
+
+.editor-resize::after {
+	content: '';
+	width: var(--spacing-10);
+	height: var(--spacing-1);
+	border-radius: var(--radius-sm);
+	background: var(--color-neutral-3);
+	transition:
+		background-color var(--motion-fast) ease,
+		width var(--motion-base) var(--ease-move);
+}
+
+.editor-resize:hover::after,
+.editor-resize:active::after,
+.editor-resize:focus-visible::after {
+	width: var(--spacing-16);
+	background: var(--foreground);
+}
+
+/* Frame */
+
+.editor-frame {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+	border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+.editor-row {
+	display: grid;
+	flex: none;
+	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
+	overflow-y: hidden;
+	scrollbar-gutter: stable;
+	border-bottom: 1px solid var(--border);
+}
+
+.editor-row.isRuler {
+	height: var(--spacing-9);
+	background: var(--paper);
+}
+
+.editor-row.isWave {
+	height: var(--spacing-14);
+	background: var(--paper);
+}
+
+.editor-row.isWave > [data-track] {
+	background: var(--bg);
+}
+
+.editor-row.isOverview {
+	height: var(--spacing-8);
+	border-top: 1px solid var(--border);
+	border-bottom: 0;
+	background: var(--paper);
+}
+
+.editor-lanes {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+	background: var(--paper);
+}
+
+/* Lanes keep their own height and the list scrolls, instead of
+   squeezing every lane to fit. */
+.editor-lanes > * {
+	flex-shrink: 0;
+}
+
+/* Header cells */
+
+.editor-corner,
+.editor-song,
+.editor-overview-label {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	min-width: 0;
+	border-right: 1px solid var(--border);
+}
+
+.editor-corner {
+	padding: 0 var(--spacing-2) 0 var(--spacing-3);
+}
+
+.editor-song {
+	padding: 0 var(--spacing-3);
+}
+
+.editor-overview-label {
+	padding: 0 var(--spacing-3);
+}
+
+.editor-eyebrow {
+	color: var(--muted);
+	font-size: var(--font-size-0);
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.editor-count {
+	min-width: var(--spacing-4);
+	padding: 0 var(--spacing-1);
+	border-radius: var(--radius-sm);
+	background: var(--paper-soft);
+	color: var(--muted);
+	font-size: var(--font-size-0);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	line-height: 1.6;
+	text-align: center;
+}
+
+.editor-corner-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: auto;
+}
+
+.editor-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-6);
+	height: var(--spacing-6);
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--muted);
+	font-size: var(--font-size-2);
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.editor-icon:hover:not(:disabled) {
+	background: var(--paper-soft);
+	color: var(--foreground);
+}
+
+.editor-icon:disabled {
+	cursor: default;
+	opacity: var(--control-disabled-opacity);
+}
+
+.editor-icon:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.editor-song-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: var(--spacing-8);
+	height: var(--spacing-8);
+	border-radius: var(--radius-md);
+	background: var(--paper-soft);
+	color: var(--muted);
+	font-size: var(--font-size-3);
+}
+
+.editor-song-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.editor-song-name {
+	overflow: hidden;
+	color: var(--foreground);
+	font-size: var(--font-size-2);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.editor-song-meta {
+	color: var(--secondary);
+	font-size: var(--font-size-1);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Add lane row, which also fills the space under the lanes */
+
+.editor-add-row {
+	display: grid;
+	flex-grow: 1;
+	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
+	min-height: var(--spacing-12);
+}
+
+.editor-add-cell {
+	padding: var(--spacing-2) var(--spacing-3);
+	border-right: 1px solid var(--border);
+	background: var(--paper);
+}
+
+.editor-add-fill {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	padding: 0 var(--spacing-6);
+	background: var(--bg);
+}
+
+.editor-add-button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	width: 100%;
+	height: var(--spacing-8);
+	padding: 0 var(--spacing-3);
+	border: 1px dashed var(--color-neutral-3);
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--muted);
+	font: inherit;
+	font-size: var(--font-size-2);
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.editor-add-button:hover:not(:disabled) {
+	border-color: var(--color-neutral-5);
+	background: var(--paper-soft);
+	color: var(--foreground);
+}
+
+.editor-add-button:disabled {
+	cursor: default;
+	opacity: var(--control-disabled-opacity);
+}
+
+.editor-add-button:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.editor-add-row.isEmpty .editor-add-button {
+	border-style: solid;
+	border-color: var(--foreground);
+	background: var(--foreground);
+	color: var(--bg);
+}
+
+.editor-add-row.isEmpty .editor-add-button:hover {
+	border-color: var(--color-neutral-9);
+	background: var(--color-neutral-9);
+	color: var(--bg);
+}
+
+.editor-add-hint {
+	max-width: 32rem;
+	color: var(--secondary);
+	font-size: var(--font-size-2);
+	line-height: 1.5;
+	text-align: center;
+}
+
+@container (max-width: 44rem) {
+	.editor-frame {
+		--editor-header-width: 11rem;
+	}
+
+	.editor-song-icon {
+		display: none;
+	}
+}

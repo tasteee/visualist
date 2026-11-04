@@ -51,6 +51,24 @@ layout.json (pivot and size). It is never retyped in a font.
 | Key | Action |
 | --- | --- |
 | Space | Play / pause (not while typing) |
-| Left / Right on the timeline | Seek 5 s |
+| Home | Back to start |
+| `=` / `-` | Zoom in / out around the playhead |
+| `0` | Zoom to fit the whole song |
+| F | Follow the playhead while playing |
+| S | Snap points to the beat grid (hold Shift to move freely) |
+| Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z | Undo / redo automation edits |
+| Left / Right on the waveform | Seek 5 s |
+
+## Timeline
+
+- Ctrl/Cmd + wheel or pinch zooms anywhere. Plain wheel zooms over
+  the ruler, waveform and overview, and scrolls the lanes elsewhere.
+- Shift + wheel or a sideways swipe scrolls left and right.
+- Drag the ruler up and down to zoom, left and right to scroll,
+  click it to seek. The bar along its top is the export range.
+- The overview at the bottom shows the whole song: drag the window
+  to scroll, drag its edges to zoom, double-click to fit.
+- Drag the grip above the editor to resize it. The video keeps its
+  16:9 frame in the space left over.
 
 Spec: product spec for the tasteink visualizer (behavior only).

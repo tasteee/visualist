@@ -1,7 +1,7 @@
 <script lang="ts">
 	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
-	import { automation } from '../automation.svelte'
-	import { checkIsAutomated, findControl, getLiveControlValue } from '../engine/automation'
+	import { automation, revealLane } from '../automation.svelte'
+	import { checkIsAutomated, findLaneForControl, getControlTone, getLiveControlValue } from '../engine/automation'
 	import { app, detectBpm, getAnalysis, setBpm, setTheme, setTitle } from '../store.svelte'
 	import type { AutomatableKeyT, EchoStyleNameT, ModeT } from '../engine/types'
 	import ColorRow from './ColorRow.svelte'
@@ -56,11 +56,16 @@
 		return liveValue ?? app.settings[key]
 	}
 
-	const getSliderHint = (key: AutomatableKeyT): string | undefined => {
-		const control = findControl(key)
+	const getAutomationTone = (key: AutomatableKeyT): number => {
 		const isAutomated = checkIsKeyAutomated(key)
-		if (!isAutomated || control === null) return undefined
-		return `${control.label} is driven by an automation lane`
+		if (!isAutomated) return 0
+		return getControlTone(key)
+	}
+
+	const revealControlLane = (key: AutomatableKeyT) => {
+		const lane = findLaneForControl(automation.lanes, key)
+		if (lane === undefined) return
+		revealLane(lane.id)
 	}
 
 	const handleTitleInput = (event: Event) => {
@@ -108,17 +113,17 @@
 	</div>
 
 	<Segmented label="Theme" options={THEME_OPTIONS} value={app.settings.mode} onchange={(value) => setTheme(value as ModeT)} />
-	<SettingSlider label="Logo border" value={getSliderValue('logoBorder')} hint={getSliderHint('logoBorder')} isDisabled={checkIsKeyAutomated('logoBorder')} min={0} max={1} step={0.05} onchange={(value) => (app.settings.logoBorder = value)} />
-	<SettingSlider label="Reactivity" value={getSliderValue('reactivity')} hint={getSliderHint('reactivity')} isDisabled={checkIsKeyAutomated('reactivity')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.reactivity = value)} />
+	<SettingSlider label="Logo border" value={getSliderValue('logoBorder')} automationTone={getAutomationTone('logoBorder')} onreveal={() => revealControlLane('logoBorder')} min={0} max={1} step={0.05} onchange={(value) => (app.settings.logoBorder = value)} />
+	<SettingSlider label="Reactivity" value={getSliderValue('reactivity')} automationTone={getAutomationTone('reactivity')} onreveal={() => revealControlLane('reactivity')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.reactivity = value)} />
 
 	<ColorRow label="Accent 1" value={app.settings.accent1} onchange={(value) => (app.settings.accent1 = value)} />
 	<ColorRow label="Accent 2" value={app.settings.accent2} onchange={(value) => (app.settings.accent2 = value)} />
 	<ColorRow label="Background" value={app.settings.background} onchange={(value) => (app.settings.background = value)} />
 	<ColorRow label="Foreground" value={app.settings.foreground} onchange={(value) => (app.settings.foreground = value)} />
 
-	<SettingSlider label="Echoes Amount" value={getSliderValue('echoAmount')} hint={getSliderHint('echoAmount')} isDisabled={checkIsKeyAutomated('echoAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoAmount = value)} />
-	<SettingSlider label="Echoes Size" value={getSliderValue('echoSize')} hint={getSliderHint('echoSize')} isDisabled={checkIsKeyAutomated('echoSize')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoSize = value)} />
-	<SettingSlider label="Echoes Speed" value={getSliderValue('echoSpeed')} hint={getSliderHint('echoSpeed')} isDisabled={checkIsKeyAutomated('echoSpeed')} min={0.4} max={3} step={0.05} onchange={(value) => (app.settings.echoSpeed = value)} />
+	<SettingSlider label="Echoes Amount" value={getSliderValue('echoAmount')} automationTone={getAutomationTone('echoAmount')} onreveal={() => revealControlLane('echoAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoAmount = value)} />
+	<SettingSlider label="Echoes Size" value={getSliderValue('echoSize')} automationTone={getAutomationTone('echoSize')} onreveal={() => revealControlLane('echoSize')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.echoSize = value)} />
+	<SettingSlider label="Echoes Speed" value={getSliderValue('echoSpeed')} automationTone={getAutomationTone('echoSpeed')} onreveal={() => revealControlLane('echoSpeed')} min={0.4} max={3} step={0.05} onchange={(value) => (app.settings.echoSpeed = value)} />
 	<div class="settings-chips">
 		{#each STYLE_CHIPS as chip (chip.name)}
 			<z-badge
@@ -135,7 +140,7 @@
 		{/each}
 	</div>
 
-	<SettingSlider label="Glitch Amount" value={getSliderValue('glitchAmount')} hint={getSliderHint('glitchAmount')} isDisabled={checkIsKeyAutomated('glitchAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.glitchAmount = value)} />
-	<SettingSlider label="Texture Amount" value={getSliderValue('textureAmount')} hint={getSliderHint('textureAmount')} isDisabled={checkIsKeyAutomated('textureAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.textureAmount = value)} />
-	<SettingSlider label="Solids Amount" value={getSliderValue('solidAmount')} hint={getSliderHint('solidAmount')} isDisabled={checkIsKeyAutomated('solidAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.solidAmount = value)} />
+	<SettingSlider label="Glitch Amount" value={getSliderValue('glitchAmount')} automationTone={getAutomationTone('glitchAmount')} onreveal={() => revealControlLane('glitchAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.glitchAmount = value)} />
+	<SettingSlider label="Texture Amount" value={getSliderValue('textureAmount')} automationTone={getAutomationTone('textureAmount')} onreveal={() => revealControlLane('textureAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.textureAmount = value)} />
+	<SettingSlider label="Solids Amount" value={getSliderValue('solidAmount')} automationTone={getAutomationTone('solidAmount')} onreveal={() => revealControlLane('solidAmount')} min={0} max={2} step={0.05} onchange={(value) => (app.settings.solidAmount = value)} />
 </div>

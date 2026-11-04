@@ -40,14 +40,104 @@
 }
 
 .setting-slider,
-.setting-slider z-tooltip,
+.setting-slider > z-tooltip,
 .setting-slider z-slider {
 	display: block;
 	width: 100%;
 }
 
+.setting-slider {
+	--setting-tone: var(--foreground);
+}
+
 .setting-slider.isDisabled {
 	opacity: var(--control-disabled-opacity);
+}
+
+.setting-slider-header {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	margin-bottom: var(--spacing-2);
+}
+
+.setting-slider-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--foreground);
+	font-size: var(--font-size-small);
+	font-weight: var(--font-weight-medium);
+	line-height: 1.2;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.setting-slider-value {
+	flex: none;
+	padding: 0.125rem var(--spacing-2);
+	border-radius: 999px;
+	background: color-mix(in oklch, var(--setting-tone) 12%, transparent);
+	color: var(--setting-tone);
+	font-size: var(--font-size-caption);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-weight-semibold);
+	line-height: 1.4;
+	white-space: nowrap;
+}
+
+.setting-slider-badge {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: var(--spacing-1);
+	height: var(--spacing-5);
+	padding: 0 var(--spacing-2);
+	border: 1px solid color-mix(in oklch, var(--setting-tone) 45%, transparent);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--setting-tone);
+	font: inherit;
+	font-size: var(--font-size-0);
+	font-weight: var(--font-weight-semibold);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	cursor: pointer;
+	transition: background-color var(--motion-fast) ease;
+}
+
+.setting-slider-badge:hover {
+	background: color-mix(in oklch, var(--setting-tone) 14%, transparent);
+}
+
+.setting-slider-badge:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.setting-slider-badge.isTone1,
+.setting-slider-value.isTone1 {
+	--setting-tone: var(--purple);
+}
+
+.setting-slider-badge.isTone2,
+.setting-slider-value.isTone2 {
+	--setting-tone: var(--pink);
+}
+
+.setting-slider-badge.isTone3,
+.setting-slider-value.isTone3 {
+	--setting-tone: var(--success);
+}
+
+.setting-slider-badge.isTone4,
+.setting-slider-value.isTone4 {
+	--setting-tone: var(--warning);
+}
+
+.setting-slider-badge.isTone5,
+.setting-slider-value.isTone5 {
+	--setting-tone: var(--color-neutral-7);
 }
 
 .color-row {

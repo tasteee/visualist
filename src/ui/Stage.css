@@ -2,7 +2,7 @@
 	position: relative;
 	overflow: hidden;
 	aspect-ratio: 16 / 9;
-	width: min(100cqw, (100cqh - var(--stage-reserved-height)) * 16 / 9);
+	width: min(100cqw, 100cqh * 16 / 9);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: var(--bg);

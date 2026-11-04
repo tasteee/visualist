@@ -117,45 +117,66 @@ export const applyAutomation = (
 	return live
 }
 
-const toPathX = (time: number, duration: number): number => {
-	const ratio = duration > 0 ? time / duration : 0
-	return clamp(ratio, 0, 1) * PATH_WIDTH
+// Path space: x runs 0-1000 across the visible view, so the
+// curve can extend past both edges and gets clipped by the plot.
+export type PathViewT = { start: number; span: number }
+
+const toPathX = (time: number, view: PathViewT): number => {
+	const ratio = view.span > 0 ? (time - view.start) / view.span : 0
+	return ratio * PATH_WIDTH
 }
 
 const toPathY = (normalized: number): number => (1 - clamp(normalized, 0, 1)) * PATH_HEIGHT
 
 type PathVertexT = { x: number; y: number }
 
-const buildSegmentVertices = (start: AutomationPointT, end: AutomationPointT, duration: number): PathVertexT[] => {
+const buildSegmentVertices = (start: AutomationPointT, end: AutomationPointT, view: PathViewT): PathVertexT[] => {
 	const isBent = start.bend !== 0
 	const sampleCount = isBent ? BENT_SAMPLES : 1
-	const vertices: PathVertexT[] = []
-	for (let sample = 1; sample <= sampleCount; sample++) {
+	const sampleNumbers = Array.from({ length: sampleCount }, (_, index) => index + 1)
+	return sampleNumbers.map((sample) => {
 		const progress = sample / sampleCount
 		const time = start.time + (end.time - start.time) * progress
 		const value = interpolateSegment(start, end, time)
-		vertices.push({ x: toPathX(time, duration), y: toPathY(value) })
-	}
-	return vertices
+		return { x: toPathX(time, view), y: toPathY(value) }
+	})
 }
 
-export const buildVertices = (points: AutomationPointT[], duration: number, fallback: number): PathVertexT[] => {
+// Segments fully outside the view are skipped, except their
+// ends, so long songs stay cheap at deep zoom.
+const checkIsSegmentVisible = (start: AutomationPointT, end: AutomationPointT, view: PathViewT): boolean => {
+	const viewEnd = view.start + view.span
+	const isBeforeView = end.time < view.start
+	const isAfterView = start.time > viewEnd
+	return !isBeforeView && !isAfterView
+}
+
+export const buildVertices = (points: AutomationPointT[], view: PathViewT, fallback: number): PathVertexT[] => {
+	const leftX = Math.min(0, toPathX(0, view))
+	const rightX = PATH_WIDTH
 	const hasPoints = points.length > 0
 	if (!hasPoints) {
 		return [
-			{ x: 0, y: toPathY(fallback) },
-			{ x: PATH_WIDTH, y: toPathY(fallback) }
+			{ x: leftX, y: toPathY(fallback) },
+			{ x: rightX, y: toPathY(fallback) }
 		]
 	}
 	const first = points[0]
 	const last = points[points.length - 1]
-	const vertices: PathVertexT[] = [{ x: 0, y: toPathY(first.value) }]
-	vertices.push({ x: toPathX(first.time, duration), y: toPathY(first.value) })
-	for (let index = 0; index < points.length - 1; index++) {
-		const segment = buildSegmentVertices(points[index], points[index + 1], duration)
-		vertices.push(...segment)
+	const vertices: PathVertexT[] = [{ x: leftX, y: toPathY(first.value) }]
+	vertices.push({ x: toPathX(first.time, view), y: toPathY(first.value) })
+	const segmentStarts = points.slice(0, -1)
+	for (const [index, start] of segmentStarts.entries()) {
+		const end = points[index + 1]
+		const isVisible = checkIsSegmentVisible(start, end, view)
+		if (!isVisible) {
+			vertices.push({ x: toPathX(end.time, view), y: toPathY(end.value) })
+			continue
+		}
+		vertices.push(...buildSegmentVertices(start, end, view))
 	}
-	vertices.push({ x: PATH_WIDTH, y: toPathY(last.value) })
+	const lastX = Math.max(rightX, toPathX(last.time, view))
+	vertices.push({ x: lastX, y: toPathY(last.value) })
 	return vertices
 }
 
@@ -171,7 +192,23 @@ export const buildLinePath = (vertices: PathVertexT[]): string => {
 
 export const buildAreaPath = (vertices: PathVertexT[]): string => {
 	const line = buildLinePath(vertices)
-	return `${line} L${PATH_WIDTH} ${PATH_HEIGHT} L0 ${PATH_HEIGHT} Z`
+	const first = vertices[0]
+	const last = vertices[vertices.length - 1]
+	return `${line} L${last.x.toFixed(2)} ${PATH_HEIGHT} L${first.x.toFixed(2)} ${PATH_HEIGHT} Z`
+}
+
+const LANE_TONE_COUNT = 5
+
+// Each control keeps one color wherever it shows up: lane,
+// header dot and the automated badge in the settings panel.
+export const getControlTone = (key: AutomatableKeyT | null): number => {
+	if (key === null) return 0
+	const index = AUTOMATION_CONTROLS.findIndex((control) => control.key === key)
+	return (Math.max(0, index) % LANE_TONE_COUNT) + 1
+}
+
+export const findLaneForControl = (lanes: AutomationLaneT[], key: AutomatableKeyT): AutomationLaneT | undefined => {
+	return lanes.find((lane) => lane.controlKey === key)
 }
 
 export const createPointId = (): string => crypto.randomUUID()

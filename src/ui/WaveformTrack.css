@@ -1,0 +1,46 @@
+.waveform-track {
+	position: relative;
+	height: 100%;
+	min-width: 0;
+	overflow: hidden;
+	cursor: text;
+	outline: none;
+	touch-action: none;
+}
+
+.waveform-track:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: -2px;
+}
+
+.waveform-track.isDisabled {
+	cursor: default;
+	pointer-events: none;
+}
+
+.waveform-track-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border-top: 0 solid var(--color-neutral-3);
+	color: var(--color-neutral-5);
+	caret-color: var(--foreground);
+}
+
+.waveform-track-playhead,
+.waveform-track-hover {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--wave-x);
+	width: 1px;
+	pointer-events: none;
+}
+
+.waveform-track-playhead {
+	background: var(--foreground);
+}
+
+.waveform-track-hover {
+	background: var(--color-neutral-5);
+}

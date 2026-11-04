@@ -1,6 +1,6 @@
 <script lang="ts">
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
-	import { automation, deletePoint, movePoint } from '../automation.svelte'
+	import { automation, deletePoint, movePoint, recordHistory } from '../automation.svelte'
 	import { findControl, toControlValue, toNormalized } from '../engine/automation'
 	import { app } from '../store.svelte'
 	import './AutomationPopover.css'
@@ -51,12 +51,14 @@
 		const detail = (event as CustomEvent<{ value: number }>).detail
 		if (control === null || point === undefined) return
 		const normalized = toNormalized(control, detail.value)
+		recordHistory()
 		movePoint(props.laneId, props.pointId, point.time, normalized, app.duration)
 	}
 
 	const handleTimeChange = (event: Event) => {
 		const detail = (event as CustomEvent<{ value: number }>).detail
 		if (point === undefined) return
+		recordHistory()
 		movePoint(props.laneId, props.pointId, detail.value, point.value, app.duration)
 	}
 

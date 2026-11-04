@@ -1,22 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
-	import { automation } from './automation.svelte'
 	import { app, loadAudioFile, startApp, togglePlay } from './store.svelte'
-	import AutomationBar from './ui/AutomationBar.svelte'
 	import DropZone from './ui/DropZone.svelte'
+	import EditorDock from './ui/EditorDock.svelte'
 	import Inspector from './ui/Inspector.svelte'
 	import Stage from './ui/Stage.svelte'
-	import Transport from './ui/Transport.svelte'
-
-	const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']
-
-	const checkIsTyping = (event: KeyboardEvent): boolean => {
-		const origin = event.composedPath()[0]
-		const isElement = origin instanceof HTMLElement
-		if (!isElement) return false
-		const isTypingTag = TYPING_TAGS.includes(origin.tagName)
-		return isTypingTag || origin.isContentEditable
-	}
+	import { checkIsTyping } from './ui/keyboard'
 
 	const handleKeyDown = (event: KeyboardEvent) => {
 		const isSpace = event.code === 'Space'
@@ -50,9 +39,6 @@
 		void loadAudioFile(file)
 	}
 
-	const MAX_VISIBLE_LANES = 3
-	const visibleLaneRows = $derived(Math.min(automation.lanes.length, MAX_VISIBLE_LANES))
-
 	onMount(() => {
 		void startApp()
 	})
@@ -61,13 +47,12 @@
 <svelte:window onkeydown={handleKeyDown} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop} />
 
 <main class="app-shell">
-	<section class="app-workspace" data-lane-rows={app.hasAudio ? visibleLaneRows : undefined}>
-		<Stage />
+	<section class="app-workspace">
+		<div class="app-stage-area">
+			<Stage />
+		</div>
 		{#if app.hasAudio}
-			<div class="app-console">
-				<Transport />
-				<AutomationBar />
-			</div>
+			<EditorDock />
 		{/if}
 		{#if !app.hasAudio}
 			<DropZone />
