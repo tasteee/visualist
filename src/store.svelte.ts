@@ -50,6 +50,9 @@ type AppStateT = {
 }
 
 const PALETTE_DELAY = 120
+// The live preview draws smaller than the export, so heavy
+// effects stay smooth. Recording always uses the export size.
+const PREVIEW_SIZE = { width: 1440, height: 810 }
 const DEMO_STATUS = 'Previewing the built-in demo beat. Drop a song to begin.'
 
 export const app = $state<AppStateT>({
@@ -113,6 +116,11 @@ export const formatTime = (seconds: number): string => {
 	const wholeSeconds = Math.floor(safeSeconds % 60)
 	const paddedSeconds = String(wholeSeconds).padStart(2, '0')
 	return `${minutes}:${paddedSeconds}`
+}
+
+export const getCanvasSize = (): { width: number; height: number } => {
+	if (app.isRecording) return getOutputSize()
+	return PREVIEW_SIZE
 }
 
 export const getOutputSize = (): { width: number; height: number } => {
@@ -213,7 +221,7 @@ const tick = (): void => {
 	const currentLayers = layers
 	if (canvas === null || context === null || currentLayers === null) return
 
-	const size = getOutputSize()
+	const size = getCanvasSize()
 	const hasWrongSize = canvas.width !== size.width || canvas.height !== size.height
 	if (hasWrongSize) {
 		canvas.width = size.width

@@ -1,8 +1,8 @@
 import { findFirstHitIndex, getLevels } from './analysis'
 import { collectEchoes } from './echoes'
 import type { EchoT } from './echoes'
-import { FRAME_HEIGHT, FRAME_WIDTH, LOGO_CENTER_X, LOGO_CENTER_Y, getTinted, paintMask } from './logoLayers'
-import type { LogoLayersT, VectorMaskT } from './logoLayers'
+import { FRAME_HEIGHT, FRAME_WIDTH, LOGO_CENTER_X, LOGO_CENTER_Y, getLayerHeight, getLayerWidth, getTinted, tintLayer } from './logoLayers'
+import type { LayerT, LogoLayersT } from './logoLayers'
 import { createRandom } from './rng'
 import { FLICKER_RATE, clamp } from './settings'
 import type { FrameInputT } from './types'
@@ -130,34 +130,35 @@ const buildFrameState = (input: FrameInputT, layers: LogoLayersT): FrameStateT =
 	}
 }
 
-// Draws a raster layer (worn or gritty variants), cut into the
-// shared glitch strips when a glitch is on so layers stay aligned.
-const drawRasterLayer = (context: CanvasRenderingContext2D, layer: HTMLCanvasElement, state: FrameStateT, extraShift = 0): void => {
-	const hasStrips = state.strips.length > 0
-	if (!hasStrips) {
-		context.drawImage(layer, extraShift, 0, FRAME_WIDTH, FRAME_HEIGHT)
-		return
-	}
+// Draws a whole layer, slid sideways by offsetX.
+const drawLayerWhole = (context: CanvasRenderingContext2D, layer: LayerT, offsetX = 0): void => {
+	context.drawImage(layer.canvas, layer.left + offsetX, layer.top, getLayerWidth(layer), getLayerHeight(layer))
+}
 
-	const scale = layer.width / FRAME_WIDTH
-	for (const strip of state.strips) {
-		const sourceTop = strip.top * scale
-		const sourceHeight = strip.height * scale
-		context.drawImage(layer, 0, sourceTop, layer.width, sourceHeight, strip.shift + extraShift, strip.top, FRAME_WIDTH, strip.height)
+// Draws a layer cut into horizontal strips, each slid by its own
+// amount. Only the part of a strip that overlaps the layer is drawn.
+const drawLayerStrips = (context: CanvasRenderingContext2D, layer: LayerT, strips: StripT[], extraShift = 0): void => {
+	const layerWidth = getLayerWidth(layer)
+	const layerBottom = layer.top + getLayerHeight(layer)
+	for (const strip of strips) {
+		const overlapTop = Math.max(strip.top, layer.top)
+		const overlapBottom = Math.min(strip.top + strip.height, layerBottom)
+		const hasOverlap = overlapBottom > overlapTop
+		if (!hasOverlap) continue
+		const sourceTop = (overlapTop - layer.top) * layer.scale
+		const sourceHeight = (overlapBottom - overlapTop) * layer.scale
+		const destinationLeft = layer.left + strip.shift + extraShift
+		context.drawImage(layer.canvas, 0, sourceTop, layer.canvas.width, sourceHeight, destinationLeft, overlapTop, layerWidth, overlapBottom - overlapTop)
 	}
 }
 
-// Draws a vector layer the same way. Crisp at any output size.
-const drawMaskLayer = (context: CanvasRenderingContext2D, mask: VectorMaskT, color: string, state: FrameStateT, extraShift = 0): void => {
+// Draws a tinted layer, cut into the shared glitch strips when a
+// glitch is on so every layer stays aligned.
+const drawMaskLayer = (context: CanvasRenderingContext2D, layer: LayerT, color: string, state: FrameStateT, extraShift = 0): void => {
+	const tinted = tintLayer(layer, color)
 	const hasStrips = state.strips.length > 0
-	if (!hasStrips) {
-		paintMask(context, mask, color, extraShift)
-		return
-	}
-
-	for (const strip of state.strips) {
-		paintMask(context, mask, color, strip.shift + extraShift, strip)
-	}
+	if (!hasStrips) return drawLayerWhole(context, tinted, extraShift)
+	drawLayerStrips(context, tinted, state.strips, extraShift)
 }
 
 const scaleAroundLogo = (context: CanvasRenderingContext2D, scale: number): void => {
@@ -180,14 +181,16 @@ const pickEchoColor = (echo: EchoT, palette: ScenePaletteT, slotOffset = 0): str
 	return palette.logo
 }
 
-const drawSlicedEcho = (context: CanvasRenderingContext2D, outline: VectorMaskT, color: string, echo: EchoT, state: FrameStateT): void => {
+const drawSlicedEcho = (context: CanvasRenderingContext2D, outline: LayerT, echo: EchoT, state: FrameStateT): void => {
 	const random = createRandom(echo.seed * 31 + state.flickerStep)
 	const maxShift = 18 + 34 * echo.strength
 	const stripHeight = FRAME_HEIGHT / STRIP_COUNT
+	const strips: StripT[] = []
 	for (let index = 0; index < STRIP_COUNT; index++) {
 		const shift = (random() * 2 - 1) * maxShift
-		paintMask(context, outline, color, shift, { top: index * stripHeight, height: stripHeight })
+		strips.push({ top: index * stripHeight, height: stripHeight, shift })
 	}
+	drawLayerStrips(context, outline, strips)
 }
 
 const drawEcho = (context: CanvasRenderingContext2D, echo: EchoT, layers: LogoLayersT, palette: ScenePaletteT, state: FrameStateT): void => {
@@ -197,32 +200,32 @@ const drawEcho = (context: CanvasRenderingContext2D, echo: EchoT, layers: LogoLa
 	context.globalAlpha = echo.alpha * state.introAlpha
 	scaleAroundLogo(context, echo.scale)
 
-	if (echo.style === 'hollow') paintMask(context, layers.outline, color)
+	if (echo.style === 'hollow') drawLayerWhole(context, tintLayer(layers.outline, color))
 
 	if (echo.style === 'faintFill') {
 		const fillStrength = clamp(0.06 + 0.2 * echo.strength, 0.06, 0.26)
 		const alphaBefore = context.globalAlpha
 		const canFill = settings.solidAmount > 0
 		if (canFill) context.globalAlpha = alphaBefore * fillStrength
-		if (canFill) paintMask(context, layers.silhouette, color)
+		if (canFill) drawLayerWhole(context, tintLayer(layers.silhouette, color))
 		context.globalAlpha = alphaBefore
-		paintMask(context, layers.outline, color)
+		drawLayerWhole(context, tintLayer(layers.outline, color))
 	}
 
 	if (echo.style === 'double') {
 		const spread = 16 * (1 - echo.progress)
 		const secondColor = pickEchoColor(echo, palette, 1)
-		paintMask(context, layers.outline, color, -spread)
-		paintMask(context, layers.outline, secondColor, spread)
+		drawLayerWhole(context, tintLayer(layers.outline, color), -spread)
+		drawLayerWhole(context, tintLayer(layers.outline, secondColor), spread)
 	}
 
-	if (echo.style === 'sliced') drawSlicedEcho(context, layers.outline, color, echo, state)
+	if (echo.style === 'sliced') drawSlicedEcho(context, tintLayer(layers.outline, color), echo, state)
 
 	if (echo.style === 'gritty') {
 		const flickerRandom = createRandom(echo.seed * 17 + state.flickerStep)
 		const flicker = 0.2 + 0.7 * flickerRandom()
 		context.globalAlpha = context.globalAlpha * flicker
-		context.drawImage(getTinted(layers.outlineGritty, color), 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+		drawLayerWhole(context, tintLayer(layers.outlineGritty, color))
 	}
 
 	context.restore()
@@ -303,7 +306,7 @@ const drawLogo = (context: CanvasRenderingContext2D, layers: LogoLayersT, palett
 
 	const border = clamp(settings.logoBorder, 0, 1)
 	context.globalAlpha = border * state.introAlpha
-	context.drawImage(getTinted(layers.halo, palette.background), 0, 0)
+	drawLayerWhole(context, tintLayer(layers.halo, palette.background))
 	context.globalAlpha = state.introAlpha
 
 	drawSolidLayers(context, layers, palette, state)
@@ -311,8 +314,8 @@ const drawLogo = (context: CanvasRenderingContext2D, layers: LogoLayersT, palett
 	drawMaskLayer(context, layers.fringeB, palette.accent2, state)
 
 	const isWorn = state.wornVariant >= 0
-	if (isWorn) drawRasterLayer(context, getTinted(layers.coreVariants[state.wornVariant], palette.logo), state)
-	if (!isWorn) drawMaskLayer(context, layers.core, palette.logo, state)
+	const coreLayer = isWorn ? layers.coreVariants[state.wornVariant] : layers.core
+	drawMaskLayer(context, coreLayer, palette.logo, state)
 	drawTearBars(context, layers, palette, state)
 	context.restore()
 }
