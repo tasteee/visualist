@@ -115,3 +115,12 @@ export const setPausedPosition = (position: number): void => {
 export const createRecordingTap = (): MediaStreamAudioDestinationNode => {
 	return getAudioContext().createMediaStreamDestination()
 }
+
+// How far behind the clock the speakers are. Taps land late by
+// this much, since people tap to what they hear.
+export const getOutputLatency = (): number => {
+	const context = getAudioContext()
+	const outputLatency = context.outputLatency ?? 0
+	const baseLatency = context.baseLatency ?? 0
+	return Math.max(outputLatency, baseLatency)
+}

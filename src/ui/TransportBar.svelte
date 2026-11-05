@@ -11,7 +11,7 @@
 	import PlayIcon from 'phosphor-svelte/lib/PlayIcon'
 	import SkipBackIcon from 'phosphor-svelte/lib/SkipBackIcon'
 	import { automation, redo, undo } from '../automation.svelte'
-	import { formatBarBeat, formatPreciseTime } from '../engine/timeline'
+	import { formatBarBeat, formatBpm, formatPreciseTime } from '../engine/timeline'
 	import { app, getAnalysis, seekTo, togglePlay } from '../store.svelte'
 	import { checkIsFitted, fitView, getZoomLevel, timeline, toggleFollowing, toggleSnapping, zoomIn, zoomOut } from '../timeline.svelte'
 	import { openAudioPicker } from './filePicker'
@@ -24,7 +24,7 @@
 	const elapsedLabel = $derived(formatPreciseTime(app.currentTime))
 	const totalLabel = $derived(formatPreciseTime(app.duration))
 	const barBeatLabel = $derived(formatBarBeat(app.currentTime, getAnalysis().bpm, getAnalysis().beatOffset))
-	const bpmLabel = $derived(String(Math.round(getAnalysis().bpm)))
+	const bpmLabel = $derived(formatBpm(getAnalysis().bpm))
 
 	const zoomLevel = $derived(getZoomLevel())
 	const zoomLabel = $derived(zoomLevel < 1.05 ? 'Fit' : `${zoomLevel.toFixed(1)}×`)

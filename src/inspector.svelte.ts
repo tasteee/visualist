@@ -1,4 +1,4 @@
-export type InspectorTabT = 'settings' | 'layers' | 'post' | 'export'
+export type InspectorTabT = 'settings' | 'sources' | 'layers' | 'post' | 'export'
 
 type InspectorStateT = {
 	activeTab: InspectorTabT

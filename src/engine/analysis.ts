@@ -1,4 +1,5 @@
 import { GRID_STEP, clamp } from './settings'
+import { buildSpectrum } from './spectrum'
 import type { AnalysisT, AudioLevelsT, HitT } from './types'
 
 const FRAMES_PER_SECOND = 100
@@ -95,7 +96,7 @@ const getPercentile = (values: Float32Array, percentile: number): number => {
 // Normalized to the series' own 97th percentile so quiet and
 // loud masters behave alike. The floor keeps silence from
 // dividing by zero.
-const normalizeToPercentile = (values: Float32Array, percentile: number): Float32Array => {
+export const normalizeToPercentile = (values: Float32Array, percentile: number): Float32Array => {
 	const reference = Math.max(getPercentile(values, percentile), 1e-6)
 	const normalized = new Float32Array(values.length)
 	for (let index = 0; index < values.length; index++) normalized[index] = Math.min(1.5, values[index] / reference)
@@ -103,7 +104,7 @@ const normalizeToPercentile = (values: Float32Array, percentile: number): Float3
 }
 
 // Instant attack, exponential release.
-const applyRelease = (values: Float32Array, releaseSeconds: number): Float32Array => {
+export const applyRelease = (values: Float32Array, releaseSeconds: number): Float32Array => {
 	const decayPerFrame = Math.exp(-GRID_STEP / releaseSeconds)
 	const output = new Float32Array(values.length)
 	let held = 0
@@ -135,7 +136,7 @@ const buildEnergy = (low: Float32Array, level: Float32Array): Float32Array => {
 }
 
 // Log-compressed rise in level over two frames.
-const buildRise = (series: Float32Array): Float32Array => {
+export const buildRise = (series: Float32Array): Float32Array => {
 	const rise = new Float32Array(series.length)
 	const compression = 50
 	for (let index = 2; index < series.length; index++) {
@@ -146,7 +147,9 @@ const buildRise = (series: Float32Array): Float32Array => {
 	return rise
 }
 
-const pickHits = (rise: Float32Array, minGapSeconds: number): HitT[] => {
+// thresholdScale above 1 asks for stronger onsets, below 1
+// lets quieter ones through.
+export const pickHits = (rise: Float32Array, minGapSeconds: number, thresholdScale = 1): HitT[] => {
 	const prefix = new Float64Array(rise.length + 1)
 	for (let index = 0; index < rise.length; index++) prefix[index + 1] = prefix[index] + rise[index]
 
@@ -164,7 +167,7 @@ const pickHits = (rise: Float32Array, minGapSeconds: number): HitT[] => {
 		const start = Math.max(0, frame - ONSET_WINDOW_FRAMES)
 		const end = Math.min(rise.length, frame + ONSET_WINDOW_FRAMES)
 		const localAverage = (prefix[end] - prefix[start]) / Math.max(1, end - start)
-		const threshold = 1.8 * localAverage + floorThreshold
+		const threshold = (1.8 * localAverage + floorThreshold) * thresholdScale
 		const isAboveThreshold = value > threshold
 		if (!isAboveThreshold) continue
 
@@ -294,7 +297,12 @@ export const analyzeAudio = async (buffer: AudioBuffer, onProgress?: AnalysisPro
 
 	const bpm = detectTempo(flux)
 	const beatOffset = computeBeatOffset(flux, bpm)
-	report(0.95)
+	report(0.75)
+	await waitForPaint()
+
+	const reportSpectrum = (fraction: number) => report(0.75 + fraction * 0.23)
+	const spectrum = await buildSpectrum(mono, sampleRate, reportSpectrum)
+	report(0.98)
 
 	return {
 		duration: buffer.duration,
@@ -308,6 +316,7 @@ export const analyzeAudio = async (buffer: AudioBuffer, onProgress?: AnalysisPro
 		snaps,
 		bpm,
 		beatOffset,
+		spectrum,
 		isDemo: false
 	}
 }

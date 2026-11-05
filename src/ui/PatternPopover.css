@@ -1,0 +1,131 @@
+.pattern-popover {
+	--popover-width: 20rem;
+	position: absolute;
+	bottom: calc(100% - var(--popover-y) + var(--spacing-3));
+	left: clamp(calc(var(--popover-width) / 2), var(--popover-x), calc(100% - var(--popover-width) / 2));
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-3);
+	width: var(--popover-width);
+	padding: var(--spacing-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--popover);
+	color: var(--popover-foreground);
+	transform: translateX(-50%);
+}
+
+.pattern-popover-header {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-1);
+}
+
+.pattern-popover-eyebrow {
+	color: var(--muted);
+	font-size: var(--font-size-1);
+	font-weight: var(--font-weight-semibold);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.pattern-popover-title {
+	overflow: hidden;
+	font-size: var(--font-size-3);
+	font-weight: var(--font-weight-semibold);
+	letter-spacing: -0.01em;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pattern-popover-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--spacing-1);
+}
+
+.pattern-popover-preset {
+	height: var(--spacing-6);
+	padding: 0 var(--spacing-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--muted);
+	font: inherit;
+	font-size: var(--font-size-1);
+	font-weight: var(--font-weight-medium);
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.pattern-popover-preset:hover {
+	border-color: var(--color-neutral-3);
+	background: var(--paper-soft);
+	color: var(--foreground);
+}
+
+.pattern-popover-preset:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+/* Sixteen steps, with a wider gap at each beat. */
+.pattern-popover-steps {
+	display: grid;
+	grid-template-columns: repeat(16, minmax(0, 1fr));
+	gap: 3px;
+}
+
+.pattern-popover-step {
+	height: var(--spacing-8);
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--paper-soft);
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease;
+}
+
+.pattern-popover-step.isBeatStart {
+	border-color: var(--color-neutral-3);
+}
+
+.pattern-popover-step:nth-child(4n + 1):not(:first-child) {
+	margin-left: var(--spacing-1);
+}
+
+.pattern-popover-step:hover {
+	border-color: var(--color-neutral-4);
+}
+
+.pattern-popover-step.isOn {
+	border-color: color-mix(in oklab, var(--accent) 60%, var(--border));
+	background: color-mix(in oklab, var(--accent) 45%, var(--paper-soft));
+}
+
+.pattern-popover-step.isAccent {
+	border-color: var(--accent);
+	background: var(--accent);
+}
+
+.pattern-popover-step:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.pattern-popover-hint {
+	color: var(--secondary);
+	font-size: var(--font-size-1);
+}
+
+.pattern-popover-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--spacing-2);
+}

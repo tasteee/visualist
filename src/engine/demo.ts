@@ -1,4 +1,5 @@
 import { GRID_STEP, DEMO_LOOP_SECONDS } from './settings'
+import { buildEmptySpectrum } from './spectrum'
 import type { AnalysisT, HitT } from './types'
 
 const DEMO_BPM = 120
@@ -58,6 +59,7 @@ export const buildDemoAnalysis = (): AnalysisT => {
 		snaps,
 		bpm: DEMO_BPM,
 		beatOffset: 0,
+		spectrum: buildEmptySpectrum(),
 		isDemo: true
 	}
 }

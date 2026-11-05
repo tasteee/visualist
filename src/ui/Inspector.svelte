@@ -5,11 +5,13 @@
 	import LayersPanel from './LayersPanel.svelte'
 	import PostPanel from './PostPanel.svelte'
 	import SettingsPanel from './SettingsPanel.svelte'
+	import SourcesPanel from './SourcesPanel.svelte'
 	import './Inspector.css'
 
 
 	const TABS = [
 		{ value: 'settings', label: 'Settings' },
+		{ value: 'sources', label: 'Sync' },
 		{ value: 'layers', label: 'Layers' },
 		{ value: 'post', label: 'Post' },
 		{ value: 'export', label: 'Export' }
@@ -32,6 +34,9 @@
 		<div class="inspector-panel">
 			{#if activeTab === 'settings'}
 				<SettingsPanel />
+			{/if}
+			{#if activeTab === 'sources'}
+				<SourcesPanel />
 			{/if}
 			{#if activeTab === 'layers'}
 				<LayersPanel />

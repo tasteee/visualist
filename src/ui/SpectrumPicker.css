@@ -1,0 +1,133 @@
+.spectrum-picker {
+	--spectrum-tone: var(--warning);
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-1);
+	user-select: none;
+}
+
+.spectrum-picker-surface {
+	position: relative;
+	height: var(--spacing-20);
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg);
+	touch-action: none;
+}
+
+.spectrum-picker-bars {
+	position: absolute;
+	inset: var(--spacing-2) 0 0;
+	width: 100%;
+	height: calc(100% - var(--spacing-2));
+	pointer-events: none;
+}
+
+.spectrum-picker-bar {
+	fill: var(--color-neutral-2);
+	transition: fill var(--motion-fast) ease;
+}
+
+.spectrum-picker-bar.isInRange {
+	fill: color-mix(in oklab, var(--spectrum-tone) 70%, var(--color-neutral-3));
+}
+
+.spectrum-picker-gridline {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--spectrum-x);
+	width: 1px;
+	background: var(--color-neutral-1);
+	pointer-events: none;
+}
+
+.spectrum-picker-range {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--spectrum-x);
+	width: var(--spectrum-width);
+	border-top: 2px solid var(--spectrum-tone);
+	background: color-mix(in oklab, var(--spectrum-tone) 10%, transparent);
+	cursor: grab;
+}
+
+.spectrum-picker.isDragging .spectrum-picker-range {
+	cursor: grabbing;
+}
+
+/* Edges: a thin rule in a wider grab area. */
+.spectrum-picker-edge {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--spectrum-x);
+	z-index: 1;
+	width: var(--spacing-3);
+	cursor: ew-resize;
+	outline: none;
+	transform: translateX(-50%);
+}
+
+.spectrum-picker-edge::before {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	width: 2px;
+	background: var(--spectrum-tone);
+	content: '';
+	transform: translateX(-50%);
+}
+
+.spectrum-picker-edge::after {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: var(--spacing-2);
+	height: var(--spacing-5);
+	border: 1.5px solid var(--spectrum-tone);
+	border-radius: var(--radius-sm);
+	background: var(--bg);
+	content: '';
+	transform: translate(-50%, -50%);
+	transition: background-color var(--motion-fast) ease;
+}
+
+.spectrum-picker-edge:hover::after,
+.spectrum-picker-edge:focus-visible::after {
+	background: var(--spectrum-tone);
+}
+
+.spectrum-picker-edge:focus-visible::before {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+}
+
+.spectrum-picker-empty {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--secondary);
+	font-size: var(--font-size-caption);
+	pointer-events: none;
+}
+
+.spectrum-picker-axis {
+	position: relative;
+	height: var(--spacing-4);
+}
+
+.spectrum-picker-tick {
+	position: absolute;
+	top: 0;
+	left: var(--spectrum-x);
+	color: var(--secondary);
+	font-size: var(--font-size-0);
+	font-variant-numeric: tabular-nums;
+	transform: translateX(-50%);
+}

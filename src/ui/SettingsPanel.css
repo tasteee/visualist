@@ -27,3 +27,82 @@
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: var(--spacing-3);
 }
+
+.settings-tempo {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-2);
+}
+
+.settings-downbeat {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-3);
+	min-height: var(--control-height-md);
+	padding: var(--spacing-2) var(--spacing-2) var(--spacing-2) var(--spacing-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--paper-soft);
+}
+
+.settings-downbeat-text {
+	display: flex;
+	flex: 1;
+	align-items: baseline;
+	gap: var(--spacing-2);
+	min-width: 0;
+}
+
+.settings-downbeat-label {
+	color: var(--muted);
+	font-size: var(--font-size-caption);
+	font-weight: var(--font-weight-semibold);
+}
+
+.settings-downbeat-value {
+	color: var(--foreground);
+	white-space: nowrap;
+	font-size: var(--font-size-small);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-weight-semibold);
+}
+
+.settings-downbeat-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 2px;
+}
+
+.settings-downbeat-nudge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-7);
+	height: var(--spacing-7);
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--muted);
+	font-size: var(--font-size-2);
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.settings-downbeat-nudge:hover:not(:disabled) {
+	background: var(--paper);
+	color: var(--foreground);
+}
+
+.settings-downbeat-nudge:disabled {
+	cursor: default;
+	opacity: var(--control-disabled-opacity);
+}
+
+.settings-downbeat-nudge:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}

@@ -20,9 +20,15 @@
 		undo
 	} from '../automation.svelte'
 	import { GLOBAL_GROUP_ID } from '../engine/automation'
-	import { buildGrid, ratioToTime } from '../engine/timeline'
+	import { getOutputLatency, getPlaybackTime } from '../engine/audio'
+	import { snapToStep } from '../engine/hits'
+	import { getBandSourceId } from '../engine/sources'
+	import type { CompiledBandT } from '../engine/types'
+	import { buildGrid, formatBpm, ratioToTime } from '../engine/timeline'
 	import type { LayerT } from '../engine/types'
+	import { showInspectorTab } from '../inspector.svelte'
 	import { focusLayer, layerStore, moveLayer, moveLayerToFrontIndex, toggleLayerVisible } from '../layers.svelte'
+	import { addEmptyTrack, getCompiledSources, recordTap, sources, toggleTriggersCollapsed } from '../sources.svelte'
 	import { app, formatTime, getAnalysis, seekTo } from '../store.svelte'
 	import {
 		MAX_DOCK_SHARE,
@@ -41,18 +47,27 @@
 	} from '../timeline.svelte'
 	import AutomationLane from './AutomationLane.svelte'
 	import AutomationPopover from './AutomationPopover.svelte'
+	import BandLane from './BandLane.svelte'
+	import HitLane from './HitLane.svelte'
 	import LaneGroup from './LaneGroup.svelte'
 	import LayerClip from './LayerClip.svelte'
 	import OverviewBar from './OverviewBar.svelte'
+	import PatternPopover from './PatternPopover.svelte'
 	import TimeRuler from './TimeRuler.svelte'
 	import TransportBar from './TransportBar.svelte'
 	import WaveformTrack from './WaveformTrack.svelte'
-	import { checkIsTyping } from './keyboard'
+	import { checkIsTextEntry, checkIsTyping } from './keyboard'
 	import './EditorDock.css'
 
 	type PointEditorT = {
 		laneId: string
 		pointId: string
+		anchorX: number
+		anchorY: number
+	}
+
+	type PatternEditorT = {
+		trackId: string
 		anchorX: number
 		anchorY: number
 	}
@@ -84,6 +99,7 @@
 	let dock: HTMLDivElement
 	let frame: HTMLDivElement
 	let editor = $state<PointEditorT | null>(null)
+	let patternEditor = $state<PatternEditorT | null>(null)
 	let resizeDrag: ResizeDragT | null = null
 	let reorder = $state<ReorderDragT | null>(null)
 	let dropMarker = $state<DropMarkerT | null>(null)
@@ -117,11 +133,31 @@
 	const isGlobalCollapsed = $derived(checkIsGroupCollapsed(GLOBAL_GROUP_ID))
 	const globalDetail = $derived(formatLaneCount(globalLanes.length))
 
+	const trackCount = $derived(sources.tracks.length)
+	const bandCount = $derived(sources.bands.length)
+	const hasTriggers = $derived(trackCount > 0 || bandCount > 0)
+	const isTriggersCollapsed = $derived(sources.isTriggersCollapsed)
+	const compiledBands = $derived(getCompiledSources().bands)
+
+	const formatTriggersDetail = (tracks: number, bands: number): string => {
+		const hasNone = tracks === 0 && bands === 0
+		if (hasNone) return 'Hit tracks, MIDI and bands'
+		const trackLabel = tracks === 1 ? '1 track' : `${tracks} tracks`
+		const bandLabel = bands === 1 ? '1 band' : `${bands} bands`
+		const hasNoBands = bands === 0
+		if (hasNoBands) return trackLabel
+		const hasNoTracks = tracks === 0
+		if (hasNoTracks) return bandLabel
+		return `${trackLabel} · ${bandLabel}`
+	}
+
+	const triggersDetail = $derived(formatTriggersDetail(trackCount, bandCount))
+
 	// Front to back, matching the Layers panel.
 	const layersFrontToBack = $derived([...layerStore.layers].reverse() as LayerT[])
 	const laneCountLabel = $derived(String(laneCount))
 	const songName = $derived(app.fileName === '' ? 'Untitled' : app.fileName)
-	const songMeta = $derived(`${formatTime(app.duration)} · ${Math.round(analysis.bpm)} BPM`)
+	const songMeta = $derived(`${formatTime(app.duration)} · ${formatBpm(analysis.bpm)} BPM`)
 
 	// A new song opens fully zoomed out.
 	$effect(() => {
@@ -238,7 +274,15 @@
 
 	const handleFramePointerLeave = () => setHoverTime(null)
 
+	const checkIsTapKey = (event: KeyboardEvent): boolean => {
+		const isPlainKey = !event.metaKey && !event.ctrlKey && !event.altKey
+		const isT = event.key.toLowerCase() === 't'
+		return isPlainKey && isT && !event.repeat
+	}
+
 	const handleKeyDown = (event: KeyboardEvent) => {
+		const isTap = checkIsTapKey(event) && !checkIsTextEntry(event)
+		if (isTap) return handleTap()
 		if (checkIsTyping(event)) return
 		const isCommand = event.metaKey || event.ctrlKey
 		const key = event.key.toLowerCase()
@@ -259,6 +303,39 @@
 		if (key === 'f') return toggleFollowing()
 		if (key === 's') return toggleSnapping()
 		if (key === 'home') return seekTo(0)
+	}
+
+	// People tap to what they hear, which is the clock minus
+	// the speakers' delay.
+	const handleTap = () => {
+		const isArmed = sources.armedTrackId !== null
+		if (!isArmed || !app.isPlaying) return
+		const tapTime = getPlaybackTime() - getOutputLatency()
+		const tempo = { bpm: analysis.bpm, beatOffset: analysis.beatOffset }
+		recordTap(tapTime, tempo, snapToStep)
+	}
+
+	const handleAddTrack = () => {
+		addEmptyTrack()
+	}
+
+	const openSourcesPanel = () => showInspectorTab('sources')
+
+	const openPatternEditor = (trackId: string, anchor: HTMLElement) => {
+		const dockBounds = dock.getBoundingClientRect()
+		const anchorBounds = anchor.getBoundingClientRect()
+		const anchorX = anchorBounds.left + anchorBounds.width / 2 - dockBounds.left
+		const anchorY = anchorBounds.top - dockBounds.top
+		patternEditor = { trackId, anchorX, anchorY }
+	}
+
+	const closePatternEditor = () => {
+		patternEditor = null
+	}
+
+	const findCompiledBand = (bandId: string): CompiledBandT | undefined => {
+		const sourceId = getBandSourceId(bandId)
+		return compiledBands.find((band) => band.sourceId === sourceId)
 	}
 
 	const openEditor = (laneId: string, pointId: string, anchor: HTMLElement) => {
@@ -433,6 +510,27 @@
 
 		<div class="editor-lanes">
 			<LaneGroup
+				kind="triggers"
+				title="Sync"
+				detail={triggersDetail}
+				{grid}
+				isCollapsed={isTriggersCollapsed}
+				canAddLane
+				addLabel="Add a hit track"
+				ontoggle={toggleTriggersCollapsed}
+				onadd={handleAddTrack}
+				onselect={openSourcesPanel}
+			/>
+			{#if !isTriggersCollapsed && hasTriggers}
+				{#each sources.tracks as track (track.id)}
+					<HitLane {track} {grid} onpattern={openPatternEditor} />
+				{/each}
+				{#each sources.bands as band (band.id)}
+					<BandLane {band} compiled={findCompiledBand(band.id)} {grid} onedit={openSourcesPanel} />
+				{/each}
+			{/if}
+
+			<LaneGroup
 				kind="global"
 				title="Scene and post"
 				detail={globalDetail}
@@ -498,6 +596,10 @@
 			<OverviewBar />
 		</div>
 	</div>
+
+	{#if patternEditor !== null}
+		<PatternPopover trackId={patternEditor.trackId} anchorX={patternEditor.anchorX} anchorY={patternEditor.anchorY} onclose={closePatternEditor} />
+	{/if}
 
 	{#if editor !== null}
 		<AutomationPopover laneId={editor.laneId} pointId={editor.pointId} anchorX={editor.anchorX} anchorY={editor.anchorY} onclose={closeEditor} />

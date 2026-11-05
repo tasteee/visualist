@@ -5,6 +5,7 @@
 	import EyeSlashIcon from 'phosphor-svelte/lib/EyeSlashIcon'
 	import SlidersHorizontalIcon from 'phosphor-svelte/lib/SlidersHorizontalIcon'
 	import ImageIcon from 'phosphor-svelte/lib/ImageIcon'
+	import LightningIcon from 'phosphor-svelte/lib/LightningIcon'
 	import PenNibIcon from 'phosphor-svelte/lib/PenNibIcon'
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import SparkleIcon from 'phosphor-svelte/lib/SparkleIcon'
@@ -17,10 +18,11 @@
 	import { timeline } from '../timeline.svelte'
 	import './LaneGroup.css'
 
-	// One header row in the timeline: the global settings, or a
-	// layer. Its lanes render below it when it is open.
+	// One header row in the timeline: the global settings, the
+	// sync sources (hit tracks and bands), or a layer. Its lanes
+	// render below it when it is open.
 	type LaneGroupPropsT = {
-		kind: 'global' | LayerKindT
+		kind: 'global' | 'triggers' | LayerKindT
 		title: string
 		detail: string
 		grid: TimelineGridT
@@ -28,6 +30,7 @@
 		isSelected?: boolean
 		isHidden?: boolean
 		canAddLane: boolean
+		addLabel?: string
 		ontoggle: () => void
 		onadd: () => void
 		onselect?: () => void
@@ -45,8 +48,9 @@
 	const props: LaneGroupPropsT = $props()
 
 	const view = $derived(timeline.view)
-	const isLayer = $derived(props.kind !== 'global')
 	const isGlobal = $derived(props.kind === 'global')
+	const isTriggers = $derived(props.kind === 'triggers')
+	const isLayer = $derived(!isGlobal && !isTriggers)
 	const isLogo = $derived(props.kind === 'logo')
 	const isText = $derived(props.kind === 'text')
 	const isImage = $derived(props.kind === 'image')
@@ -54,7 +58,8 @@
 	const canSelect = $derived(props.onselect !== undefined)
 	const canToggleVisible = $derived(props.ontogglevisible !== undefined)
 	const collapseLabel = $derived(props.isCollapsed ? `Show ${props.title} lanes` : `Hide ${props.title} lanes`)
-	const addLabel = $derived(props.canAddLane ? `Add a lane to ${props.title}` : `Every ${props.title} control has a lane`)
+	const defaultAddLabel = $derived(props.canAddLane ? `Add a lane to ${props.title}` : `Every ${props.title} control has a lane`)
+	const addLabel = $derived(props.addLabel ?? defaultAddLabel)
 	const visibilityLabel = $derived(props.isHidden ? `Show ${props.title}` : `Hide ${props.title}`)
 	const barLines = $derived(props.grid.lines.filter((line) => line.kind === 'label' || line.kind === 'bar'))
 	const playheadPercent = $derived(timeToPercent(app.currentTime, view))
@@ -118,6 +123,9 @@
 			<span class="lane-group-icon" aria-hidden="true">
 				{#if isGlobal}
 					<SlidersHorizontalIcon weight="bold" />
+				{/if}
+				{#if isTriggers}
+					<LightningIcon weight="fill" />
 				{/if}
 				{#if isLogo}
 					<SparkleIcon weight="fill" />

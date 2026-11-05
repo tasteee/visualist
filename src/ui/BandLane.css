@@ -1,0 +1,194 @@
+.band-lane {
+	--band-lane-tone: var(--warning);
+	display: grid;
+	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
+	height: var(--spacing-14);
+	border-bottom: 1px solid var(--border);
+}
+
+.band-lane-header {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: var(--spacing-1);
+	min-width: 0;
+	padding: 0 var(--spacing-3) 0 var(--spacing-6);
+	border-right: 1px solid var(--border);
+	background: color-mix(in oklab, var(--paper) 70%, var(--bg));
+}
+
+.band-lane-header::before {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--spacing-4);
+	width: 1px;
+	background: var(--border);
+	content: '';
+}
+
+.band-lane-title {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	min-width: 0;
+	padding-left: calc(var(--spacing-5) + var(--spacing-2));
+}
+
+.band-lane-dot {
+	flex: none;
+	width: var(--spacing-2);
+	height: var(--spacing-2);
+	border-radius: 50%;
+	background: var(--band-lane-tone);
+}
+
+.band-lane-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--foreground);
+	font-size: var(--font-size-2);
+	font-weight: var(--font-weight-medium);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.band-lane-action {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-6);
+	height: var(--spacing-6);
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--muted);
+	font-size: var(--font-size-2);
+	cursor: pointer;
+	opacity: 0.55;
+	transition:
+		background-color var(--motion-fast) ease,
+		color var(--motion-fast) ease,
+		opacity var(--motion-fast) ease;
+}
+
+.band-lane:hover .band-lane-action,
+.band-lane-action:focus-visible {
+	opacity: 1;
+}
+
+.band-lane-action:hover {
+	background: var(--paper-soft);
+	color: var(--foreground);
+}
+
+.band-lane-action:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.band-lane-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	min-width: 0;
+	padding-left: calc(var(--spacing-5) + var(--spacing-2) + var(--spacing-2) + var(--spacing-2));
+}
+
+.band-lane-meter {
+	position: relative;
+	flex: none;
+	width: var(--spacing-6);
+	height: var(--spacing-1);
+	overflow: hidden;
+	border-radius: var(--radius-sm);
+	background: var(--paper-soft);
+}
+
+.band-lane-meter-fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: var(--band-lane-level);
+	background: var(--band-lane-tone);
+}
+
+.band-lane-range {
+	overflow: hidden;
+	color: var(--secondary);
+	font-size: var(--font-size-1);
+	font-variant-numeric: tabular-nums;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.band-lane-track {
+	position: relative;
+	min-width: 0;
+	overflow: hidden;
+	background: var(--bg);
+}
+
+.band-lane-graph {
+	position: absolute;
+	inset: var(--spacing-2) 0 0;
+	width: 100%;
+	height: calc(100% - var(--spacing-2));
+	pointer-events: none;
+}
+
+.band-lane-gridline {
+	stroke: var(--color-neutral-2);
+	stroke-width: 1;
+	vector-effect: non-scaling-stroke;
+}
+
+.band-lane-gridline.isLabel {
+	stroke: var(--color-neutral-3);
+}
+
+.band-lane-area {
+	fill: color-mix(in oklab, var(--band-lane-tone) 14%, transparent);
+}
+
+.band-lane-line {
+	fill: none;
+	stroke: var(--band-lane-tone);
+	stroke-linejoin: round;
+	stroke-width: 1.25;
+	vector-effect: non-scaling-stroke;
+}
+
+.band-lane-hit {
+	position: absolute;
+	top: 0;
+	left: var(--band-x);
+	width: 1px;
+	height: var(--spacing-2);
+	background: var(--band-lane-tone);
+	pointer-events: none;
+}
+
+.band-lane-playhead {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--band-x);
+	width: 1px;
+	background: var(--foreground);
+	pointer-events: none;
+}
+
+.band-lane-empty {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--secondary);
+	font-size: var(--font-size-2);
+	pointer-events: none;
+}

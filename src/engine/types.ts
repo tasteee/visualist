@@ -4,7 +4,14 @@ export type AspectRatioT = '16:9' | '9:16' | '1:1' | '4:5'
 export type FrameRateT = 30 | 60
 export type EchoStyleNameT = 'hollow' | 'faintFill' | 'double' | 'sliced' | 'gritty'
 
-export type ModSourceT = 'bass' | 'mids' | 'highs' | 'energy' | 'kick' | 'snare' | 'beat' | 'bar'
+export type BuiltInSourceT = 'bass' | 'mids' | 'highs' | 'energy' | 'kick' | 'snare' | 'beat' | 'bar'
+
+// User sources: hit tracks and frequency bands, by id.
+export type TrackSourceIdT = `track:${string}`
+export type BandSourceIdT = `band:${string}`
+export type CustomSourceIdT = TrackSourceIdT | BandSourceIdT
+
+export type ModSourceT = BuiltInSourceT | CustomSourceIdT
 
 // amount runs -1 to 1, as a share of the control's full range.
 export type ModulationT = {
@@ -12,7 +19,7 @@ export type ModulationT = {
 	amount: number
 }
 
-export type SignalsT = Record<ModSourceT, number>
+export type SignalsT = Record<BuiltInSourceT, number> & Partial<Record<CustomSourceIdT, number>>
 
 export type FadeSettingNameT = 'audioFadeIn' | 'audioFadeOut' | 'videoFadeIn' | 'videoFadeOut'
 
@@ -51,9 +58,75 @@ export type SettingsT = {
 
 export type SettingModulationsT = Partial<Record<AutomatableKeyT, ModulationT>>
 
+// length is how long the hit holds, in seconds. Only gate
+// tracks use it.
 export type HitT = {
 	time: number
 	strength: number
+	length?: number
+}
+
+// A hit the user owns. strength runs 0-1, like MIDI velocity.
+export type TrackHitT = {
+	id: string
+	time: number
+	strength: number
+	length: number
+}
+
+// pulse fades out after the hit. gate holds for the hit's
+// length, then fades.
+export type HitShapeT = 'pulse' | 'gate'
+
+// A track can stand in for the detected kicks or snares, so
+// echoes and glitch bursts follow it too.
+export type HitRoleT = 'none' | 'kick' | 'snare'
+
+export type HitTrackT = {
+	id: string
+	name: string
+	hits: TrackHitT[]
+	decay: number
+	shape: HitShapeT
+	role: HitRoleT
+}
+
+// level is a smooth 0-1 curve. hits turns the band's onsets
+// into pulses, like a kick or snare.
+export type BandOutputT = 'level' | 'hits'
+
+export type BandSourceT = {
+	id: string
+	name: string
+	lowHz: number
+	highHz: number
+	output: BandOutputT
+	release: number
+	sensitivity: number
+}
+
+// What computeSignals needs from the user's sources, as plain
+// arrays, already sorted and normalized.
+export type CompiledTrackT = {
+	sourceId: TrackSourceIdT
+	name: string
+	hits: HitT[]
+	decay: number
+	shape: HitShapeT
+}
+
+export type CompiledBandT = {
+	sourceId: BandSourceIdT
+	name: string
+	series: Float32Array
+	hits: HitT[]
+	output: BandOutputT
+	release: number
+}
+
+export type CompiledSourcesT = {
+	tracks: CompiledTrackT[]
+	bands: CompiledBandT[]
 }
 
 // All series sit on a 10 ms grid: index = floor(time * 100).
@@ -69,7 +142,18 @@ export type AnalysisT = {
 	snaps: HitT[]
 	bpm: number
 	beatOffset: number
+	spectrum: SpectrumT
 	isDemo: boolean
+}
+
+// Band power on the 10 ms grid: frame-major, bandCount values
+// per frame. edges has bandCount + 1 frequencies in Hz.
+export type SpectrumT = {
+	power: Float32Array
+	frameCount: number
+	bandCount: number
+	edges: Float32Array
+	averageDb: Float32Array
 }
 
 export type AudioLevelsT = {

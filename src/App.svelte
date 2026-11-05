@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
+	import { toaster } from '@tasteee/zest'
+	import { checkIsMidiFile, openMidiFile } from './midiImport.svelte'
 	import { app, loadAudioFile, startApp, togglePlay } from './store.svelte'
 	import DropZone from './ui/DropZone.svelte'
 	import EditorDock from './ui/EditorDock.svelte'
 	import Inspector from './ui/Inspector.svelte'
+	import MidiImportDialog from './ui/MidiImportDialog.svelte'
 	import Stage from './ui/Stage.svelte'
 	import { checkIsTyping } from './ui/keyboard'
 
@@ -36,7 +39,18 @@
 		app.isDraggingFile = false
 		const file = event.dataTransfer?.files[0]
 		if (file === undefined) return
+		const isMidi = checkIsMidiFile(file)
+		if (isMidi) return handleMidiDrop(file)
 		void loadAudioFile(file)
+	}
+
+	// MIDI lands on the song's timeline, so it needs a song.
+	const handleMidiDrop = (file: File) => {
+		if (!app.hasAudio) {
+			toaster.show({ title: 'Load a song first', description: 'MIDI hits are placed on the song’s timeline.', tone: 'warning' })
+			return
+		}
+		void openMidiFile(file)
 	}
 
 	onMount(() => {
@@ -64,10 +78,12 @@
 
 	{#if app.isDraggingFile}
 		<div class="app-drop-overlay">
-			<span class="app-drop-title">Drop to load your song</span>
-			<span class="app-drop-hint">It will be analyzed in a few seconds.</span>
+			<span class="app-drop-title">Drop a song or a MIDI file</span>
+			<span class="app-drop-hint">Songs are analyzed in a few seconds. MIDI becomes hit tracks.</span>
 		</div>
 	{/if}
 </main>
+
+<MidiImportDialog />
 
 <z-toaster position="bottom-center"></z-toaster>

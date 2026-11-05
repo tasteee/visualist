@@ -3,6 +3,7 @@
 	import WaveSineIcon from 'phosphor-svelte/lib/WaveSineIcon'
 	import { formatModulation } from '../engine/modulation'
 	import type { ModulationT } from '../engine/types'
+	import { getCompiledSources } from '../sources.svelte'
 	import ModEditor from './ModEditor.svelte'
 	import './controls.css'
 
@@ -49,7 +50,7 @@
 	const modulation = $derived(props.modulation ?? null)
 	const canModulate = $derived(props.onmodulationchange !== undefined)
 	const isModulated = $derived(modulation !== null)
-	const modLabel = $derived(modulation === null ? 'Modulate' : formatModulation(modulation))
+	const modLabel = $derived(modulation === null ? 'Modulate' : formatModulation(modulation, getCompiledSources()))
 	const modAriaLabel = $derived(isModulated ? `${props.label}: ${modLabel}. Edit modulation.` : `Modulate ${props.label}`)
 	const range = $derived(props.max - props.min)
 	const liveValue = $derived(props.liveValue ?? props.value)

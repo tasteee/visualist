@@ -1,6 +1,9 @@
 <script lang="ts">
+	import CaretLeftIcon from 'phosphor-svelte/lib/CaretLeftIcon'
+	import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon'
+	import CrosshairSimpleIcon from 'phosphor-svelte/lib/CrosshairSimpleIcon'
 	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
-	import { app, detectBpm, getAnalysis, setBpm, setTheme, setTitle } from '../store.svelte'
+	import { app, checkIsTempoEdited, detectBpm, nudgeDownbeat, setBpm, setDownbeatAt, setTheme, setTitle } from '../store.svelte'
 	import type { EchoStyleNameT, ModeT } from '../engine/types'
 	import ColorRow from './ColorRow.svelte'
 	import ControlSlider from './ControlSlider.svelte'
@@ -33,7 +36,15 @@
 		{ name: 'gritty', label: 'Gritty' }
 	]
 
-	const hasDifferentBpm = $derived(app.bpm !== Math.round(getAnalysis().bpm))
+	const DOWNBEAT_NUDGE_SECONDS = 0.005
+
+	const isTempoEdited = $derived(checkIsTempoEdited())
+	const downbeatLabel = $derived(`${app.beatOffset.toFixed(3)} s`)
+	const canSetDownbeat = $derived(app.hasAudio && !app.isRecording)
+
+	const handleSetDownbeat = () => setDownbeatAt(app.currentTime)
+	const handleNudgeEarlier = () => nudgeDownbeat(-DOWNBEAT_NUDGE_SECONDS)
+	const handleNudgeLater = () => nudgeDownbeat(DOWNBEAT_NUDGE_SECONDS)
 
 	const checkIsStyleAvailable = (name: EchoStyleNameT): boolean => {
 		const isEchoOn = app.settings.echoAmount > 0
@@ -76,14 +87,43 @@
 		<z-select value={app.musicalScale} options={SCALE_OPTIONS} placeholder="Scale" aria-label="Scale" onchange={handleScaleChange}></z-select>
 	</div>
 
-	<div class="settings-bpm">
-		<z-field label="BPM">
-			<z-number-input value={app.bpm} min={40} max={240} step={1} hasStepperButtons isFullWidth onchange={handleBpmChange}></z-number-input>
-		</z-field>
-		<z-button size="md" kind="outline" tone="neutral" isDisabled={!hasDifferentBpm} onclick={detectBpm}>
-			<WaveformIcon weight="bold" />
-			Detect
-		</z-button>
+	<div class="settings-tempo">
+		<div class="settings-bpm">
+			<z-field label="BPM">
+				<z-number-input value={app.bpm} min={40} max={240} step={0.1} hasStepperButtons isFullWidth onchange={handleBpmChange}></z-number-input>
+			</z-field>
+			<z-tooltip content="Back to the detected tempo and downbeat" placement="top" openDelay={300}>
+				<z-button size="md" kind="outline" tone="neutral" isDisabled={!isTempoEdited} onclick={detectBpm}>
+					<WaveformIcon weight="bold" />
+					Detect
+				</z-button>
+			</z-tooltip>
+		</div>
+
+		<div class="settings-downbeat">
+			<div class="settings-downbeat-text">
+				<span class="settings-downbeat-label">Downbeat</span>
+				<span class="settings-downbeat-value">{downbeatLabel}</span>
+			</div>
+			<div class="settings-downbeat-actions">
+				<z-tooltip content="5 ms earlier" placement="top" openDelay={300}>
+					<button class="settings-downbeat-nudge" type="button" aria-label="Move downbeat 5 ms earlier" disabled={!canSetDownbeat} onclick={handleNudgeEarlier}>
+						<CaretLeftIcon weight="bold" />
+					</button>
+				</z-tooltip>
+				<z-tooltip content="5 ms later" placement="top" openDelay={300}>
+					<button class="settings-downbeat-nudge" type="button" aria-label="Move downbeat 5 ms later" disabled={!canSetDownbeat} onclick={handleNudgeLater}>
+						<CaretRightIcon weight="bold" />
+					</button>
+				</z-tooltip>
+				<z-tooltip content="Park the playhead on a clear bar 1, then click" placement="top" openDelay={300}>
+					<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canSetDownbeat} onclick={handleSetDownbeat}>
+						<CrosshairSimpleIcon weight="bold" />
+						At playhead
+					</z-button>
+				</z-tooltip>
+			</div>
+		</div>
 	</div>
 
 	<Segmented label="Theme" options={THEME_OPTIONS} value={app.settings.mode} onchange={(value) => setTheme(value as ModeT)} />

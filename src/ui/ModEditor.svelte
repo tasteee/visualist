@@ -1,7 +1,8 @@
 <script lang="ts">
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
-	import { DEFAULT_MOD_AMOUNT, MOD_SOURCES } from '../engine/modulation'
+	import { DEFAULT_MOD_AMOUNT, listModSourceOptions } from '../engine/modulation'
 	import type { ModSourceT, ModulationT } from '../engine/types'
+	import { getCompiledSources } from '../sources.svelte'
 	import './ModEditor.css'
 
 	type ModEditorPropsT = {
@@ -13,7 +14,10 @@
 	const props: ModEditorPropsT = $props()
 
 	const OFF_VALUE = 'off'
-	const SOURCE_OPTIONS = [{ value: OFF_VALUE, label: 'Off' }, ...MOD_SOURCES]
+	const OFF_OPTION = { value: OFF_VALUE, label: 'Off' }
+
+	const selectedSource = $derived(props.modulation === null ? null : props.modulation.source)
+	const sourceOptions = $derived([OFF_OPTION, ...listModSourceOptions(getCompiledSources(), selectedSource)])
 
 	const hasModulation = $derived(props.modulation !== null)
 	const sourceValue = $derived(props.modulation === null ? OFF_VALUE : props.modulation.source)
@@ -42,7 +46,7 @@
 <div class="mod-editor" role="group" aria-label="Modulate {props.label}">
 	<div class="mod-editor-row">
 		<span class="mod-editor-label">Follow</span>
-		<z-select class="mod-editor-source" value={sourceValue} options={SOURCE_OPTIONS} size="sm" aria-label="Modulation source" onchange={handleSourceChange}></z-select>
+		<z-select class="mod-editor-source" value={sourceValue} options={sourceOptions} size="sm" aria-label="Modulation source" onchange={handleSourceChange}></z-select>
 		{#if hasModulation}
 			<z-tooltip content="Remove modulation" placement="left" openDelay={300}>
 				<button class="mod-editor-remove" type="button" aria-label="Remove modulation" onclick={handleRemove}>

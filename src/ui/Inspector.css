@@ -7,7 +7,9 @@
 
 .inspector-tabs {
 	flex: none;
-	padding: var(--spacing-2) var(--spacing-5) 0;
+	/* Tabs carry their own inset, so the strip runs nearly edge
+	   to edge and tab text still lines up with the panel. */
+	padding: var(--spacing-2) var(--spacing-1) 0;
 	border-bottom: 1px solid var(--border);
 }
 

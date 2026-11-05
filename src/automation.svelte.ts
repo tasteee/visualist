@@ -13,6 +13,8 @@ import {
 } from './engine/automation'
 import type { AutomationLaneT, AutomationPointT, LaneTargetT, LayerT } from './engine/types'
 import { findLayer, layerStore } from './layers.svelte'
+import { restoreTrackSnapshot, takeTrackSnapshot } from './sources.svelte'
+import type { TrackSnapshotT } from './sources.svelte'
 import { app } from './store.svelte'
 
 type AutomationStateT = {
@@ -80,12 +82,14 @@ type LayerTimingT = {
 	endTime: number | null
 }
 
-// One undo step: every lane, plus each layer's timing and the
-// stack order, so clip drags and reorders undo with the lanes.
+// One undo step: every lane, plus each layer's timing, the
+// stack order and the hit tracks, so clip drags, reorders and
+// hit edits all undo with the lanes.
 type HistoryEntryT = {
 	lanes: AutomationLaneT[]
 	layerTimings: Record<string, LayerTimingT>
 	layerOrder: string[]
+	hitTracks: TrackSnapshotT
 }
 
 // History lives outside the proxy: plain snapshots, swapped in
@@ -104,7 +108,8 @@ const readLayerTimings = (): Record<string, LayerTimingT> => {
 const takeSnapshot = (): HistoryEntryT => ({
 	lanes: $state.snapshot(automation.lanes) as AutomationLaneT[],
 	layerTimings: readLayerTimings(),
-	layerOrder: layerStore.layers.map((layer) => layer.id)
+	layerOrder: layerStore.layers.map((layer) => layer.id),
+	hitTracks: takeTrackSnapshot()
 })
 
 const syncHistoryDepth = (): void => {
@@ -155,6 +160,7 @@ const restoreEntry = (entry: HistoryEntryT): void => {
 	restoreLanes(entry.lanes)
 	restoreLayerTimings(entry.layerTimings)
 	restoreLayerOrder(entry.layerOrder)
+	restoreTrackSnapshot(entry.hitTracks)
 }
 
 export const undo = (): void => {

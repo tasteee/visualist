@@ -176,3 +176,6 @@ export const formatBarBeat = (seconds: number, bpm: number, beatOffset: number):
 	const beatInBar = ((beatPosition % BEATS_PER_BAR) + BEATS_PER_BAR) % BEATS_PER_BAR
 	return `${barIndex + 1}.${beatInBar + 1}`
 }
+
+// Whole tempos read plain. Corrected ones keep one decimal.
+export const formatBpm = (bpm: number): string => String(Number(bpm.toFixed(1)))

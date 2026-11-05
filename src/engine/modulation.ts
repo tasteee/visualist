@@ -1,10 +1,16 @@
-import { findFirstHitIndex, getLevels } from './analysis'
+import { getLevels } from './analysis'
 import { AUTOMATION_CONTROLS } from './automation'
 import { clamp } from './settings'
-import type { AnalysisT, HitT, ModSourceT, ModulationT, SettingsT, SignalsT } from './types'
+import { checkIsCustomSource, getBandSignal, getCustomSourceName, getDetectedHitSignal, getTrackSignal } from './sources'
+import type { AnalysisT, BuiltInSourceT, CompiledSourcesT, ModSourceT, ModulationT, SettingsT, SignalsT } from './types'
 
 export type ModSourceOptionT = {
 	value: ModSourceT
+	label: string
+}
+
+type BuiltInOptionT = {
+	value: BuiltInSourceT
 	label: string
 }
 
@@ -13,7 +19,7 @@ export type ParamRangeT = {
 	max: number
 }
 
-export const MOD_SOURCES: ModSourceOptionT[] = [
+export const MOD_SOURCES: BuiltInOptionT[] = [
 	{ value: 'bass', label: 'Bass' },
 	{ value: 'mids', label: 'Mids' },
 	{ value: 'highs', label: 'Highs' },
@@ -26,31 +32,28 @@ export const MOD_SOURCES: ModSourceOptionT[] = [
 
 export const DEFAULT_MOD_AMOUNT = 0.5
 
-// How long a kick or snare keeps pushing after it lands.
-const HIT_DECAY_SECONDS = 0.14
-const HIT_WINDOW_SECONDS = 0.6
 const BEAT_DECAY = 5
 const BEATS_PER_BAR = 4
+const MISSING_SOURCE_LABEL = 'Missing source'
 
-export const getModSourceLabel = (source: ModSourceT): string => {
+export const getModSourceLabel = (source: ModSourceT, sources: CompiledSourcesT): string => {
+	const isCustom = checkIsCustomSource(source)
+	if (isCustom) return getCustomSourceName(source, sources) ?? MISSING_SOURCE_LABEL
 	const option = MOD_SOURCES.find((candidate) => candidate.value === source)
 	if (option === undefined) return source
 	return option.label
 }
 
-// The strongest recent hit, fading out after it lands.
-const getHitEnvelope = (hits: HitT[], time: number): number => {
-	const startIndex = findFirstHitIndex(hits, time - HIT_WINDOW_SECONDS)
-	const recentHits = hits.slice(startIndex, startIndex + 8)
-	let envelope = 0
-	for (const hit of recentHits) {
-		const hasNotHappenedYet = hit.time > time
-		if (hasNotHappenedYet) break
-		const age = time - hit.time
-		const level = hit.strength * Math.exp(-age / HIT_DECAY_SECONDS)
-		envelope = Math.max(envelope, level)
-	}
-	return clamp(envelope, 0, 1)
+// Built-ins first, then the user's tracks and bands. A source
+// a modulation still points at but which is gone stays listed,
+// so the dropdown can show what is selected.
+export const listModSourceOptions = (sources: CompiledSourcesT, selected: ModSourceT | null): ModSourceOptionT[] => {
+	const trackOptions: ModSourceOptionT[] = sources.tracks.map((track) => ({ value: track.sourceId, label: `Track · ${track.name}` }))
+	const bandOptions: ModSourceOptionT[] = sources.bands.map((band) => ({ value: band.sourceId, label: `Band · ${band.name}` }))
+	const options: ModSourceOptionT[] = [...MOD_SOURCES, ...trackOptions, ...bandOptions]
+	const isSelectedListed = selected === null || options.some((option) => option.value === selected)
+	if (isSelectedListed) return options
+	return [...options, { value: selected, label: MISSING_SOURCE_LABEL }]
 }
 
 const getBeatCount = (time: number, bpm: number, beatOffset: number): number => {
@@ -74,27 +77,31 @@ const getBarWave = (beatCount: number): number => {
 
 // Every source is 0-1 at this instant. Pure function of time,
 // so scrubbing and recording see the same values.
-export const computeSignals = (analysis: AnalysisT, time: number): SignalsT => {
+export const computeSignals = (analysis: AnalysisT, time: number, sources: CompiledSourcesT): SignalsT => {
 	const levels = getLevels(analysis, time)
 	const beatCount = getBeatCount(time, analysis.bpm, analysis.beatOffset)
 
-	return {
+	const signals: SignalsT = {
 		bass: clamp(levels.low, 0, 1),
 		mids: clamp(levels.mid, 0, 1),
 		highs: clamp(levels.high, 0, 1),
 		energy: clamp(levels.energy, 0, 1),
-		kick: getHitEnvelope(analysis.kicks, time),
-		snare: getHitEnvelope(analysis.snaps, time),
+		kick: getDetectedHitSignal(analysis.kicks, time),
+		snare: getDetectedHitSignal(analysis.snaps, time),
 		beat: getBeatPulse(beatCount),
 		bar: getBarWave(beatCount)
 	}
+
+	for (const track of sources.tracks) signals[track.sourceId] = getTrackSignal(track, time)
+	for (const band of sources.bands) signals[band.sourceId] = getBandSignal(band, time)
+	return signals
 }
 
 export const applyModulation = (base: number, range: ParamRangeT, modulation: ModulationT | null | undefined, signals: SignalsT): number => {
 	const hasModulation = modulation !== null && modulation !== undefined
 	if (!hasModulation) return base
 	const span = range.max - range.min
-	const signal = signals[modulation.source]
+	const signal = signals[modulation.source] ?? 0
 	const push = modulation.amount * signal * span
 	return clamp(base + push, range.min, range.max)
 }
@@ -115,8 +122,9 @@ export const applySettingsModulation = (settings: SettingsT, signals: SignalsT):
 	return live
 }
 
-export const formatModulation = (modulation: ModulationT): string => {
+export const formatModulation = (modulation: ModulationT, sources: CompiledSourcesT): string => {
 	const percent = Math.round(modulation.amount * 100)
 	const sign = percent > 0 ? '+' : ''
-	return `${getModSourceLabel(modulation.source)} ${sign}${percent}%`
+	const sourceLabel = getModSourceLabel(modulation.source, sources)
+	return `${sourceLabel} ${sign}${percent}%`
 }

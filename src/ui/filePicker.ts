@@ -31,3 +31,18 @@ export const openLayerFilePicker = (kind: LayerFileKindT, onfile: (file: File) =
 	}
 	input.click()
 }
+
+const MIDI_ACCEPT = '.mid,.midi,audio/midi,audio/x-midi'
+
+// Opens the system file chooser for a MIDI file.
+export const openMidiPicker = (onfile: (file: File) => void): void => {
+	const input = document.createElement('input')
+	input.type = 'file'
+	input.accept = MIDI_ACCEPT
+	input.onchange = () => {
+		const file = input.files?.[0]
+		if (file === undefined) return
+		onfile(file)
+	}
+	input.click()
+}

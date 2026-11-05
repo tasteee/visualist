@@ -1,0 +1,113 @@
+.source-card {
+	--source-card-tone: var(--success);
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-3);
+	padding: var(--spacing-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--paper);
+}
+
+.source-card.isKick {
+	--source-card-tone: var(--purple);
+}
+
+.source-card.isSnare {
+	--source-card-tone: var(--pink);
+}
+
+.source-card.isBand {
+	--source-card-tone: var(--warning);
+}
+
+.source-card-header {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+}
+
+.source-card-dot {
+	flex: none;
+	width: var(--spacing-2);
+	height: var(--spacing-2);
+	border-radius: var(--radius-sm);
+	background: var(--source-card-tone);
+}
+
+.source-card.isBand .source-card-dot {
+	border-radius: 50%;
+}
+
+.source-card-name {
+	flex: 1;
+	min-width: 0;
+}
+
+.source-card-remove {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-7);
+	height: var(--spacing-7);
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--muted);
+	font-size: var(--font-size-2);
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.source-card-remove:hover {
+	background: color-mix(in oklab, var(--destructive) 14%, transparent);
+	color: var(--destructive);
+}
+
+.source-card-remove:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.source-card-status {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	min-width: 0;
+}
+
+.source-card-meter {
+	position: relative;
+	flex: none;
+	width: var(--spacing-10);
+	height: var(--spacing-1);
+	overflow: hidden;
+	border-radius: var(--radius-sm);
+	background: var(--paper-soft);
+}
+
+.source-card-meter-fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: var(--source-card-level);
+	background: var(--source-card-tone);
+}
+
+.source-card-meta {
+	overflow: hidden;
+	color: var(--secondary);
+	font-size: var(--font-size-caption);
+	font-variant-numeric: tabular-nums;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.source-card-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-3);
+}

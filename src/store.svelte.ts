@@ -1,5 +1,5 @@
 import { toaster } from '@tasteee/zest'
-import { analyzeAudio } from './engine/analysis'
+import { analyzeAudio, computeBeatOffset } from './engine/analysis'
 import {
 	createRecordingTap,
 	decodeAudioFile,
@@ -13,6 +13,8 @@ import { applyAutomation, applyLayerAutomation } from './engine/automation'
 import { applySettingsModulation, computeSignals } from './engine/modulation'
 import { applyPostEffects, getPostAmounts } from './engine/post'
 import { layerStore, restoreLayerAssets, startLayerWatchers } from './layers.svelte'
+import { buildSongKey, getCompiledSources, getRoleHits, startSourceWatchers, switchSong } from './sources.svelte'
+import type { RoleHitsT } from './sources.svelte'
 import { buildDemoAnalysis } from './engine/demo'
 import { buildLogoLayers } from './engine/logoLayers'
 import type { LogoLayersT } from './engine/logoLayers'
@@ -38,7 +40,13 @@ type AppStateT = {
 	settings: SettingsT
 	title: string
 	isTitleEdited: boolean
+	// The tempo everything follows. Starts as detected, and the
+	// user can correct both.
 	bpm: number
+	beatOffset: number
+	// Set when the user picks the downbeat by hand, so a later
+	// tempo change keeps that bar line where they put it.
+	downbeatAnchor: number | null
 	musicalKey: string
 	musicalScale: string
 	fileName: string
@@ -71,6 +79,8 @@ export const app = $state<AppStateT>({
 	title: '',
 	isTitleEdited: false,
 	bpm: 120,
+	beatOffset: 0,
+	downbeatAnchor: null,
 	musicalKey: '',
 	musicalScale: '',
 	fileName: '',
@@ -93,7 +103,7 @@ export const app = $state<AppStateT>({
 })
 
 // Big typed arrays stay out of the deep proxy.
-let analysis = $state.raw<AnalysisT>(buildDemoAnalysis())
+let detectedAnalysis = $state.raw<AnalysisT>(buildDemoAnalysis())
 let appliedPalette = $state.raw<PaletteT>(readPalette(app.settings))
 
 let audioBuffer: AudioBuffer | null = null
@@ -115,7 +125,22 @@ function readPalette(settings: SettingsT): PaletteT {
 	}
 }
 
-export const getAnalysis = (): AnalysisT => analysis
+// What the audio analysis found, before any user corrections.
+export const getDetectedAnalysis = (): AnalysisT => detectedAnalysis
+
+// The analysis everything renders from: the user's tempo and
+// downbeat, and any hit tracks standing in for kicks or snares.
+const buildEffectiveAnalysis = (detected: AnalysisT, bpm: number, beatOffset: number, roleHits: RoleHitsT): AnalysisT => ({
+	...detected,
+	bpm,
+	beatOffset,
+	kicks: roleHits.kicks ?? detected.kicks,
+	snaps: roleHits.snaps ?? detected.snaps
+})
+
+const effectiveAnalysis = $derived(buildEffectiveAnalysis(detectedAnalysis, app.bpm, app.beatOffset, getRoleHits()))
+
+export const getAnalysis = (): AnalysisT => effectiveAnalysis
 export const getLogoLayers = (): LogoLayersT | null => layers
 
 export const setStatus = (text: string, tone: StatusToneT = 'neutral'): void => {
@@ -150,7 +175,8 @@ const getFrameTime = (): number => {
 // Lanes set each control's base for this instant, then the
 // modulations push it around with the music.
 const buildFrameInput = (time: number): FrameInputT => {
-	const signals = computeSignals(analysis, time)
+	const analysis = getAnalysis()
+	const signals = computeSignals(analysis, time, getCompiledSources())
 	const automatedSettings = applyAutomation(app.settings, automation.lanes, time)
 	const settings = applySettingsModulation(automatedSettings, signals)
 
@@ -169,7 +195,7 @@ const buildFrameInput = (time: number): FrameInputT => {
 }
 
 // The live mod sources at the playhead, for meters in the UI.
-export const getLiveSignals = (): SignalsT => computeSignals(analysis, app.currentTime)
+export const getLiveSignals = (): SignalsT => computeSignals(getAnalysis(), app.currentTime, getCompiledSources())
 
 const renderFrame = (context: CanvasRenderingContext2D, time: number, logoLayers: LogoLayersT, width: number, height: number): void => {
 	const input = buildFrameInput(time)
@@ -395,8 +421,10 @@ export const startRecording = async (): Promise<void> => {
 }
 
 const applyAnalysis = (nextAnalysis: AnalysisT): void => {
-	analysis = nextAnalysis
-	app.bpm = Math.round(nextAnalysis.bpm)
+	detectedAnalysis = nextAnalysis
+	app.bpm = nextAnalysis.bpm
+	app.beatOffset = nextAnalysis.beatOffset
+	app.downbeatAnchor = null
 }
 
 export const loadAudioFile = async (file: File): Promise<void> => {
@@ -418,6 +446,7 @@ export const loadAudioFile = async (file: File): Promise<void> => {
 		app.trimEnd = decoded.duration
 		clampLanesToDuration(decoded.duration)
 		app.fileName = file.name
+		switchSong(buildSongKey(file.name, decoded.duration))
 		app.kickCount = result.kicks.length
 		app.currentTime = 0
 		setPausedPosition(0)
@@ -441,17 +470,58 @@ export const setTitle = (text: string): void => {
 	app.isTitleEdited = true
 }
 
-// The BPM control is display-only for now. Echo timing keeps
-// following the detected tempo.
+const BEATS_PER_BAR = 4
+
+const getBarLength = (bpm: number): number => (60 / bpm) * BEATS_PER_BAR
+
+// Bar 1 starts within the first bar of the song, so bar
+// numbers stay small and positive.
+const wrapToFirstBar = (time: number, bpm: number): number => {
+	const barLength = getBarLength(bpm)
+	const wrapped = time % barLength
+	const isNegative = wrapped < 0
+	if (isNegative) return wrapped + barLength
+	return wrapped
+}
+
+// A hand-set downbeat stays put. Otherwise the phase is found
+// again for the new tempo, the same way detection finds it.
+const resolveBeatOffset = (bpm: number): number => {
+	const anchor = app.downbeatAnchor
+	const hasAnchor = anchor !== null
+	if (hasAnchor) return wrapToFirstBar(anchor, bpm)
+	return computeBeatOffset(detectedAnalysis.flux, bpm)
+}
+
 export const setBpm = (value: number): void => {
 	const isNumber = Number.isFinite(value)
 	const isInRange = value >= 40 && value <= 240
 	if (!isNumber || !isInRange) return
-	app.bpm = Math.round(value)
+	app.bpm = value
+	app.beatOffset = resolveBeatOffset(value)
 }
 
+// Back to what the analysis found, tempo and downbeat both.
 export const detectBpm = (): void => {
-	app.bpm = Math.round(analysis.bpm)
+	app.bpm = detectedAnalysis.bpm
+	app.beatOffset = detectedAnalysis.beatOffset
+	app.downbeatAnchor = null
+}
+
+export const setDownbeatAt = (time: number): void => {
+	app.downbeatAnchor = time
+	app.beatOffset = wrapToFirstBar(time, app.bpm)
+}
+
+export const nudgeDownbeat = (seconds: number): void => {
+	const anchor = app.downbeatAnchor ?? app.beatOffset
+	setDownbeatAt(anchor + seconds)
+}
+
+export const checkIsTempoEdited = (): boolean => {
+	const isBpmEdited = app.bpm !== detectedAnalysis.bpm
+	const isDownbeatEdited = app.downbeatAnchor !== null
+	return isBpmEdited || isDownbeatEdited
 }
 
 // Switching theme swaps the two colors, so custom colors survive.
@@ -473,6 +543,8 @@ const startWatchers = (): void => {
 			void layerStore.assetVersion
 			void app.title
 			void app.bpm
+			void app.beatOffset
+			void getCompiledSources()
 			void appliedPalette
 			void app.isLayersReady
 			void app.isPlaying
@@ -497,6 +569,7 @@ export const startApp = async (): Promise<void> => {
 	startWatchers()
 	startLayerWatchers()
 	startAutomationWatchers()
+	startSourceWatchers()
 	const format = pickRecorderFormat()
 	app.recorderLabel = format === null ? 'No video recording' : format.label
 
