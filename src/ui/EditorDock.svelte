@@ -3,7 +3,6 @@
 	import CaretDoubleDownIcon from 'phosphor-svelte/lib/CaretDoubleDownIcon'
 	import CaretDoubleUpIcon from 'phosphor-svelte/lib/CaretDoubleUpIcon'
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
-	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
 	import {
 		addLayerLane,
 		addSettingLane,
@@ -28,7 +27,20 @@
 	import type { LayerT } from '../engine/types'
 	import { showInspectorTab } from '../inspector.svelte'
 	import { focusLayer, layerStore, moveLayer, moveLayerToFrontIndex, toggleLayerVisible } from '../layers.svelte'
-	import { addEmptyTrack, getCompiledSources, recordTap, sources, toggleTriggersCollapsed } from '../sources.svelte'
+	import {
+		addEmptyTrack,
+		clearHitSelection,
+		deleteSelectedHits,
+		getCompiledSources,
+		recordTap,
+		selectAllHits,
+		sources,
+		toggleTriggersCollapsed
+	} from '../sources.svelte'
+	import { AUDIO_ROW_ID, getRowColor } from '../appearance.svelte'
+	import { pickColorForId } from '../engine/palette'
+	import type { ColorNameT } from '../engine/palette'
+	import { openGridMenu } from '../timelineMenus.svelte'
 	import { app, formatTime, getAnalysis, seekTo } from '../store.svelte'
 	import {
 		MAX_DOCK_SHARE,
@@ -49,10 +61,11 @@
 	import AutomationPopover from './AutomationPopover.svelte'
 	import BandLane from './BandLane.svelte'
 	import HitLane from './HitLane.svelte'
-	import LaneGroup from './LaneGroup.svelte'
+	import TimelineLayer from './TimelineLayer.svelte'
 	import LayerClip from './LayerClip.svelte'
 	import OverviewBar from './OverviewBar.svelte'
 	import PatternPopover from './PatternPopover.svelte'
+	import TimelineMenus from './TimelineMenus.svelte'
 	import TimeRuler from './TimeRuler.svelte'
 	import TransportBar from './TransportBar.svelte'
 	import WaveformTrack from './WaveformTrack.svelte'
@@ -113,16 +126,18 @@
 			duration: app.duration,
 			widthPx: timeline.trackWidth,
 			bpm: analysis.bpm,
-			beatOffset: analysis.beatOffset
+			beatOffset: analysis.beatOffset,
+			division: timeline.gridDivision,
+			isTriplet: timeline.isTriplet
 		})
 	)
 
 	const laneCount = $derived(automation.lanes.length)
 	const hasLanes = $derived(laneCount > 0)
 	const formatLaneCount = (count: number): string => {
-		if (count === 0) return 'No lanes'
-		if (count === 1) return '1 lane'
-		return `${count} lanes`
+		if (count === 0) return 'No automations'
+		if (count === 1) return '1 automation'
+		return `${count} automations`
 	}
 
 	const canAddSettingLane = $derived(checkCanAddSettingLane())
@@ -141,7 +156,7 @@
 
 	const formatTriggersDetail = (tracks: number, bands: number): string => {
 		const hasNone = tracks === 0 && bands === 0
-		if (hasNone) return 'Hit tracks, MIDI and bands'
+		if (hasNone) return 'No hit tracks'
 		const trackLabel = tracks === 1 ? '1 track' : `${tracks} tracks`
 		const bandLabel = bands === 1 ? '1 band' : `${bands} bands`
 		const hasNoBands = bands === 0
@@ -152,12 +167,17 @@
 	}
 
 	const triggersDetail = $derived(formatTriggersDetail(trackCount, bandCount))
+	const audioColor = $derived(getRowColor(AUDIO_ROW_ID, 'amber'))
+	const globalColor = $derived(getRowColor(GLOBAL_GROUP_ID, 'slate'))
+
+	const getLayerColor = (layer: LayerT): ColorNameT => getRowColor(layer.id, pickColorForId(layer.id))
 
 	// Front to back, matching the Layers panel.
 	const layersFrontToBack = $derived([...layerStore.layers].reverse() as LayerT[])
 	const laneCountLabel = $derived(String(laneCount))
 	const songName = $derived(app.fileName === '' ? 'Untitled' : app.fileName)
 	const songMeta = $derived(`${formatTime(app.duration)} · ${formatBpm(analysis.bpm)} BPM`)
+	const audioDetail = $derived(`${songMeta} · ${triggersDetail}`)
 
 	// A new song opens fully zoomed out.
 	$effect(() => {
@@ -296,6 +316,8 @@
 			event.preventDefault()
 			return redo()
 		}
+		const isSelectionKey = handleSelectionKey(event, key, isCommand)
+		if (isSelectionKey) return
 		if (isCommand || event.altKey) return
 		if (key === '=' || key === '+') return zoomIn()
 		if (key === '-' || key === '_') return zoomOut()
@@ -303,6 +325,33 @@
 		if (key === 'f') return toggleFollowing()
 		if (key === 's') return toggleSnapping()
 		if (key === 'home') return seekTo(0)
+	}
+
+	// Keys for selected hits. True when the key was used.
+	const handleSelectionKey = (event: KeyboardEvent, key: string, isCommand: boolean): boolean => {
+		const selectedTrackId = sources.hitSelection.trackId
+		const hasSelection = selectedTrackId !== null && sources.hitSelection.hitIds.length > 0
+		if (!hasSelection || selectedTrackId === null) return false
+		const isDelete = key === 'delete' || key === 'backspace'
+		const isSelectAll = isCommand && key === 'a'
+		const isClear = key === 'escape'
+		const isUsed = isDelete || isSelectAll || isClear
+		if (!isUsed) return false
+		event.preventDefault()
+		if (isDelete) deleteSelectedHits()
+		if (isSelectAll) selectAllHits(selectedTrackId)
+		if (isClear) clearHitSelection()
+		return true
+	}
+
+	// Right-click on empty lane space opens the grid menu. Rows
+	// that use right-click for themselves cancel it first.
+	const handleLanesContextMenu = (event: MouseEvent) => {
+		if (event.defaultPrevented) return
+		const track = findTrack(event.target)
+		if (track === null) return
+		event.preventDefault()
+		openGridMenu(event.clientX, event.clientY)
 	}
 
 	// People tap to what they hear, which is the clock minus
@@ -497,22 +546,13 @@
 			<TimeRuler {grid} />
 		</div>
 
-		<div class="editor-row isWave">
-			<div class="editor-song">
-				<span class="editor-song-icon"><WaveformIcon weight="bold" /></span>
-				<div class="editor-song-text">
-					<span class="editor-song-name" title={songName}>{songName}</span>
-					<span class="editor-song-meta">{songMeta}</span>
-				</div>
-			</div>
-			<WaveformTrack />
-		</div>
-
-		<div class="editor-lanes">
-			<LaneGroup
-				kind="triggers"
-				title="Sync"
-				detail={triggersDetail}
+		<div class="editor-lanes" role="presentation" oncontextmenu={handleLanesContextMenu}>
+			<TimelineLayer
+				kind="audio"
+				rowId={AUDIO_ROW_ID}
+				color={audioColor}
+				title={songName}
+				detail={audioDetail}
 				{grid}
 				isCollapsed={isTriggersCollapsed}
 				canAddLane
@@ -520,7 +560,11 @@
 				ontoggle={toggleTriggersCollapsed}
 				onadd={handleAddTrack}
 				onselect={openSourcesPanel}
-			/>
+			>
+				{#snippet track()}
+					<WaveformTrack />
+				{/snippet}
+			</TimelineLayer>
 			{#if !isTriggersCollapsed && hasTriggers}
 				{#each sources.tracks as track (track.id)}
 					<HitLane {track} {grid} onpattern={openPatternEditor} />
@@ -530,8 +574,10 @@
 				{/each}
 			{/if}
 
-			<LaneGroup
+			<TimelineLayer
 				kind="global"
+				rowId={GLOBAL_GROUP_ID}
+				color={globalColor}
 				title="Scene and post"
 				detail={globalDetail}
 				{grid}
@@ -549,8 +595,10 @@
 			{#each layersFrontToBack as layer (layer.id)}
 				{@const isCollapsed = checkIsGroupCollapsed(layer.id)}
 				{@const isSelected = layerStore.selectedLayerId === layer.id}
-				<LaneGroup
+				<TimelineLayer
 					kind={layer.kind}
+					rowId={layer.id}
+					color={getLayerColor(layer)}
 					title={layer.name}
 					detail={getLayerDetail(layer)}
 					{grid}
@@ -571,7 +619,7 @@
 					{#snippet track()}
 						<LayerClip {layer} {grid} {isSelected} />
 					{/snippet}
-				</LaneGroup>
+				</TimelineLayer>
 				{#if !isCollapsed}
 					<div class="editor-layer-lanes" role="presentation" onpointerdowncapture={() => focusLayer(layer.id)}>
 						{#each getLanesInGroup(layer.id) as lane (lane.id)}
@@ -596,6 +644,8 @@
 			<OverviewBar />
 		</div>
 	</div>
+
+	<TimelineMenus />
 
 	{#if patternEditor !== null}
 		<PatternPopover trackId={patternEditor.trackId} anchorX={patternEditor.anchorX} anchorY={patternEditor.anchorY} onclose={closePatternEditor} />

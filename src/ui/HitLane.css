@@ -1,24 +1,17 @@
 .hit-lane {
 	--hit-lane-height: 4.5rem;
-	--hit-lane-tone: var(--success);
+	--hit-lane-tone: var(--tone, var(--success));
+	position: relative;
 	--hit-lane-indent: calc(var(--spacing-5) + var(--spacing-2) + var(--spacing-2) + var(--spacing-2));
 	display: grid;
 	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
-	height: var(--hit-lane-height);
+	height: var(--hit-lane-custom-height, var(--hit-lane-height));
 	border-bottom: 1px solid var(--border);
-	transition: height var(--motion-base) var(--ease-move);
 }
 
+/* Collapsed ignores a custom height, then gets it back. */
 .hit-lane.isCollapsed {
-	--hit-lane-height: var(--spacing-8);
-}
-
-.hit-lane.isKick {
-	--hit-lane-tone: var(--purple);
-}
-
-.hit-lane.isSnare {
-	--hit-lane-tone: var(--pink);
+	height: var(--spacing-8);
 }
 
 /* Header column */
@@ -35,7 +28,7 @@
 	background: color-mix(in oklab, var(--paper) 70%, var(--bg));
 }
 
-/* The guide line that ties the lane to the Sync header. */
+/* The guide line that ties the lane to the audio layer. */
 .hit-lane-header::before {
 	position: absolute;
 	top: 0;
@@ -95,13 +88,6 @@
 	outline-offset: 1px;
 }
 
-.hit-lane-dot {
-	flex: none;
-	width: var(--spacing-2);
-	height: var(--spacing-2);
-	border-radius: var(--radius-sm);
-	background: var(--hit-lane-tone);
-}
 
 .hit-lane-input {
 	flex: 1;
@@ -151,6 +137,11 @@
 	font-variant-numeric: tabular-nums;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.hit-lane-count.isSelection {
+	color: var(--hit-lane-tone);
+	font-weight: var(--font-weight-semibold);
 }
 
 .hit-lane-count.isCompact {
@@ -332,6 +323,31 @@
 .hit-lane-hit:focus-visible::after {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 2px;
+}
+
+/* With a selection, the rest step back so it reads clearly. */
+.hit-lane.hasSelection .hit-lane-hit:not(.isSelected) {
+	opacity: 0.4;
+}
+
+/* Selected hits get a halo along their whole stem. */
+.hit-lane-hit.isSelected::before {
+	width: 3px;
+	background: var(--hit-lane-tone);
+	outline: 2px solid color-mix(in oklab, var(--hit-lane-tone) 28%, transparent);
+}
+
+.hit-lane-marquee {
+	position: absolute;
+	top: calc(-1 * var(--spacing-2));
+	bottom: 0;
+	left: var(--hit-x);
+	z-index: 2;
+	width: var(--hit-width);
+	border: 1px solid color-mix(in oklab, var(--hit-lane-tone) 70%, transparent);
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--hit-lane-tone) 12%, transparent);
+	pointer-events: none;
 }
 
 .hit-lane-hold {

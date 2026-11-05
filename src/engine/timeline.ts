@@ -23,12 +23,20 @@ export type TimelineGridT = {
 	beatOffset: number
 }
 
+// Steps per bar, as in note values: 4 is quarter notes, 16 is
+// sixteenths. auto picks the finest step the zoom has room for.
+export type GridDivisionT = 'auto' | 1 | 2 | 4 | 8 | 16 | 32
+
+export const GRID_DIVISIONS: GridDivisionT[] = ['auto', 1, 2, 4, 8, 16, 32]
+
 export type BuildGridInputT = {
 	view: TimelineViewT
 	duration: number
 	widthPx: number
 	bpm: number
 	beatOffset: number
+	division: GridDivisionT
+	isTriplet: boolean
 }
 
 export const MIN_VIEW_SPAN = 0.5
@@ -106,11 +114,16 @@ type ClassifyInputT = {
 	hasBeatLabels: boolean
 }
 
+const BEAT_EPSILON = 1e-6
+
+const checkIsWholeBeat = (beatPosition: number): boolean => Math.abs(beatPosition - Math.round(beatPosition)) < BEAT_EPSILON
+
 const classifyLine = (input: ClassifyInputT): Omit<GridLineT, 'time'> => {
-	const isWholeBeat = Number.isInteger(input.beatPosition)
+	const isWholeBeat = checkIsWholeBeat(input.beatPosition)
 	if (!isWholeBeat) return { kind: 'sub', label: null }
-	const beatInBar = ((input.beatPosition % BEATS_PER_BAR) + BEATS_PER_BAR) % BEATS_PER_BAR
-	const barIndex = Math.floor(input.beatPosition / BEATS_PER_BAR)
+	const wholeBeat = Math.round(input.beatPosition)
+	const beatInBar = ((wholeBeat % BEATS_PER_BAR) + BEATS_PER_BAR) % BEATS_PER_BAR
+	const barIndex = Math.floor(wholeBeat / BEATS_PER_BAR)
 	const barNumber = barIndex + 1
 	const isBarStart = beatInBar === 0
 	const isLabelBar = isBarStart && barIndex % input.labelBarStep === 0
@@ -120,8 +133,28 @@ const classifyLine = (input: ClassifyInputT): Omit<GridLineT, 'time'> => {
 	return { kind: 'beat', label: beatLabel }
 }
 
-// Musical grid from the detected tempo: bar numbers as labels,
-// beats and sixteenths as finer lines when there is room.
+const TRIPLET_FACTOR = 2 / 3
+
+// The snap step in beats: the chosen note value, or the zoom's
+// own line step on auto. Triplets fit three in the space of two.
+const getSnapBeatStep = (input: BuildGridInputT, autoBeatStep: number): number => {
+	const tripletFactor = input.isTriplet ? TRIPLET_FACTOR : 1
+	const division = input.division
+	if (division === 'auto') return autoBeatStep * tripletFactor
+	const chosenBeatStep = BEATS_PER_BAR / division
+	return chosenBeatStep * tripletFactor
+}
+
+// Lines are drawn at the snap step, or at a whole multiple of
+// it when the zoom leaves too little room between lines.
+const getLineBeatStep = (snapBeatStep: number, pxPerBeat: number): number => {
+	const pxPerStep = snapBeatStep * pxPerBeat
+	const multiple = Math.max(1, Math.ceil(LINE_MIN_PX / Math.max(pxPerStep, 1e-6)))
+	return snapBeatStep * multiple
+}
+
+// Musical grid from the tempo: bar numbers as labels, beats
+// and finer steps as lines when there is room.
 export const buildGrid = (input: BuildGridInputT): TimelineGridT => {
 	const beatLength = 60 / Math.max(1, input.bpm)
 	const beatOffset = input.beatOffset
@@ -131,7 +164,9 @@ export const buildGrid = (input: BuildGridInputT): TimelineGridT => {
 
 	const pxPerBeat = (input.widthPx / input.view.span) * beatLength
 	const labelBarStep = pickLabelBarStep(pxPerBeat * BEATS_PER_BAR)
-	const beatStep = pickLineBeatStep(pxPerBeat, labelBarStep)
+	const autoBeatStep = pickLineBeatStep(pxPerBeat, labelBarStep)
+	const snapBeatStep = getSnapBeatStep(input, autoBeatStep)
+	const beatStep = getLineBeatStep(snapBeatStep, pxPerBeat)
 	const stepSeconds = beatStep * beatLength
 	const hasBeatLabels = pxPerBeat >= BEAT_LABEL_MIN_PX
 
@@ -150,7 +185,13 @@ export const buildGrid = (input: BuildGridInputT): TimelineGridT => {
 		lines.push({ time, kind: classified.kind, label: classified.label })
 	}
 
-	return { lines, snapStep: stepSeconds, beatLength, beatOffset }
+	return { lines, snapStep: snapBeatStep * beatLength, beatLength, beatOffset }
+}
+
+export const formatGridDivision = (division: GridDivisionT): string => {
+	const isAuto = division === 'auto'
+	if (isAuto) return 'Auto'
+	return `1/${division}`
 }
 
 export const snapToGrid = (time: number, grid: TimelineGridT): number => {

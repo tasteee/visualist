@@ -2,6 +2,7 @@
 	import LightningIcon from 'phosphor-svelte/lib/LightningIcon'
 	import WaveSineIcon from 'phosphor-svelte/lib/WaveSineIcon'
 	import { formatModulation } from '../engine/modulation'
+	import type { ColorNameT } from '../engine/palette'
 	import type { ModulationT } from '../engine/types'
 	import { getCompiledSources } from '../sources.svelte'
 	import ModEditor from './ModEditor.svelte'
@@ -16,9 +17,9 @@
 		hint?: string
 		suffix?: string
 		isDisabled?: boolean
-		// 1-5 when an automation lane drives this control, matching
-		// the lane's color. 0 or missing when it is free.
-		automationTone?: number
+		// The lane's color when an automation lane drives this
+		// control. null or missing when it is free.
+		automationColor?: ColorNameT | null
 		onreveal?: () => void
 		// Passing onautomate shows an Automate button on hover
 		// while the control has no lane.
@@ -36,13 +37,11 @@
 
 	const AUTOMATED_TOOLTIP = 'Managed by automation. Click to open its lane, or remove the lane to unlock.'
 
-	const automationTone = $derived(props.automationTone ?? 0)
-	const isAutomated = $derived(automationTone > 0)
+	const automationColor = $derived(props.automationColor ?? null)
+	const isAutomated = $derived(automationColor !== null)
 	const isLocked = $derived(isAutomated || (props.isDisabled ?? false))
 	const hasHint = $derived(props.hint !== undefined && !isAutomated)
 	const tooltipText = $derived(props.hint ?? '')
-	const badgeClass = $derived(`setting-slider-badge isTone${automationTone}`)
-	const valueClass = $derived(`setting-slider-value isTone${automationTone}`)
 	const valueLabel = $derived(`${Number(props.value.toFixed(2))}${props.suffix ?? ''}`)
 
 	let isModOpen = $state(false)
@@ -83,7 +82,7 @@
 		<span class="setting-slider-label">{props.label}</span>
 		{#if isAutomated}
 			<z-tooltip content={AUTOMATED_TOOLTIP} placement="left" openDelay={200}>
-				<button class={badgeClass} type="button" aria-label="{props.label} is automated. Open its lane." onclick={handleReveal}>
+				<button class="setting-slider-badge" data-tone={automationColor} type="button" aria-label="{props.label} is automated. Open its lane." onclick={handleReveal}>
 					<LightningIcon weight="fill" />
 					Automated
 				</button>
@@ -104,7 +103,7 @@
 				{/if}
 			</button>
 		{/if}
-		<span class={valueClass}>{valueLabel}</span>
+		<span class="setting-slider-value" data-tone={automationColor}>{valueLabel}</span>
 	</div>
 	<z-tooltip content={tooltipText} isDisabled={!hasHint} placement="left" openDelay={400}>
 		<z-slider

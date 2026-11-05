@@ -48,6 +48,10 @@
 	const playheadPercent = $derived(timeToPercent(app.currentTime, timeline.view))
 	const isPlayheadVisible = $derived(checkIsTimeVisible(app.currentTime, timeline.view))
 
+	// While playing, a hollow flag marks where stop returns to.
+	const markerPercent = $derived(timeToPercent(app.playMarker, timeline.view))
+	const isMarkerShown = $derived(app.isPlaying && checkIsTimeVisible(app.playMarker, timeline.view))
+
 	const hoverTime = $derived(timeline.hoverTime)
 	const hasHover = $derived(hoverTime !== null && checkIsTimeVisible(hoverTime, timeline.view))
 	const hoverPercent = $derived(hoverTime === null ? 0 : timeToPercent(hoverTime, timeline.view))
@@ -233,6 +237,10 @@
 			></div>
 		</div>
 	</div>
+
+	{#if isMarkerShown}
+		<div class="time-ruler-marker" style:--ruler-x="{markerPercent}%"></div>
+	{/if}
 
 	{#if isPlayheadVisible}
 		<div class="time-ruler-playhead" style:--ruler-x="{playheadPercent}%"></div>

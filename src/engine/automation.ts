@@ -100,10 +100,12 @@ export const evaluatePoints = (points: AutomationPointT[], time: number, fallbac
 export const GLOBAL_GROUP_ID = 'global'
 
 export const getTargetGroupId = (target: LaneTargetT): string => {
-	const isSetting = target.kind === 'setting'
-	if (isSetting) return GLOBAL_GROUP_ID
+	if (target.kind === 'unset') return target.groupId
+	if (target.kind === 'setting') return GLOBAL_GROUP_ID
 	return target.layerId
 }
+
+export const checkIsUnsetTarget = (target: LaneTargetT): boolean => target.kind === 'unset'
 
 export const checkIsSameTarget = (first: LaneTargetT, second: LaneTargetT): boolean => {
 	const isSettingPair = first.kind === 'setting' && second.kind === 'setting'
@@ -117,6 +119,7 @@ export const checkIsSameTarget = (first: LaneTargetT, second: LaneTargetT): bool
 
 // A stable string per target, for select values and keys.
 export const getTargetId = (target: LaneTargetT): string => {
+	if (target.kind === 'unset') return `unset:${target.groupId}`
 	if (target.kind === 'setting') return `setting:${target.key}`
 	if (target.kind === 'layer') return `layer:${target.layerId}:${target.param}`
 	return `fx:${target.layerId}:${target.fxId}`
@@ -135,6 +138,7 @@ const findLayerFx = (layers: LayerT[], layerId: string, fxId: string): LayerFxT 
 // null when the target no longer exists, such as a lane whose
 // layer or effect was removed.
 export const getTargetControl = (target: LaneTargetT, layers: LayerT[]): LaneControlT | null => {
+	if (target.kind === 'unset') return null
 	if (target.kind === 'setting') return findControl(target.key)
 	if (target.kind === 'layer') {
 		const layer = findLayer(layers, target.layerId)
@@ -150,6 +154,7 @@ export const getTargetControl = (target: LaneTargetT, layers: LayerT[]): LaneCon
 
 // The value the control holds when no lane drives it.
 export const getTargetBase = (target: LaneTargetT, settings: SettingsT, layers: LayerT[]): number | null => {
+	if (target.kind === 'unset') return null
 	if (target.kind === 'setting') return settings[target.key]
 	if (target.kind === 'layer') {
 		const layer = findLayer(layers, target.layerId)
@@ -161,7 +166,17 @@ export const getTargetBase = (target: LaneTargetT, settings: SettingsT, layers: 
 	return fx.amount
 }
 
-export const checkIsTargetLive = (target: LaneTargetT, layers: LayerT[]): boolean => getTargetControl(target, layers) !== null
+// An unset lane lives as long as its group does.
+const checkIsGroupLive = (groupId: string, layers: LayerT[]): boolean => {
+	const isGlobal = groupId === GLOBAL_GROUP_ID
+	if (isGlobal) return true
+	return findLayer(layers, groupId) !== undefined
+}
+
+export const checkIsTargetLive = (target: LaneTargetT, layers: LayerT[]): boolean => {
+	if (target.kind === 'unset') return checkIsGroupLive(target.groupId, layers)
+	return getTargetControl(target, layers) !== null
+}
 
 export const findLaneForTarget = (lanes: AutomationLaneT[], target: LaneTargetT): AutomationLaneT | undefined => {
 	return lanes.find((lane) => checkIsSameTarget(lane.target, target))
@@ -336,6 +351,7 @@ const toTone = (index: number): number => (Math.max(0, index) % LANE_TONE_COUNT)
 // Each control keeps one color wherever it shows up: lane,
 // header dot and the automated badge in the panels.
 export const getTargetTone = (target: LaneTargetT, layers: LayerT[]): number => {
+	if (target.kind === 'unset') return LANE_TONE_COUNT
 	if (target.kind === 'setting') {
 		const settingIndex = AUTOMATION_CONTROLS.findIndex((control) => control.key === target.key)
 		return toTone(settingIndex)

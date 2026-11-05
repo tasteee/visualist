@@ -1,0 +1,120 @@
+.timeline-menu {
+	position: fixed;
+	top: var(--menu-y);
+	left: var(--menu-x);
+	z-index: 40;
+	display: flex;
+	flex-direction: column;
+	min-width: 12rem;
+	padding: var(--spacing-1);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--popover);
+	color: var(--popover-foreground);
+	transform: translate(var(--menu-shift-x, 0), var(--menu-shift-y, 0));
+}
+
+.timeline-menu.isPalette {
+	min-width: 0;
+	padding: var(--spacing-2);
+	margin-top: var(--spacing-1);
+}
+
+.timeline-menu-eyebrow {
+	padding: var(--spacing-1) var(--spacing-2) var(--spacing-2);
+	color: var(--muted);
+	font-size: var(--font-size-0);
+	font-weight: var(--font-weight-semibold);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.timeline-menu.isPalette .timeline-menu-eyebrow {
+	padding: 0 0 var(--spacing-2);
+}
+
+.timeline-menu-swatches {
+	display: grid;
+	grid-template-columns: repeat(3, var(--spacing-7));
+	gap: var(--spacing-1);
+}
+
+.timeline-menu-swatch {
+	position: relative;
+	width: var(--spacing-7);
+	height: var(--spacing-7);
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	background: transparent;
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease;
+}
+
+.timeline-menu-swatch::after {
+	position: absolute;
+	inset: 25%;
+	border-radius: 50%;
+	background: var(--tone);
+	content: '';
+}
+
+.timeline-menu-swatch:hover {
+	background: var(--paper-soft);
+}
+
+.timeline-menu-swatch.isActive {
+	border-color: var(--tone);
+}
+
+.timeline-menu-swatch:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.timeline-menu-item {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	height: var(--spacing-8);
+	padding: 0 var(--spacing-2);
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--foreground);
+	font: inherit;
+	font-size: var(--font-size-small);
+	text-align: left;
+	cursor: pointer;
+	transition: background-color var(--motion-fast) ease;
+}
+
+.timeline-menu-item:hover,
+.timeline-menu-item:focus-visible {
+	background: var(--paper-soft);
+	outline: none;
+}
+
+.timeline-menu-check {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-4);
+	color: var(--accent);
+	font-size: var(--font-size-2);
+}
+
+.timeline-menu-shortcut {
+	margin-left: auto;
+	color: var(--secondary);
+	font-size: var(--font-size-caption);
+}
+
+.timeline-menu-separator {
+	height: 1px;
+	margin: var(--spacing-1) var(--spacing-1);
+	background: var(--border);
+}

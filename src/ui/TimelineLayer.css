@@ -1,14 +1,25 @@
-.lane-group {
+.timeline-layer {
+	--timeline-layer-height: var(--spacing-11);
 	position: relative;
 	display: grid;
 	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
-	height: var(--spacing-11);
+	height: var(--timeline-layer-custom-height, var(--timeline-layer-height));
 	border-bottom: 1px solid var(--border);
+}
+
+/* The audio layer stays pinned to the top of the list, so the
+   waveform is in view while its lanes scroll under it. */
+.timeline-layer.isAudio {
+	--timeline-layer-height: var(--spacing-14);
+	position: sticky;
+	top: 0;
+	z-index: 3;
+	background: var(--paper);
 }
 
 /* Header column */
 
-.lane-group-header {
+.timeline-layer-header {
 	position: relative;
 	display: flex;
 	align-items: center;
@@ -21,11 +32,11 @@
 }
 
 /* A thin accent rule marks the layer open in the panel. */
-.lane-group.isSelected .lane-group-header {
+.timeline-layer.isSelected .timeline-layer-header {
 	background: color-mix(in oklab, var(--accent) 9%, var(--paper-soft));
 }
 
-.lane-group.isSelected .lane-group-header::before {
+.timeline-layer.isSelected .timeline-layer-header::before {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -35,7 +46,7 @@
 	content: '';
 }
 
-.lane-group-caret {
+.timeline-layer-caret {
 	display: inline-flex;
 	flex: none;
 	align-items: center;
@@ -54,21 +65,21 @@
 		color var(--motion-fast) ease;
 }
 
-.lane-group-caret svg {
+.timeline-layer-caret svg {
 	transform: rotate(90deg);
 	transition: transform var(--motion-base) var(--ease-move);
 }
 
-.lane-group.isCollapsed .lane-group-caret svg {
+.timeline-layer.isCollapsed .timeline-layer-caret svg {
 	transform: rotate(0deg);
 }
 
-.lane-group-caret:hover {
+.timeline-layer-caret:hover {
 	background: var(--paper);
 	color: var(--foreground);
 }
 
-.lane-group-title {
+.timeline-layer-title {
 	display: flex;
 	flex: 1;
 	align-items: center;
@@ -83,15 +94,15 @@
 	text-align: left;
 }
 
-.lane-group-title.canSelect {
+.timeline-layer-title.canSelect {
 	cursor: pointer;
 }
 
-.lane-group-title:disabled {
+.timeline-layer-title:disabled {
 	cursor: default;
 }
 
-.lane-group-icon {
+.timeline-layer-icon {
 	display: inline-flex;
 	flex: none;
 	align-items: center;
@@ -108,20 +119,20 @@
 		color var(--motion-fast) ease;
 }
 
-.lane-group.isSelected .lane-group-icon,
-.lane-group-title.canSelect:hover .lane-group-icon {
+.timeline-layer.isSelected .timeline-layer-icon,
+.timeline-layer-title.canSelect:hover .timeline-layer-icon {
 	border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
 	color: var(--accent);
 }
 
-.lane-group-text {
+.timeline-layer-text {
 	display: flex;
 	flex-direction: column;
 	gap: 0.0625rem;
 	min-width: 0;
 }
 
-.lane-group-name {
+.timeline-layer-name {
 	overflow: hidden;
 	font-size: var(--font-size-small);
 	font-weight: var(--font-weight-semibold);
@@ -130,7 +141,7 @@
 	white-space: nowrap;
 }
 
-.lane-group-detail {
+.timeline-layer-detail {
 	overflow: hidden;
 	color: var(--secondary);
 	font-size: var(--font-size-caption);
@@ -139,19 +150,19 @@
 	white-space: nowrap;
 }
 
-.lane-group.isHidden .lane-group-text,
-.lane-group.isHidden .lane-group-icon {
+.timeline-layer.isHidden .timeline-layer-text,
+.timeline-layer.isHidden .timeline-layer-icon {
 	opacity: 0.45;
 }
 
-.lane-group-actions {
+.timeline-layer-actions {
 	display: flex;
 	flex: none;
 	align-items: center;
 	gap: 0.125rem;
 }
 
-.lane-group-action {
+.timeline-layer-action {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -169,33 +180,33 @@
 		color var(--motion-fast) ease;
 }
 
-.lane-group-action:hover:not(:disabled) {
+.timeline-layer-action:hover:not(:disabled) {
 	background: var(--paper);
 	color: var(--foreground);
 }
 
-.lane-group-action:disabled {
+.timeline-layer-action:disabled {
 	cursor: default;
 	opacity: var(--control-disabled-opacity);
 }
 
-.lane-group-caret:focus-visible,
-.lane-group-title:focus-visible,
-.lane-group-action:focus-visible {
+.timeline-layer-caret:focus-visible,
+.timeline-layer-title:focus-visible,
+.timeline-layer-action:focus-visible {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 1px;
 }
 
 /* Track column */
 
-.lane-group-track {
+.timeline-layer-track {
 	position: relative;
 	min-width: 0;
 	overflow: hidden;
 	background: color-mix(in oklab, var(--paper-soft) 40%, var(--bg));
 }
 
-.lane-group-grid {
+.timeline-layer-grid {
 	position: absolute;
 	inset: 0;
 	width: 100%;
@@ -203,21 +214,21 @@
 	pointer-events: none;
 }
 
-.lane-group-gridline {
+.timeline-layer-gridline {
 	stroke: var(--color-neutral-2);
 	stroke-width: 1;
 	vector-effect: non-scaling-stroke;
 }
 
-.lane-group-gridline.isLabel {
+.timeline-layer-gridline.isLabel {
 	stroke: var(--color-neutral-3);
 }
 
-.lane-group-playhead {
+.timeline-layer-playhead {
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: var(--group-x);
+	left: var(--layer-x);
 	z-index: 2;
 	width: 1px;
 	background: var(--foreground);
@@ -226,18 +237,18 @@
 
 /* Reordering */
 
-.lane-group-title.canReorder {
+.timeline-layer-title.canReorder {
 	cursor: grab;
 	touch-action: none;
 }
 
-.lane-group.isDragSource {
+.timeline-layer.isDragSource {
 	opacity: 0.45;
 }
 
 /* Where the dragged layer will land: a rule on the near edge. */
-.lane-group.isDropBefore::before,
-.lane-group.isDropAfter::after {
+.timeline-layer.isDropBefore::before,
+.timeline-layer.isDropAfter::after {
 	position: absolute;
 	right: 0;
 	left: 0;
@@ -248,10 +259,10 @@
 	content: '';
 }
 
-.lane-group.isDropBefore::before {
+.timeline-layer.isDropBefore::before {
 	top: -1px;
 }
 
-.lane-group.isDropAfter::after {
+.timeline-layer.isDropAfter::after {
 	bottom: -1px;
 }

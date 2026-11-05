@@ -18,6 +18,7 @@
 		toggleLaneCollapsed
 	} from '../automation.svelte'
 	import {
+		GLOBAL_GROUP_ID,
 		PATH_WIDTH,
 		buildAreaPath,
 		buildLinePath,
@@ -28,8 +29,8 @@
 		getLiveLaneValue,
 		getTargetBase,
 		getTargetControl,
+		getTargetGroupId,
 		getTargetId,
-		getTargetTone,
 		listLayerTargets,
 		listSettingTargets,
 		toControlValue,
@@ -39,9 +40,12 @@
 	import { checkIsTimeVisible, formatPreciseTime, getViewEnd, ratioToTime, snapToGrid, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
 	import type { AutomationLaneT, AutomationPointT, LaneTargetT, LayerT } from '../engine/types'
+	import { getLaneColor, getRowHeightStyle } from '../appearance.svelte'
 	import { findLayer, layerStore } from '../layers.svelte'
 	import { app } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
+	import ColorDot from './ColorDot.svelte'
+	import RowResizer from './RowResizer.svelte'
 	import './AutomationLane.css'
 
 	type AutomationLanePropsT = {
@@ -90,7 +94,8 @@
 	const points = $derived(props.lane.points)
 	const pointCount = $derived(points.length)
 	const isCollapsed = $derived(checkIsLaneCollapsed(props.lane.id))
-	const toneClass = $derived(`isTone${getTargetTone(props.lane.target, layers)}`)
+	const laneColor = $derived(getLaneColor(props.lane, layers))
+	const customHeight = $derived(getRowHeightStyle(props.lane.id))
 	const controlLabel = $derived(control === null ? 'No control' : control.label)
 	const pointCountLabel = $derived(pointCount === 1 ? '1 point' : `${pointCount} points`)
 	const collapseLabel = $derived(isCollapsed ? `Expand ${controlLabel}` : `Collapse ${controlLabel}`)
@@ -147,8 +152,10 @@
 	// global settings, or the params and effects of its layer.
 	const getGroupTargets = (): LaneTargetT[] => {
 		const target = props.lane.target
-		if (target.kind === 'setting') return listSettingTargets()
-		const layer = findLayer(target.layerId)
+		const groupId = getTargetGroupId(target)
+		const isGlobal = groupId === GLOBAL_GROUP_ID
+		if (isGlobal) return listSettingTargets()
+		const layer = findLayer(groupId)
 		if (layer === undefined) return []
 		return listLayerTargets(layer)
 	}
@@ -340,13 +347,22 @@
 	}
 </script>
 
-<div class="automation-lane {toneClass}" class:isCollapsed class:isActive={hasSelectedPoint} class:isFlashing class:isNested={props.isNested} bind:this={root}>
+<div
+	class="automation-lane"
+	class:isCollapsed
+	class:isActive={hasSelectedPoint}
+	class:isFlashing
+	class:isNested={props.isNested}
+	data-tone={laneColor}
+	style:--lane-custom-height={customHeight}
+	bind:this={root}
+>
 	<div class="automation-lane-header">
 		<div class="automation-lane-title">
 			<button class="automation-lane-caret" type="button" aria-expanded={!isCollapsed} aria-label={collapseLabel} onclick={handleToggle}>
 				<CaretRightIcon weight="bold" />
 			</button>
-			<span class="automation-lane-dot"></span>
+			<ColorDot rowId={props.lane.id} color={laneColor} label={controlLabel} />
 			{#if isCollapsed}
 				<span class="automation-lane-name">{controlLabel}</span>
 				<span class="automation-lane-value isCompact">{liveLabel}</span>
@@ -461,4 +477,6 @@
 			<span class="automation-lane-empty">Choose a control to automate</span>
 		{/if}
 	</div>
+
+	<RowResizer rowId={props.lane.id} label={controlLabel} />
 </div>

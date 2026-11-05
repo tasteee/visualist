@@ -1,3 +1,14 @@
+:root {
+	/* One knob for the size of the whole interface. Everything
+	   in zest and the app is sized in rem, so scaling the root
+	   font scales it all, shadow DOM included. */
+	--ui-scale: 0.9;
+}
+
+html {
+	font-size: calc(100% * var(--ui-scale));
+}
+
 html,
 body,
 #root {

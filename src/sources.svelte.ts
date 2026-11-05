@@ -37,9 +37,22 @@ type SourcesStateT = {
 	songKey: string
 	armedTrackId: string | null
 	isTapQuantized: boolean
-	selectedHitId: string | null
+	// Selected hits, all on one track at a time.
+	hitSelection: HitSelectionT
 	collapsedTrackIds: string[]
 	isTriggersCollapsed: boolean
+}
+
+export type HitSelectionT = {
+	trackId: string | null
+	hitIds: string[]
+}
+
+// Where a hit moves to, for moving several at once.
+export type HitMoveT = {
+	hitId: string
+	time: number
+	strength: number
 }
 
 export type RoleHitsT = {
@@ -119,7 +132,7 @@ export const sources = $state<SourcesStateT>({
 	songKey: DEMO_SONG_KEY,
 	armedTrackId: null,
 	isTapQuantized: true,
-	selectedHitId: null,
+	hitSelection: { trackId: null, hitIds: [] },
 	collapsedTrackIds: [],
 	isTriggersCollapsed: false
 })
@@ -188,7 +201,7 @@ export const switchSong = (songKey: string): void => {
 	sources.songKey = songKey
 	sources.tracks = loadTracks(songKey)
 	sources.armedTrackId = null
-	sources.selectedHitId = null
+	clearHitSelection()
 }
 
 // Undo snapshots carry the song they belong to, so undoing
@@ -207,7 +220,7 @@ export const restoreTrackSnapshot = (snapshot: TrackSnapshotT): void => {
 	const isOtherSong = snapshot.songKey !== sources.songKey
 	if (isOtherSong) return
 	sources.tracks = snapshot.tracks
-	sources.selectedHitId = null
+	clearHitSelection()
 }
 
 // ---- Tracks ------------------------------------------------
@@ -343,9 +356,11 @@ export const addHit = (trackId: string, time: number, strength: number, length: 
 	recordHistory()
 	const hit = createHit(clampToSong(time), strength, length)
 	track.hits = insertHit(track.hits, hit)
-	sources.selectedHitId = hit.id
+	selectHits(trackId, [hit.id])
 	return hit.id
 }
+
+const MIN_HIT_STRENGTH = 0.05
 
 export const moveHit = (trackId: string, hitId: string, time: number, strength: number): void => {
 	const track = findTrack(trackId)
@@ -353,20 +368,76 @@ export const moveHit = (trackId: string, hitId: string, time: number, strength: 
 	const hit = findHit(track, hitId)
 	if (hit === undefined) return
 	hit.time = clampToSong(time)
-	hit.strength = clamp(strength, 0.05, 1)
+	hit.strength = clamp(strength, MIN_HIT_STRENGTH, 1)
 }
 
-export const deleteHit = (trackId: string, hitId: string): void => {
+export const moveHits = (trackId: string, moves: HitMoveT[]): void => {
+	for (const move of moves) moveHit(trackId, move.hitId, move.time, move.strength)
+}
+
+export const deleteHits = (trackId: string, hitIds: string[]): void => {
+	const track = findTrack(trackId)
+	const hasHits = hitIds.length > 0
+	if (track === undefined || !hasHits) return
+	recordHistory()
+	const doomedIds = new Set(hitIds)
+	track.hits = track.hits.filter((hit) => !doomedIds.has(hit.id))
+	const remainingSelection = sources.hitSelection.hitIds.filter((hitId) => !doomedIds.has(hitId))
+	sources.hitSelection.hitIds = remainingSelection
+}
+
+export const deleteHit = (trackId: string, hitId: string): void => deleteHits(trackId, [hitId])
+
+// ---- Hit selection -----------------------------------------
+
+export const clearHitSelection = (): void => {
+	sources.hitSelection = { trackId: null, hitIds: [] }
+}
+
+export const selectHits = (trackId: string, hitIds: string[]): void => {
+	sources.hitSelection = { trackId, hitIds }
+}
+
+export const checkIsHitSelected = (trackId: string, hitId: string): boolean => {
+	const isTrack = sources.hitSelection.trackId === trackId
+	if (!isTrack) return false
+	return sources.hitSelection.hitIds.includes(hitId)
+}
+
+// Selection stays on one track: picking on another track
+// starts over there.
+export const toggleHitSelected = (trackId: string, hitId: string): void => {
+	const isSameTrack = sources.hitSelection.trackId === trackId
+	const currentIds = isSameTrack ? sources.hitSelection.hitIds : []
+	const isSelected = currentIds.includes(hitId)
+	const nextIds = isSelected ? currentIds.filter((candidate) => candidate !== hitId) : [...currentIds, hitId]
+	selectHits(trackId, nextIds)
+}
+
+export const addHitsToSelection = (trackId: string, hitIds: string[]): void => {
+	const isSameTrack = sources.hitSelection.trackId === trackId
+	const currentIds = isSameTrack ? sources.hitSelection.hitIds : []
+	const merged = new Set([...currentIds, ...hitIds])
+	selectHits(trackId, Array.from(merged))
+}
+
+export const selectAllHits = (trackId: string): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
-	recordHistory()
-	track.hits = track.hits.filter((hit) => hit.id !== hitId)
-	const wasSelected = sources.selectedHitId === hitId
-	if (wasSelected) sources.selectedHitId = null
+	selectHits(trackId, track.hits.map((hit) => hit.id))
 }
 
-export const selectHit = (hitId: string | null): void => {
-	sources.selectedHitId = hitId
+export const deleteSelectedHits = (): void => {
+	const trackId = sources.hitSelection.trackId
+	if (trackId === null) return
+	deleteHits(trackId, sources.hitSelection.hitIds)
+	clearHitSelection()
+}
+
+export const getSelectedHitCount = (trackId: string): number => {
+	const isTrack = sources.hitSelection.trackId === trackId
+	if (!isTrack) return 0
+	return sources.hitSelection.hitIds.length
 }
 
 export const clearTrackRange = (trackId: string, range: TimeRangeT): void => {

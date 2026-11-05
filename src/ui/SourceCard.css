@@ -1,5 +1,5 @@
 .source-card {
-	--source-card-tone: var(--success);
+	--source-card-tone: var(--tone, var(--success));
 	display: flex;
 	flex-direction: column;
 	gap: var(--spacing-3);
@@ -9,17 +9,6 @@
 	background: var(--paper);
 }
 
-.source-card.isKick {
-	--source-card-tone: var(--purple);
-}
-
-.source-card.isSnare {
-	--source-card-tone: var(--pink);
-}
-
-.source-card.isBand {
-	--source-card-tone: var(--warning);
-}
 
 .source-card-header {
 	display: flex;

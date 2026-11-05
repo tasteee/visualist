@@ -1,8 +1,10 @@
 import { clamp } from './engine/settings'
 import {
+	GLOBAL_GROUP_ID,
 	MIN_POINT_GAP,
 	checkIsSameTarget,
 	checkIsTargetLive,
+	checkIsUnsetTarget,
 	createPointId,
 	getTargetBase,
 	getTargetControl,
@@ -35,7 +37,7 @@ const checkIsTargetShape = (target: unknown): target is LaneTargetT => {
 	const isObject = typeof target === 'object' && target !== null
 	if (!isObject) return false
 	const kind = (target as { kind?: unknown }).kind
-	return kind === 'setting' || kind === 'layer' || kind === 'fx'
+	return kind === 'unset' || kind === 'setting' || kind === 'layer' || kind === 'fx'
 }
 
 const checkIsLaneShape = (lane: Partial<AutomationLaneT>): boolean => {
@@ -196,24 +198,6 @@ const findUnusedTarget = (targets: LaneTargetT[]): LaneTargetT | null => {
 	return unused ?? null
 }
 
-// Opacity and scale are what most layer lanes are for, so a
-// new lane on a layer offers those first.
-const LAYER_LANE_ORDER = ['opacity', 'scale']
-
-const getLaneOrderRank = (target: LaneTargetT): number => {
-	const isParam = target.kind === 'layer'
-	if (!isParam) return LAYER_LANE_ORDER.length
-	const rank = LAYER_LANE_ORDER.indexOf(target.param)
-	const isPreferred = rank !== -1
-	if (!isPreferred) return LAYER_LANE_ORDER.length
-	return rank
-}
-
-const getLayerTargetsInLaneOrder = (layer: LayerT): LaneTargetT[] => {
-	const targets = listLayerTargets(layer)
-	return [...targets].sort((first, second) => getLaneOrderRank(first) - getLaneOrderRank(second))
-}
-
 export const checkCanAddSettingLane = (): boolean => findUnusedTarget(listSettingTargets()) !== null
 
 export const checkCanAddLayerLane = (layerId: string): boolean => {
@@ -232,26 +216,34 @@ const buildSeedPoint = (target: LaneTargetT): AutomationPointT => {
 	return { id: createPointId(), time: 0, value: normalized, bend: 0 }
 }
 
+// An unset lane has no control to seed from, so it starts
+// empty and is seeded when a control is picked.
+const buildStartingPoints = (target: LaneTargetT): AutomationPointT[] => {
+	const isUnset = checkIsUnsetTarget(target)
+	if (isUnset) return []
+	return [buildSeedPoint(target)]
+}
+
 const pushLane = (target: LaneTargetT): string => {
 	recordHistory()
-	const lane: AutomationLaneT = { id: crypto.randomUUID(), target, points: [buildSeedPoint(target)] }
+	const lane: AutomationLaneT = { id: crypto.randomUUID(), target, points: buildStartingPoints(target) }
 	automation.lanes.push(lane)
 	expandGroup(getTargetGroupId(target))
 	return lane.id
 }
 
+// New lanes start unmapped. The user picks the control from
+// the lane's own menu.
 export const addSettingLane = (): string | null => {
-	const target = findUnusedTarget(listSettingTargets())
-	if (target === null) return null
-	return pushLane(target)
+	const canAdd = checkCanAddSettingLane()
+	if (!canAdd) return null
+	return pushLane({ kind: 'unset', groupId: GLOBAL_GROUP_ID })
 }
 
 export const addLayerLane = (layerId: string): string | null => {
-	const layer = findLayer(layerId)
-	if (layer === undefined) return null
-	const target = findUnusedTarget(getLayerTargetsInLaneOrder(layer))
-	if (target === null) return null
-	return pushLane(target)
+	const canAdd = checkCanAddLayerLane(layerId)
+	if (!canAdd) return null
+	return pushLane({ kind: 'unset', groupId: layerId })
 }
 
 // From a panel control: opens its lane if it has one, makes

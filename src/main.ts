@@ -1,5 +1,6 @@
 import './zest'
 import './app.css'
+import './ui/tones.css'
 import { mount } from 'svelte'
 import App from './App.svelte'
 

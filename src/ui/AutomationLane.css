@@ -1,36 +1,17 @@
 .automation-lane {
 	--lane-height: 5.5rem;
-	--lane-tone: var(--purple);
+	--lane-tone: var(--tone, var(--purple));
+	position: relative;
 	--lane-indent: calc(var(--spacing-5) + var(--spacing-2) + var(--spacing-2) + var(--spacing-2));
 	display: grid;
 	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
-	height: var(--lane-height);
+	height: var(--lane-custom-height, var(--lane-height));
 	border-bottom: 1px solid var(--border);
-	transition: height var(--motion-base) var(--ease-move);
 }
 
+/* Collapsed ignores a custom height, then gets it back. */
 .automation-lane.isCollapsed {
-	--lane-height: var(--spacing-8);
-}
-
-.automation-lane.isTone1 {
-	--lane-tone: var(--purple);
-}
-
-.automation-lane.isTone2 {
-	--lane-tone: var(--pink);
-}
-
-.automation-lane.isTone3 {
-	--lane-tone: var(--success);
-}
-
-.automation-lane.isTone4 {
-	--lane-tone: var(--warning);
-}
-
-.automation-lane.isTone5 {
-	--lane-tone: var(--color-neutral-7);
+	height: var(--spacing-8);
 }
 
 /* Header column */

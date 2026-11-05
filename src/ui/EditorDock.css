@@ -75,14 +75,7 @@
 	background: var(--paper);
 }
 
-.editor-row.isWave {
-	height: var(--spacing-14);
-	background: var(--paper);
-}
 
-.editor-row.isWave > [data-track] {
-	background: var(--bg);
-}
 
 .editor-row.isOverview {
 	height: var(--spacing-8);
@@ -111,7 +104,6 @@
 /* Header cells */
 
 .editor-corner,
-.editor-song,
 .editor-overview-label {
 	display: flex;
 	align-items: center;
@@ -124,9 +116,6 @@
 	padding: 0 var(--spacing-2) 0 var(--spacing-3);
 }
 
-.editor-song {
-	padding: 0 var(--spacing-3);
-}
 
 .editor-overview-label {
 	padding: 0 var(--spacing-3);
@@ -194,39 +183,9 @@
 	outline-offset: 1px;
 }
 
-.editor-song-icon {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	flex: none;
-	width: var(--spacing-8);
-	height: var(--spacing-8);
-	border-radius: var(--radius-md);
-	background: var(--paper-soft);
-	color: var(--muted);
-	font-size: var(--font-size-3);
-}
 
-.editor-song-text {
-	display: flex;
-	flex-direction: column;
-	min-width: 0;
-}
 
-.editor-song-name {
-	overflow: hidden;
-	color: var(--foreground);
-	font-size: var(--font-size-2);
-	font-weight: 600;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
 
-.editor-song-meta {
-	color: var(--secondary);
-	font-size: var(--font-size-1);
-	font-variant-numeric: tabular-nums;
-}
 
 /* Add lane row, which also fills the space under the lanes */
 
@@ -265,9 +224,6 @@
 		--editor-header-width: 11rem;
 	}
 
-	.editor-song-icon {
-		display: none;
-	}
 }
 
 /* A layer's lanes stack as one block under its header. */

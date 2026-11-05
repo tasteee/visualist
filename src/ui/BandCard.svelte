@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getRowColor } from '../appearance.svelte'
 	import { BAND_OUTPUT_OPTIONS, BAND_PRESETS, formatBandRange } from '../engine/bands'
 	import type { BandRangeT } from '../engine/bands'
 	import { MAX_BAND_RELEASE, MIN_BAND_RELEASE, getBandSourceId } from '../engine/sources'
@@ -21,6 +22,7 @@
 	let presetKey = $state(0)
 
 	const spectrum = $derived(getDetectedAnalysis().spectrum)
+	const bandColor = $derived(getRowColor(props.band.id, 'amber'))
 	const sourceId = $derived(getBandSourceId(props.band.id))
 	const liveLevel = $derived(getLiveSignals()[sourceId] ?? 0)
 	const isHits = $derived(props.band.output === 'hits')
@@ -51,7 +53,7 @@
 	const handleSensitivityChange = (value: number) => setBandSensitivity(props.band.id, value)
 </script>
 
-<SourceCard tone="band" name={props.band.name} meta={metaLabel} level={liveLevel} removeLabel="Remove band" onrename={handleRename} onremove={handleRemove}>
+<SourceCard color={bandColor} isBand name={props.band.name} meta={metaLabel} level={liveLevel} removeLabel="Remove band" onrename={handleRename} onremove={handleRemove}>
 	<SpectrumPicker {spectrum} lowHz={props.band.lowHz} highHz={props.band.highHz} label={props.band.name} onchange={handleRangeChange} />
 	{#key presetKey}
 		<z-select size="sm" value="" placeholder="Jump to a preset" options={PRESET_OPTIONS} aria-label="Band preset" onchange={handlePresetChange}></z-select>

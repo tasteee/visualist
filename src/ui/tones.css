@@ -1,0 +1,38 @@
+/* Row colors. Any element with data-tone gets --tone, which
+   its own styles read. Names come from engine/palette.ts. */
+
+[data-tone='purple'] {
+	--tone: var(--purple);
+}
+
+[data-tone='lavender'] {
+	--tone: var(--color-secondary-6);
+}
+
+[data-tone='pink'] {
+	--tone: var(--pink);
+}
+
+[data-tone='blush'] {
+	--tone: var(--color-primary-6);
+}
+
+[data-tone='red'] {
+	--tone: var(--destructive);
+}
+
+[data-tone='amber'] {
+	--tone: var(--warning);
+}
+
+[data-tone='green'] {
+	--tone: var(--success);
+}
+
+[data-tone='silver'] {
+	--tone: var(--color-neutral-7);
+}
+
+[data-tone='slate'] {
+	--tone: var(--color-neutral-5);
+}

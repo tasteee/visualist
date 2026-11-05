@@ -166,3 +166,20 @@ export const deleteAsset = async (assetId: string): Promise<void> => {
 		console.warn('vink: could not remove a stored layer file')
 	}
 }
+
+// The project's song lives in the same store as layer files,
+// under a fixed key, so a reload can bring the whole project
+// back. A File keeps its name when stored.
+const SONG_FILE_KEY = 'project-song'
+
+export const saveSongFile = async (file: File): Promise<void> => {
+	await saveFile(SONG_FILE_KEY, file)
+}
+
+export const readSongFile = async (fallbackName: string): Promise<File | null> => {
+	const stored = await readFile(SONG_FILE_KEY)
+	if (stored === null) return null
+	const isFile = stored instanceof File
+	if (isFile) return stored
+	return new File([stored], fallbackName, { type: stored.type })
+}

@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { getLaneColor } from '../appearance.svelte'
 	import { automateTarget, automation, revealLane } from '../automation.svelte'
-	import { findLaneForTarget, getLiveLaneValue, getTargetTone } from '../engine/automation'
+	import { findLaneForTarget, getLiveLaneValue } from '../engine/automation'
 	import { findLayerParam } from '../engine/layers'
 	import { applyModulation } from '../engine/modulation'
 	import { layerStore } from '../layers.svelte'
@@ -20,7 +21,7 @@
 	const spec = $derived(findLayerParam(props.paramKey))
 	const lane = $derived(findLaneForTarget(automation.lanes, target))
 	const isAutomated = $derived(lane !== undefined && lane.points.length > 0)
-	const automationTone = $derived(isAutomated ? getTargetTone(target, layers) : 0)
+	const automationColor = $derived(isAutomated && lane !== undefined ? getLaneColor(lane, layers) : null)
 	const modulation = $derived(props.layer.modulations[props.paramKey] ?? null)
 
 	// An automated param follows its lane at the playhead and
@@ -69,7 +70,7 @@
 	max={spec.max}
 	step={spec.step}
 	suffix={spec.suffix}
-	{automationTone}
+	{automationColor}
 	onreveal={handleReveal}
 	onautomate={app.hasAudio ? handleAutomate : undefined}
 	{modulation}

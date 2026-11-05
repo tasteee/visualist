@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte'
 	import { toaster } from '@tasteee/zest'
 	import { checkIsMidiFile, openMidiFile } from './midiImport.svelte'
+	import { restoreProject, startProjectWatchers } from './project.svelte'
 	import { app, loadAudioFile, startApp, togglePlay } from './store.svelte'
 	import DropZone from './ui/DropZone.svelte'
 	import EditorDock from './ui/EditorDock.svelte'
@@ -53,8 +54,16 @@
 		void openMidiFile(file)
 	}
 
+	// The app starts on the demo, then brings back the last
+	// project if one was saved.
+	const bootApp = async () => {
+		await startApp()
+		startProjectWatchers()
+		await restoreProject()
+	}
+
 	onMount(() => {
-		void startApp()
+		void bootApp()
 	})
 </script>
 

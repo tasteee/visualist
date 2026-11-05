@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { getRowColor } from '../appearance.svelte'
 	import { HIT_ROLE_OPTIONS, formatHitCount } from '../engine/hits'
+	import { getRoleColor } from '../engine/palette'
 	import { MAX_TRACK_DECAY, MIN_TRACK_DECAY, getTrackSourceId } from '../engine/sources'
 	import type { HitRoleT, HitShapeT, HitTrackT } from '../engine/types'
 	import { removeTrack, renameTrack, setTrackDecay, setTrackRole, setTrackShape } from '../sources.svelte'
@@ -19,7 +21,7 @@
 		{ value: 'gate', label: 'Hold notes' }
 	]
 
-	const tone = $derived(props.track.role === 'none' ? 'hits' : props.track.role)
+	const trackColor = $derived(getRowColor(props.track.id, getRoleColor(props.track.role)))
 	const sourceId = $derived(getTrackSourceId(props.track.id))
 	const liveLevel = $derived(getLiveSignals()[sourceId] ?? 0)
 	const metaLabel = $derived(formatHitCount(props.track.hits.length))
@@ -40,7 +42,7 @@
 	const handleDecayChange = (value: number) => setTrackDecay(props.track.id, value)
 </script>
 
-<SourceCard tone={tone} name={props.track.name} meta={metaLabel} level={liveLevel} removeLabel="Remove track" onrename={handleRename} onremove={handleRemove}>
+<SourceCard color={trackColor} name={props.track.name} meta={metaLabel} level={liveLevel} removeLabel="Remove track" onrename={handleRename} onremove={handleRemove}>
 	<z-field label="Role">
 		<z-select size="sm" value={props.track.role} options={HIT_ROLE_OPTIONS} aria-label="Role" onchange={handleRoleChange}></z-select>
 	</z-field>

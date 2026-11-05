@@ -137,6 +137,18 @@
 	transform: translateX(-50%);
 }
 
+.time-ruler-marker {
+	position: absolute;
+	bottom: 0;
+	left: var(--ruler-x);
+	width: var(--spacing-3);
+	height: var(--spacing-2);
+	background: var(--color-neutral-5);
+	clip-path: polygon(0 0, 100% 0, 100% 40%, 50% 100%, 0 40%);
+	pointer-events: none;
+	transform: translateX(-50%);
+}
+
 .time-ruler-hover {
 	position: absolute;
 	top: 0;

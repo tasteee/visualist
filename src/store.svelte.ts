@@ -12,6 +12,7 @@ import { automation, clampLanesToDuration, startAutomationWatchers } from './aut
 import { applyAutomation, applyLayerAutomation } from './engine/automation'
 import { applySettingsModulation, computeSignals } from './engine/modulation'
 import { applyPostEffects, getPostAmounts } from './engine/post'
+import { startAppearanceWatchers } from './appearance.svelte'
 import { layerStore, restoreLayerAssets, startLayerWatchers } from './layers.svelte'
 import { buildSongKey, getCompiledSources, getRoleHits, startSourceWatchers, switchSong } from './sources.svelte'
 import type { RoleHitsT } from './sources.svelte'
@@ -21,6 +22,7 @@ import type { LogoLayersT } from './engine/logoLayers'
 import { startRecorder, pickRecorderFormat } from './engine/recorder'
 import type { ActiveRecordingT, RecorderFormatT } from './engine/recorder'
 import { drawFrame } from './engine/render'
+import { saveSongFile } from './engine/assets'
 import { getFadeLevel } from './engine/fades'
 import { getSizeForShortSide } from './engine/formats'
 import type { SizeT } from './engine/formats'
@@ -61,6 +63,9 @@ type AppStateT = {
 	isPlaying: boolean
 	isRecording: boolean
 	currentTime: number
+	// Where the user last put the playhead. Play starts here and
+	// stop comes back here, so a tweak can be heard again fast.
+	playMarker: number
 	recordProgress: number
 	statusText: string
 	statusTone: StatusToneT
@@ -95,6 +100,7 @@ export const app = $state<AppStateT>({
 	isPlaying: false,
 	isRecording: false,
 	currentTime: 0,
+	playMarker: 0,
 	recordProgress: 0,
 	statusText: DEMO_STATUS,
 	statusTone: 'neutral',
@@ -346,14 +352,19 @@ export const attachCanvas = (canvas: HTMLCanvasElement): (() => void) => {
 	}
 }
 
-const handleEnded = (): void => {
-	if (app.isRecording) return
-	setPausedPosition(0)
-	app.isPlaying = false
-	app.currentTime = 0
+const returnToMarker = (): void => {
+	setPausedPosition(app.playMarker)
+	app.currentTime = app.playMarker
 	markDirty()
 }
 
+const handleEnded = (): void => {
+	if (app.isRecording) return
+	app.isPlaying = false
+	returnToMarker()
+}
+
+// Stop goes back to the marker instead of pausing in place.
 export const togglePlay = (): void => {
 	const canPlay = app.hasAudio && audioBuffer !== null && !app.isRecording
 	if (!canPlay || audioBuffer === null) return
@@ -361,22 +372,23 @@ export const togglePlay = (): void => {
 	if (app.isPlaying) {
 		pausePlayback()
 		app.isPlaying = false
-		markDirty()
+		returnToMarker()
 		return
 	}
 
-	const isAtEnd = getPlaybackTime() >= app.duration - 0.02
-	const startAt = isAtEnd ? 0 : getPlaybackTime()
-	startPlayback(audioBuffer, startAt, null, handleEnded)
+	startPlayback(audioBuffer, app.playMarker, null, handleEnded)
 	app.isPlaying = true
 }
 
+// Every seek is the user placing the playhead, so it moves the
+// marker too.
 export const seekTo = (seconds: number): void => {
 	const canSeek = app.hasAudio && audioBuffer !== null && !app.isRecording
 	if (!canSeek || audioBuffer === null) return
 
 	const target = clamp(seconds, 0, Math.max(0, app.duration - 0.01))
 	app.currentTime = target
+	app.playMarker = target
 	markDirty()
 	if (app.isPlaying) startPlayback(audioBuffer, target, null, handleEnded)
 	if (!app.isPlaying) setPausedPosition(target)
@@ -427,8 +439,24 @@ const applyAnalysis = (nextAnalysis: AnalysisT): void => {
 	app.downbeatAnchor = null
 }
 
-export const loadAudioFile = async (file: File): Promise<void> => {
-	if (app.isRecording || app.isAnalyzing) return
+type LoadOptionsT = {
+	// A restored song is already stored, so it is not saved again.
+	isRestore: boolean
+}
+
+// Keeps the song so a reload can bring the project back. A
+// failed save never blocks the song itself.
+const storeSongFile = async (file: File): Promise<void> => {
+	try {
+		await saveSongFile(file)
+	} catch {
+		toaster.show({ title: 'Song not saved', description: 'It will need loading again after a reload.', tone: 'warning' })
+	}
+}
+
+// True when the song loaded.
+export const loadAudioFile = async (file: File, options: LoadOptionsT = { isRestore: false }): Promise<boolean> => {
+	if (app.isRecording || app.isAnalyzing) return false
 	app.isAnalyzing = true
 	app.analysisProgress = 0
 	setStatus(`Reading ${file.name}…`)
@@ -449,6 +477,7 @@ export const loadAudioFile = async (file: File): Promise<void> => {
 		switchSong(buildSongKey(file.name, decoded.duration))
 		app.kickCount = result.kicks.length
 		app.currentTime = 0
+		app.playMarker = 0
 		setPausedPosition(0)
 		applyAnalysis(result)
 		if (!app.isTitleEdited) app.title = titleFromFileName(file.name)
@@ -456,10 +485,13 @@ export const loadAudioFile = async (file: File): Promise<void> => {
 
 		const length = formatTime(decoded.duration)
 		setStatus(`${file.name} · ${length} · ${result.kicks.length} kicks · ${Math.round(result.bpm)} BPM`, 'success')
+		if (!options.isRestore) void storeSongFile(file)
+		return true
 	} catch {
 		const message = 'That file could not be read. Try a WAV, MP3 or M4A.'
 		setStatus(message, 'danger')
 		toaster.show({ title: 'Could not load audio', description: message, tone: 'danger' })
+		return false
 	} finally {
 		app.isAnalyzing = false
 	}
@@ -570,6 +602,7 @@ export const startApp = async (): Promise<void> => {
 	startLayerWatchers()
 	startAutomationWatchers()
 	startSourceWatchers()
+	startAppearanceWatchers()
 	const format = pickRecorderFormat()
 	app.recorderLabel = format === null ? 'No video recording' : format.label
 

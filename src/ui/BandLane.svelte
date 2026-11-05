@@ -1,5 +1,6 @@
 <script lang="ts">
 	import SlidersHorizontalIcon from 'phosphor-svelte/lib/SlidersHorizontalIcon'
+	import { getRowColor, getRowHeightStyle } from '../appearance.svelte'
 	import { PATH_WIDTH } from '../engine/automation'
 	import { formatBandRange } from '../engine/bands'
 	import { getBandSignal, getBandSourceId } from '../engine/sources'
@@ -8,11 +9,13 @@
 	import type { BandSourceT, CompiledBandT, HitT } from '../engine/types'
 	import { app, getLiveSignals } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
+	import ColorDot from './ColorDot.svelte'
+	import RowResizer from './RowResizer.svelte'
 	import './BandLane.css'
 
 	// A read-only view of what a frequency band responds to, so
 	// its range can be tuned against the song. Edited in the
-	// Sync panel.
+	// Audio panel.
 	type BandLanePropsT = {
 		band: BandSourceT
 		compiled: CompiledBandT | undefined
@@ -26,6 +29,8 @@
 	const PATH_HEIGHT = 100
 
 	const view = $derived(timeline.view)
+	const bandColor = $derived(getRowColor(props.band.id, 'amber'))
+	const customHeight = $derived(getRowHeightStyle(props.band.id))
 	const rangeLabel = $derived(formatBandRange(props.band))
 	const isHits = $derived(props.band.output === 'hits')
 	const outputLabel = $derived(isHits ? 'Hits' : 'Level')
@@ -74,13 +79,13 @@
 	const getHitX = (hit: HitT): number => timeToPercent(hit.time, view)
 </script>
 
-<div class="band-lane">
+<div class="band-lane" data-tone={bandColor} style:--band-lane-custom-height={customHeight}>
 	<div class="band-lane-header">
 		<div class="band-lane-title">
-			<span class="band-lane-dot"></span>
+			<ColorDot rowId={props.band.id} color={bandColor} label={props.band.name} />
 			<span class="band-lane-name">{props.band.name}</span>
-			<z-tooltip content="Edit in Sync" placement="top" openDelay={300}>
-				<button class="band-lane-action" type="button" aria-label="Edit {props.band.name} in Sync" onclick={props.onedit}>
+			<z-tooltip content="Edit in the Audio panel" placement="top" openDelay={300}>
+				<button class="band-lane-action" type="button" aria-label="Edit {props.band.name} in the Audio panel" onclick={props.onedit}>
 					<SlidersHorizontalIcon weight="bold" />
 				</button>
 			</z-tooltip>
@@ -114,4 +119,6 @@
 			<span class="band-lane-empty">Load a song to see this band</span>
 		{/if}
 	</div>
+
+	<RowResizer rowId={props.band.id} label={props.band.name} />
 </div>

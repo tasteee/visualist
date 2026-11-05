@@ -14,7 +14,7 @@
 
 	const PRESET_OPTIONS = BAND_PRESETS.map((preset) => ({ value: preset.value, label: preset.label }))
 
-	const HITS_DESCRIPTION = 'Hits you place by hand, for exact sync. Edit them in the Sync lanes. A track can drive Kick or Snare, so echoes and glitches follow it too.'
+	const HITS_DESCRIPTION = 'Hits you place by hand, for exact sync. Edit them under the audio layer in the timeline. A track can drive Kick or Snare, so echoes and glitches follow it too.'
 	const BANDS_DESCRIPTION = 'Follow any slice of the spectrum. Start from a preset, then drag the range over the song’s spectrum.'
 
 	let addBandKey = $state(0)

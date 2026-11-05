@@ -218,7 +218,10 @@ export type AutomationPointT = {
 
 // What a lane drives: a global setting, a layer's transform
 // param, or the amount of one effect on a layer.
+// unset is a new lane that has not been given a control yet.
+// It still belongs to a group: 'global' or a layer id.
 export type LaneTargetT =
+	| { kind: 'unset'; groupId: string }
 	| { kind: 'setting'; key: AutomatableKeyT }
 	| { kind: 'layer'; layerId: string; param: LayerParamKeyT }
 	| { kind: 'fx'; layerId: string; fxId: string }

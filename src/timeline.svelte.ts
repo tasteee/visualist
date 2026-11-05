@@ -1,12 +1,14 @@
 import { clamp } from './engine/settings'
 import { clampView, getViewEnd, panView, zoomView } from './engine/timeline'
-import type { TimelineViewT } from './engine/timeline'
+import type { GridDivisionT, TimelineViewT } from './engine/timeline'
 import { app } from './store.svelte'
 
 type TimelineStateT = {
 	view: TimelineViewT
 	isFollowing: boolean
 	isSnapping: boolean
+	gridDivision: GridDivisionT
+	isTriplet: boolean
 	hoverTime: number | null
 	dockHeight: number
 	trackWidth: number
@@ -36,6 +38,8 @@ export const timeline = $state<TimelineStateT>({
 	view: { start: 0, span: 1 },
 	isFollowing: true,
 	isSnapping: true,
+	gridDivision: 'auto',
+	isTriplet: false,
 	hoverTime: null,
 	dockHeight: readStoredDockHeight(),
 	trackWidth: 0
@@ -96,6 +100,14 @@ export const toggleFollowing = (): void => {
 
 export const toggleSnapping = (): void => {
 	timeline.isSnapping = !timeline.isSnapping
+}
+
+export const setGridDivision = (division: GridDivisionT): void => {
+	timeline.gridDivision = division
+}
+
+export const toggleTriplet = (): void => {
+	timeline.isTriplet = !timeline.isTriplet
 }
 
 export const setHoverTime = (time: number | null): void => {

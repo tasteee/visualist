@@ -11,7 +11,7 @@
 
 	const TABS = [
 		{ value: 'settings', label: 'Settings' },
-		{ value: 'sources', label: 'Sync' },
+		{ value: 'sources', label: 'Audio' },
 		{ value: 'layers', label: 'Layers' },
 		{ value: 'post', label: 'Post' },
 		{ value: 'export', label: 'Export' }

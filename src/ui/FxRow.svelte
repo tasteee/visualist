@@ -1,7 +1,8 @@
 <script lang="ts">
+	import { getLaneColor } from '../appearance.svelte'
 	import XIcon from 'phosphor-svelte/lib/XIcon'
 	import { automateTarget, automation, revealLane } from '../automation.svelte'
-	import { findLaneForTarget, getLiveLaneValue, getTargetTone } from '../engine/automation'
+	import { findLaneForTarget, getLiveLaneValue } from '../engine/automation'
 	import { findFxSpec } from '../engine/layers'
 	import { applyModulation } from '../engine/modulation'
 	import { layerStore } from '../layers.svelte'
@@ -23,7 +24,7 @@
 	const layers = $derived(layerStore.layers as LayerT[])
 	const lane = $derived(findLaneForTarget(automation.lanes, target))
 	const isAutomated = $derived(lane !== undefined && lane.points.length > 0)
-	const automationTone = $derived(isAutomated ? getTargetTone(target, layers) : 0)
+	const automationColor = $derived(isAutomated && lane !== undefined ? getLaneColor(lane, layers) : null)
 
 	const getBaseValue = (): number => {
 		if (!isAutomated || lane === undefined) return props.fx.amount
@@ -67,7 +68,7 @@
 			min={spec.min}
 			max={spec.max}
 			step={spec.step}
-			{automationTone}
+			{automationColor}
 			onreveal={handleReveal}
 			onautomate={app.hasAudio ? handleAutomate : undefined}
 			modulation={props.fx.modulation}
