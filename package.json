@@ -12,7 +12,7 @@
 	},
 	"dependencies": {
 		"@fontsource/dm-sans": "^5.2.8",
-		"@tasteee/zest": "github:tasteee/zest#main",
+		"@tasteee/zest": "github:tasteee/zest#build",
 		"phosphor-svelte": "^3.1.1"
 	},
 	"devDependencies": {
