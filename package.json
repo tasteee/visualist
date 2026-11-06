@@ -4,15 +4,15 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "pnpm --filter @tasteee/zest build && vite --port 5179",
-		"build": "pnpm --filter @tasteee/zest build && svelte-check --tsconfig ./tsconfig.json && vite build",
+		"dev": "vite --port 5179",
+		"build": "svelte-check --tsconfig ./tsconfig.json && vite build",
 		"build:site": "svelte-check --tsconfig ./tsconfig.json && vite build --outDir ../blog/dist/vink --emptyOutDir",
 		"preview": "vite preview --port 5179",
 		"typecheck": "svelte-check --tsconfig ./tsconfig.json"
 	},
 	"dependencies": {
 		"@fontsource/dm-sans": "^5.2.8",
-		"@tasteee/zest": "workspace:*",
+		"@tasteee/zest": "github:tasteee/zest#main",
 		"phosphor-svelte": "^3.1.1"
 	},
 	"devDependencies": {
