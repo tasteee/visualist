@@ -1,5 +1,5 @@
 .automation-lane {
-	--lane-height: 5.5rem;
+	--lane-height: 96px;
 	--lane-tone: var(--tone, var(--purple));
 	position: relative;
 	--lane-indent: calc(var(--spacing-5) + var(--spacing-2) + var(--spacing-2) + var(--spacing-2));
@@ -9,9 +9,9 @@
 	border-bottom: 1px solid var(--border);
 }
 
-/* Collapsed ignores a custom height, then gets it back. */
-.automation-lane.isCollapsed {
-	height: var(--spacing-8);
+/* Folded rows ignore a stored height, then get it back. */
+.automation-lane.isFolded {
+	height: 28px;
 }
 
 /* Header column */
@@ -20,10 +20,10 @@
 	position: relative;
 	display: flex;
 	flex-direction: column;
-	justify-content: center;
+	justify-content: flex-start;
 	gap: var(--spacing-1);
 	min-width: 0;
-	padding: 0 var(--spacing-3) 0 var(--spacing-2);
+	padding: var(--spacing-2) var(--spacing-3) 0 var(--spacing-2);
 	border-right: 1px solid var(--border);
 	background: var(--paper);
 	transition: background-color var(--motion-base) ease;
@@ -42,8 +42,23 @@
 	transition: opacity var(--motion-fast) ease;
 }
 
-.automation-lane.isActive .automation-lane-header::before {
+.automation-lane.isActive .automation-lane-header::before,
+.automation-lane.isSelected .automation-lane-header::before {
 	opacity: 1;
+}
+
+.automation-lane.isSelected .automation-lane-header {
+	background: color-mix(in oklab, var(--lane-tone) 9%, var(--paper));
+}
+
+.automation-lane.isFolded .automation-lane-header {
+	padding-top: 2px;
+}
+
+.automation-lane.isBypassed .automation-lane-name,
+.automation-lane.isBypassed .automation-lane-value,
+.automation-lane.isBypassed .automation-lane-graph {
+	opacity: 0.4;
 }
 
 /* Lanes under a layer step in from the group's header, with a
@@ -98,7 +113,7 @@
 	transition: transform var(--motion-base) var(--ease-move);
 }
 
-.automation-lane.isCollapsed .automation-lane-caret svg {
+.automation-lane.isFolded .automation-lane-caret svg {
 	transform: rotate(0deg);
 }
 
@@ -112,19 +127,6 @@
 	outline-offset: 1px;
 }
 
-.automation-lane-dot {
-	flex: none;
-	width: var(--spacing-2);
-	height: var(--spacing-2);
-	border-radius: 50%;
-	background: var(--lane-tone);
-}
-
-.automation-lane-select {
-	flex: 1;
-	min-width: 0;
-}
-
 .automation-lane-name {
 	flex: 1;
 	min-width: 0;
@@ -132,8 +134,10 @@
 	color: var(--foreground);
 	font-size: var(--font-size-2);
 	font-weight: 500;
+	line-height: var(--spacing-5);
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	user-select: none;
 }
 
 .automation-lane-meta {
@@ -141,7 +145,7 @@
 	align-items: center;
 	gap: var(--spacing-2);
 	min-width: 0;
-	padding-left: var(--lane-indent);
+	padding-left: calc(var(--spacing-5) + var(--spacing-2));
 }
 
 .automation-lane-value {
@@ -232,7 +236,7 @@
 	user-select: none;
 }
 
-.automation-lane.isCollapsed .automation-lane-track {
+.automation-lane.isFolded .automation-lane-track {
 	cursor: default;
 }
 
@@ -267,7 +271,7 @@
 	inset: var(--spacing-3) 0;
 }
 
-.automation-lane.isCollapsed .automation-lane-plot {
+.automation-lane.isFolded .automation-lane-plot {
 	inset: var(--spacing-1) 0;
 }
 
@@ -292,7 +296,7 @@
 	vector-effect: non-scaling-stroke;
 }
 
-.automation-lane.isCollapsed .automation-lane-line {
+.automation-lane.isFolded .automation-lane-line {
 	stroke-width: 1.25;
 }
 
@@ -434,4 +438,19 @@
 
 .automation-lane-pill.isBelow {
 	transform: translate(-50%, var(--spacing-3));
+}
+
+/* Selection box */
+
+.automation-lane-marquee {
+	position: absolute;
+	top: var(--lane-y);
+	left: var(--lane-x);
+	z-index: 1;
+	width: var(--marquee-width);
+	height: var(--marquee-height);
+	border: 1px solid var(--lane-tone);
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--lane-tone) 12%, transparent);
+	pointer-events: none;
 }

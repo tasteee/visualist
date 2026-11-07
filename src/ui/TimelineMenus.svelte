@@ -1,23 +1,25 @@
 <script lang="ts">
 	import CheckIcon from 'phosphor-svelte/lib/CheckIcon'
-	import { setRowColor } from '../appearance.svelte'
-	import { PALETTE } from '../engine/palette'
-	import type { ColorNameT } from '../engine/palette'
 	import { GRID_DIVISIONS, formatGridDivision } from '../engine/timeline'
 	import type { GridDivisionT } from '../engine/timeline'
 	import { setGridDivision, timeline, toggleSnapping, toggleTriplet } from '../timeline.svelte'
-	import { closeTimelineMenus, timelineMenus } from '../timelineMenus.svelte'
+	import { closeTimelineMenus as closeMenus, timelineMenus } from '../timelineMenus.svelte'
+	import { focusShell } from './focus'
 	import './TimelineMenus.css'
 
-	// The palette and grid menus, placed where they were opened
+	// The grid menu, placed where it was opened
 	// and kept inside the window.
 	const MENU_MARGIN = 8
 
-	let colorRoot = $state<HTMLDivElement | undefined>(undefined)
 	let gridRoot = $state<HTMLDivElement | undefined>(undefined)
 
-	const colorMenu = $derived(timelineMenus.color)
 	const gridMenu = $derived(timelineMenus.grid)
+
+	// A closed menu hands focus back to the editor.
+	const closeTimelineMenus = () => {
+		closeMenus()
+		focusShell()
+	}
 
 	const getDivisionLabel = (division: GridDivisionT): string => {
 		const isAuto = division === 'auto'
@@ -26,12 +28,6 @@
 	}
 
 	const checkIsDivisionActive = (division: GridDivisionT): boolean => timeline.gridDivision === division
-
-	const handleColorPick = (color: ColorNameT) => {
-		if (colorMenu === null) return
-		setRowColor(colorMenu.rowId, color)
-		closeTimelineMenus()
-	}
 
 	const handleDivisionPick = (division: GridDivisionT) => {
 		setGridDivision(division)
@@ -55,23 +51,17 @@
 	}
 
 	$effect(() => {
-		void colorMenu
-		keepInWindow(colorRoot)
-	})
-
-	$effect(() => {
 		void gridMenu
 		keepInWindow(gridRoot)
 	})
 
 	$effect(() => {
-		const isOpen = colorMenu !== null || gridMenu !== null
+		const isOpen = gridMenu !== null
 		if (!isOpen) return
 		const handlePointerDown = (event: PointerEvent) => {
 			const path = event.composedPath()
-			const isInColor = colorRoot instanceof HTMLElement && path.includes(colorRoot)
 			const isInGrid = gridRoot instanceof HTMLElement && path.includes(gridRoot)
-			if (isInColor || isInGrid) return
+			if (isInGrid) return
 			closeTimelineMenus()
 		}
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -85,26 +75,6 @@
 		}
 	})
 </script>
-
-{#if colorMenu !== null}
-	<div class="timeline-menu isPalette" bind:this={colorRoot} role="dialog" aria-label="Pick a color" style:--menu-x="{colorMenu.x}px" style:--menu-y="{colorMenu.y}px">
-		<span class="timeline-menu-eyebrow">Color</span>
-		<div class="timeline-menu-swatches">
-			{#each PALETTE as option (option.name)}
-				<button
-					class="timeline-menu-swatch"
-					class:isActive={colorMenu.color === option.name}
-					type="button"
-					data-tone={option.name}
-					aria-label={option.label}
-					aria-pressed={colorMenu.color === option.name}
-					title={option.label}
-					onclick={() => handleColorPick(option.name)}
-				></button>
-			{/each}
-		</div>
-	</div>
-{/if}
 
 {#if gridMenu !== null}
 	<div class="timeline-menu" bind:this={gridRoot} role="menu" aria-label="Grid" style:--menu-x="{gridMenu.x}px" style:--menu-y="{gridMenu.y}px">

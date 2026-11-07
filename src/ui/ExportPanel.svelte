@@ -1,5 +1,6 @@
 <script lang="ts">
 	import RecordIcon from 'phosphor-svelte/lib/RecordIcon'
+	import { recordHistory, recordHistoryCoalesced } from '../automation.svelte'
 	import { app, cancelRecording, formatTime, getClipLength, startRecording } from '../store.svelte'
 	import { getFormatPreset, getSizeForShortSide } from '../engine/formats'
 	import { MAX_FADE_SECONDS, TAIL_SECONDS } from '../engine/settings'
@@ -38,16 +39,19 @@
 
 	const handleFormat = (value: AspectRatioT) => {
 		if (app.isRecording) return
+		recordHistory()
 		app.settings.aspectRatio = value
 	}
 
 	const handleResolution = (value: string) => {
 		if (app.isRecording) return
+		recordHistory()
 		app.settings.resolution = value as ResolutionT
 	}
 
 	const handleFrameRate = (value: string) => {
 		if (app.isRecording) return
+		recordHistory()
 		app.settings.frameRate = Number(value) as FrameRateT
 	}
 
@@ -55,6 +59,7 @@
 		const detail = (event as CustomEvent<{ value: number }>).detail
 		const isNumber = Number.isFinite(detail.value)
 		if (!isNumber) return
+		recordHistoryCoalesced(`fade:${name}`)
 		app.settings[name] = Math.min(MAX_FADE_SECONDS, Math.max(0, detail.value))
 	}
 

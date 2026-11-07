@@ -6,7 +6,7 @@ export type EchoStyleNameT = 'hollow' | 'faintFill' | 'double' | 'sliced' | 'gri
 
 export type BuiltInSourceT = 'bass' | 'mids' | 'highs' | 'energy' | 'kick' | 'snare' | 'beat' | 'bar'
 
-// User sources: hit tracks and frequency bands, by id.
+// User sources: impulse tracks and frequency bands, by id.
 export type TrackSourceIdT = `track:${string}`
 export type BandSourceIdT = `band:${string}`
 export type CustomSourceIdT = TrackSourceIdT | BandSourceIdT
@@ -61,42 +61,42 @@ export type SettingsT = {
 
 export type SettingModulationsT = Partial<Record<AutomatableKeyT, ModulationT>>
 
-// length is how long the hit holds, in seconds. Only gate
+// length is how long the impulse holds, in seconds. Only gate
 // tracks use it.
-export type HitT = {
+export type ImpulseT = {
 	time: number
 	strength: number
 	length?: number
 }
 
-// A hit the user owns. strength runs 0-1, like MIDI velocity.
-export type TrackHitT = {
+// An impulse the user owns. strength runs 0-1, like MIDI velocity.
+export type TrackImpulseT = {
 	id: string
 	time: number
 	strength: number
 	length: number
 }
 
-// pulse fades out after the hit. gate holds for the hit's
+// pulse fades out after the impulse. gate holds for the impulse's
 // length, then fades.
-export type HitShapeT = 'pulse' | 'gate'
+export type ImpulseShapeT = 'pulse' | 'gate'
 
 // A track can stand in for the detected kicks or snares, so
 // echoes and glitch bursts follow it too.
-export type HitRoleT = 'none' | 'kick' | 'snare'
+export type ImpulseRoleT = 'none' | 'kick' | 'snare'
 
-export type HitTrackT = {
+export type ImpulseTrackT = {
 	id: string
 	name: string
-	hits: TrackHitT[]
+	impulses: TrackImpulseT[]
 	decay: number
-	shape: HitShapeT
-	role: HitRoleT
+	shape: ImpulseShapeT
+	role: ImpulseRoleT
 }
 
-// level is a smooth 0-1 curve. hits turns the band's onsets
+// level is a smooth 0-1 curve. impulses turns the band's onsets
 // into pulses, like a kick or snare.
-export type BandOutputT = 'level' | 'hits'
+export type BandOutputT = 'level' | 'impulses'
 
 export type BandSourceT = {
 	id: string
@@ -113,16 +113,16 @@ export type BandSourceT = {
 export type CompiledTrackT = {
 	sourceId: TrackSourceIdT
 	name: string
-	hits: HitT[]
+	impulses: ImpulseT[]
 	decay: number
-	shape: HitShapeT
+	shape: ImpulseShapeT
 }
 
 export type CompiledBandT = {
 	sourceId: BandSourceIdT
 	name: string
 	series: Float32Array
-	hits: HitT[]
+	impulses: ImpulseT[]
 	output: BandOutputT
 	release: number
 }
@@ -141,8 +141,8 @@ export type AnalysisT = {
 	level: Float32Array
 	energy: Float32Array
 	flux: Float32Array
-	kicks: HitT[]
-	snaps: HitT[]
+	kicks: ImpulseT[]
+	snaps: ImpulseT[]
 	bpm: number
 	beatOffset: number
 	spectrum: SpectrumT
@@ -244,6 +244,12 @@ export type AutomationLaneT = {
 	id: string
 	target: LaneTargetT
 	points: AutomationPointT[]
+	// A name the user chose. Without one the lane is named for
+	// the control it drives.
+	name?: string
+	// A bypassed lane keeps its points but stops driving its
+	// control, so the control falls back to its own value.
+	isBypassed?: boolean
 }
 
 export type LayerKindT = 'logo' | 'text' | 'image' | 'svg'

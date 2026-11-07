@@ -176,6 +176,31 @@ const getLogoSource = (target: CanvasRenderingContext2D, input: LayerStackInputT
 	return { canvas, width: input.frame.width, height: input.frame.height }
 }
 
+// The size a layer's picture takes in frame units, before its
+// own scale. The stage uses it to draw selection boxes. The logo
+// reports the size of its artwork, not of the frame it paints into.
+const LOGO_ART_WIDTH = 1110
+const LOGO_ART_HEIGHT = 416
+
+export type LayerSizeT = {
+	width: number
+	height: number
+}
+
+export const measureLayerSize = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT): LayerSizeT | null => {
+	const isLogo = layer.kind === 'logo'
+	if (isLogo) return { width: LOGO_ART_WIDTH * frame.sceneScale, height: LOGO_ART_HEIGHT * frame.sceneScale }
+	const isText = layer.kind === 'text'
+	if (isText) {
+		const content = layer.text
+		if (content === null) return null
+		const source = getTextSource(content, palette)
+		return source === null ? null : { width: source.width, height: source.height }
+	}
+	const source = getAssetSource(layer, palette, frame)
+	return source === null ? null : { width: source.width, height: source.height }
+}
+
 const getLayerSource = (target: CanvasRenderingContext2D, layer: LayerT, input: LayerStackInputT): LayerSourceT | null => {
 	const isLogo = layer.kind === 'logo'
 	if (isLogo) return getLogoSource(target, input)

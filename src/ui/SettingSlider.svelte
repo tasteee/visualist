@@ -1,6 +1,7 @@
 <script lang="ts">
 	import LightningIcon from 'phosphor-svelte/lib/LightningIcon'
 	import WaveSineIcon from 'phosphor-svelte/lib/WaveSineIcon'
+	import { recordHistoryCoalesced } from '../automation.svelte'
 	import { formatModulation } from '../engine/modulation'
 	import type { ColorNameT } from '../engine/palette'
 	import type { ModulationT } from '../engine/types'
@@ -71,6 +72,8 @@
 
 	const handleInput = (event: Event) => {
 		const detail = (event as CustomEvent<{ value: number }>).detail
+		const isChange = detail.value !== props.value
+		if (isChange) recordHistoryCoalesced(`slider:${props.label}`)
 		props.onchange(detail.value)
 	}
 

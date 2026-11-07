@@ -14,13 +14,20 @@ import {
 	toNormalized
 } from './engine/automation'
 import type { AutomationLaneT, AutomationPointT, LaneTargetT, LayerT } from './engine/types'
+import { appearance } from './appearance.svelte'
 import { findLayer, layerStore } from './layers.svelte'
-import { restoreTrackSnapshot, takeTrackSnapshot } from './sources.svelte'
+import { restoreTrackSnapshot, sources, takeTrackSnapshot } from './sources.svelte'
 import type { TrackSnapshotT } from './sources.svelte'
-import { app } from './store.svelte'
+import { app, markDirty, setLoopRegion } from './store.svelte'
+import type { SettingsT } from './engine/types'
 
 type AutomationStateT = {
 	lanes: AutomationLaneT[]
+	// The lane whose points are selected, and which ones. A
+	// selection lives on one lane at a time.
+	selectedPointLaneId: string | null
+	selectedPointIds: string[]
+	// The last point picked on its own, for shift-range.
 	selectedPointId: string | null
 	collapsedLaneIds: string[]
 	// Groups are 'global' or a layer id.
@@ -71,6 +78,8 @@ const saveLanes = (lanes: AutomationLaneT[]): void => {
 
 export const automation = $state<AutomationStateT>({
 	lanes: loadLanes(),
+	selectedPointLaneId: null,
+	selectedPointIds: [],
 	selectedPointId: null,
 	collapsedLaneIds: [],
 	collapsedGroupIds: [],
@@ -79,19 +88,34 @@ export const automation = $state<AutomationStateT>({
 	redoDepth: 0
 })
 
-type LayerTimingT = {
-	startTime: number
-	endTime: number | null
+type RegionT = {
+	start: number
+	end: number
 }
 
-// One undo step: every lane, plus each layer's timing, the
-// stack order and the hit tracks, so clip drags, reorders and
-// hit edits all undo with the lanes.
+type AppearanceSnapshotT = {
+	colors: Record<string, string>
+	heights: Record<string, number>
+	collapsedLaneIds: string[]
+	collapsedGroupIds: string[]
+	collapsedTrackIds: string[]
+	isTriggersCollapsed: boolean
+}
+
+// One undo step: everything the user can change in the editor.
+// Lanes, the layer list with its params and effects, impulse
+// tracks, row looks, loop and export range, and the base
+// controls. Drags record once, so one gesture is one step.
 type HistoryEntryT = {
 	lanes: AutomationLaneT[]
-	layerTimings: Record<string, LayerTimingT>
-	layerOrder: string[]
-	hitTracks: TrackSnapshotT
+	layers: LayerT[]
+	impulseTracks: TrackSnapshotT
+	settings: SettingsT
+	appearance: AppearanceSnapshotT
+	loop: RegionT
+	isLoopEnabled: boolean
+	exportRange: RegionT
+	selectedLayerId: string | null
 }
 
 // History lives outside the proxy: plain snapshots, swapped in
@@ -99,19 +123,25 @@ type HistoryEntryT = {
 const undoStack: HistoryEntryT[] = []
 const redoStack: HistoryEntryT[] = []
 
-const readLayerTimings = (): Record<string, LayerTimingT> => {
-	const timings: Record<string, LayerTimingT> = {}
-	for (const layer of layerStore.layers) {
-		timings[layer.id] = { startTime: layer.startTime, endTime: layer.endTime }
-	}
-	return timings
-}
+const takeAppearanceSnapshot = (): AppearanceSnapshotT => ({
+	colors: { ...appearance.colors },
+	heights: { ...appearance.heights },
+	collapsedLaneIds: [...automation.collapsedLaneIds],
+	collapsedGroupIds: [...automation.collapsedGroupIds],
+	collapsedTrackIds: [...sources.collapsedTrackIds],
+	isTriggersCollapsed: sources.isTriggersCollapsed
+})
 
 const takeSnapshot = (): HistoryEntryT => ({
 	lanes: $state.snapshot(automation.lanes) as AutomationLaneT[],
-	layerTimings: readLayerTimings(),
-	layerOrder: layerStore.layers.map((layer) => layer.id),
-	hitTracks: takeTrackSnapshot()
+	layers: $state.snapshot(layerStore.layers) as LayerT[],
+	impulseTracks: takeTrackSnapshot(),
+	settings: $state.snapshot(app.settings) as SettingsT,
+	appearance: takeAppearanceSnapshot(),
+	loop: { start: app.loopStart, end: app.loopEnd },
+	isLoopEnabled: app.isLoopEnabled,
+	exportRange: { start: app.trimStart, end: app.trimEnd },
+	selectedLayerId: layerStore.selectedLayerId
 })
 
 const syncHistoryDepth = (): void => {
@@ -126,43 +156,61 @@ export const recordHistory = (): void => {
 	const isOverLimit = undoStack.length > HISTORY_LIMIT
 	if (isOverLimit) undoStack.shift()
 	redoStack.length = 0
+	lastCoalescedKey = null
 	syncHistoryDepth()
+}
+
+// Sliders and number fields send a stream of changes. Edits
+// with the same key inside the window share one undo step.
+const COALESCE_WINDOW_MS = 900
+let lastCoalescedKey: string | null = null
+let lastCoalescedAt = 0
+
+export const recordHistoryCoalesced = (key: string): void => {
+	const now = performance.now()
+	const isSameKey = lastCoalescedKey === key
+	const isRecent = now - lastCoalescedAt < COALESCE_WINDOW_MS
+	lastCoalescedAt = now
+	if (isSameKey && isRecent) return
+	recordHistory()
+	lastCoalescedKey = key
 }
 
 const getLayers = (): LayerT[] => layerStore.layers as LayerT[]
 
 // Undo can bring back a lane whose layer has since been
 // deleted, so restored lanes are checked against the layers.
-const restoreLanes = (lanes: AutomationLaneT[]): void => {
-	automation.lanes = lanes.filter((lane) => checkIsTargetLive(lane.target, getLayers()))
+const restoreLanes = (lanes: AutomationLaneT[], layers: LayerT[]): void => {
+	automation.lanes = lanes.filter((lane) => checkIsTargetLive(lane.target, layers))
 	automation.selectedPointId = null
+	automation.selectedPointIds = []
+	automation.selectedPointLaneId = null
 	const laneIds = lanes.map((lane) => lane.id)
 	automation.collapsedLaneIds = automation.collapsedLaneIds.filter((laneId) => laneIds.includes(laneId))
 }
 
-const restoreLayerTimings = (timings: Record<string, LayerTimingT>): void => {
-	for (const layer of layerStore.layers) {
-		const timing = timings[layer.id]
-		if (timing === undefined) continue
-		layer.startTime = timing.startTime
-		layer.endTime = timing.endTime
-	}
-}
-
-// Layers added after the snapshot keep their place at the front,
-// in their current order, since the snapshot never saw them.
-const restoreLayerOrder = (order: string[]): void => {
-	const orderedLayers = order.map((layerId) => findLayer(layerId))
-	const knownLayers = orderedLayers.filter((layer): layer is LayerT => layer !== undefined)
-	const newerLayers = layerStore.layers.filter((layer) => !order.includes(layer.id))
-	layerStore.layers = [...knownLayers, ...newerLayers]
+const restoreAppearance = (snapshot: AppearanceSnapshotT): void => {
+	appearance.colors = snapshot.colors as typeof appearance.colors
+	appearance.heights = snapshot.heights
+	automation.collapsedLaneIds = snapshot.collapsedLaneIds
+	automation.collapsedGroupIds = snapshot.collapsedGroupIds
+	sources.collapsedTrackIds = snapshot.collapsedTrackIds
+	sources.isTriggersCollapsed = snapshot.isTriggersCollapsed
 }
 
 const restoreEntry = (entry: HistoryEntryT): void => {
-	restoreLanes(entry.lanes)
-	restoreLayerTimings(entry.layerTimings)
-	restoreLayerOrder(entry.layerOrder)
-	restoreTrackSnapshot(entry.hitTracks)
+	layerStore.layers = entry.layers
+	const isSelectionLive = entry.selectedLayerId === null || findLayer(entry.selectedLayerId) !== undefined
+	layerStore.selectedLayerId = isSelectionLive ? entry.selectedLayerId : null
+	restoreLanes(entry.lanes, entry.layers)
+	restoreTrackSnapshot(entry.impulseTracks)
+	Object.assign(app.settings, entry.settings)
+	restoreAppearance(entry.appearance)
+	app.trimStart = entry.exportRange.start
+	app.trimEnd = entry.exportRange.end
+	app.isLoopEnabled = entry.isLoopEnabled
+	setLoopRegion(entry.loop.start, entry.loop.end)
+	markDirty()
 }
 
 export const undo = (): void => {
@@ -254,14 +302,20 @@ export const automateTarget = (target: LaneTargetT): void => {
 	revealLane(laneId)
 }
 
-export const removeLane = (laneId: string): void => {
+export const removeLanes = (laneIds: string[]): void => {
+	const hasLanes = laneIds.length > 0
+	if (!hasLanes) return
 	recordHistory()
-	automation.lanes = automation.lanes.filter((lane) => lane.id !== laneId)
-	automation.collapsedLaneIds = automation.collapsedLaneIds.filter((candidate) => candidate !== laneId)
+	const doomedIds = new Set(laneIds)
+	automation.lanes = automation.lanes.filter((lane) => !doomedIds.has(lane.id))
+	automation.collapsedLaneIds = automation.collapsedLaneIds.filter((candidate) => !doomedIds.has(candidate))
+	clearPointSelection()
 }
 
-// Layer and effect removal takes their lanes along. It is not
-// an undo step, since the layer itself cannot be undone.
+export const removeLane = (laneId: string): void => removeLanes([laneId])
+
+// Layer and effect removal takes their lanes along. The undo
+// step is recorded by whoever removes the layer.
 export const removeLanesForLayer = (layerId: string): void => {
 	automation.lanes = automation.lanes.filter((lane) => getTargetGroupId(lane.target) !== layerId)
 }
@@ -278,7 +332,7 @@ export const setLaneTarget = (laneId: string, target: LaneTargetT): void => {
 	recordHistory()
 	lane.target = target
 	lane.points = [buildSeedPoint(target)]
-	automation.selectedPointId = null
+	clearPointSelection()
 }
 
 // Clearing keeps one point at the start, holding the value the
@@ -292,7 +346,25 @@ export const resetLane = (laneId: string): void => {
 	const seed = buildSeedPoint(lane.target)
 	if (hasFirstPoint) seed.value = firstPoint.value
 	lane.points = [seed]
-	automation.selectedPointId = null
+	clearPointSelection()
+}
+
+// A name commits once, as the whole name. A blank name goes
+// back to the control's own.
+export const renameLane = (laneId: string, name: string): void => {
+	const lane = findLane(laneId)
+	if (lane === undefined) return
+	recordHistory()
+	const trimmed = name.trim().slice(0, 40)
+	const isBlank = trimmed.length === 0
+	lane.name = isBlank ? undefined : trimmed
+}
+
+export const toggleLaneBypassed = (laneId: string): void => {
+	const lane = findLane(laneId)
+	if (lane === undefined) return
+	recordHistory()
+	lane.isBypassed = lane.isBypassed !== true
 }
 
 export const getLanesInGroup = (groupId: string): AutomationLaneT[] => {
@@ -351,8 +423,67 @@ export const revealLane = (laneId: string): void => {
 	revealTimer = window.setTimeout(() => (automation.revealedLaneId = null), REVEAL_MS)
 }
 
-export const selectPoint = (pointId: string | null): void => {
-	automation.selectedPointId = pointId
+// ---- Point selection ----------------------------------------
+
+export const clearPointSelection = (): void => {
+	automation.selectedPointLaneId = null
+	automation.selectedPointIds = []
+	automation.selectedPointId = null
+}
+
+export const selectPoints = (laneId: string, pointIds: string[], anchorId: string | null): void => {
+	automation.selectedPointLaneId = laneId
+	automation.selectedPointIds = pointIds
+	automation.selectedPointId = anchorId
+}
+
+export const checkIsPointSelected = (laneId: string, pointId: string): boolean => {
+	const isLane = automation.selectedPointLaneId === laneId
+	if (!isLane) return false
+	return automation.selectedPointIds.includes(pointId)
+}
+
+export const getSelectedPointCount = (laneId: string): number => {
+	const isLane = automation.selectedPointLaneId === laneId
+	if (!isLane) return 0
+	return automation.selectedPointIds.length
+}
+
+const getSelectedIdsOnLane = (laneId: string): string[] => {
+	const isLane = automation.selectedPointLaneId === laneId
+	if (!isLane) return []
+	return automation.selectedPointIds
+}
+
+export const togglePointSelected = (laneId: string, pointId: string): void => {
+	const currentIds = getSelectedIdsOnLane(laneId)
+	const isSelected = currentIds.includes(pointId)
+	const nextIds = isSelected ? currentIds.filter((candidate) => candidate !== pointId) : [...currentIds, pointId]
+	selectPoints(laneId, nextIds, pointId)
+}
+
+// Shift-click: everything between the last plainly picked point
+// and this one, on the same lane.
+export const selectPointRange = (laneId: string, pointId: string): void => {
+	const lane = findLane(laneId)
+	if (lane === undefined) return
+	const anchorId = automation.selectedPointId
+	const isAnchorOnLane = automation.selectedPointLaneId === laneId && anchorId !== null
+	if (!isAnchorOnLane) return selectPoints(laneId, [pointId], pointId)
+	const anchorIndex = lane.points.findIndex((point) => point.id === anchorId)
+	const targetIndex = lane.points.findIndex((point) => point.id === pointId)
+	const hasBoth = anchorIndex !== -1 && targetIndex !== -1
+	if (!hasBoth) return selectPoints(laneId, [pointId], pointId)
+	const first = Math.min(anchorIndex, targetIndex)
+	const last = Math.max(anchorIndex, targetIndex)
+	const rangeIds = lane.points.slice(first, last + 1).map((point) => point.id)
+	selectPoints(laneId, rangeIds, anchorId)
+}
+
+export const selectAllPoints = (laneId: string): void => {
+	const lane = findLane(laneId)
+	if (lane === undefined) return
+	selectPoints(laneId, lane.points.map((point) => point.id), null)
 }
 
 export const addPoint = (laneId: string, time: number, value: number): string | null => {
@@ -369,7 +500,23 @@ export const addPoint = (laneId: string, time: number, value: number): string | 
 	const isLast = insertIndex === -1
 	if (isLast) lane.points.push(point)
 	if (!isLast) lane.points.splice(insertIndex, 0, point)
+	selectPoints(laneId, [point.id], point.id)
 	return point.id
+}
+
+// The value a new point starts from: level with the point
+// before it, or the lane's base value when there is none.
+export const getValueForNewPoint = (laneId: string, time: number): number => {
+	const lane = findLane(laneId)
+	if (lane === undefined) return 0
+	const earlierPoints = lane.points.filter((point) => point.time <= time)
+	const previous = earlierPoints[earlierPoints.length - 1]
+	const hasPrevious = previous !== undefined
+	if (hasPrevious) return previous.value
+	const control = getTargetControl(lane.target, getLayers())
+	const base = getTargetBase(lane.target, app.settings, getLayers())
+	const hasBase = control !== null && base !== null
+	return hasBase ? toNormalized(control, base) : 0
 }
 
 // Points never pass their neighbors, so the order stays stable.
@@ -387,6 +534,19 @@ export const movePoint = (laneId: string, pointId: string, time: number, value: 
 	point.value = clamp(value, 0, 1)
 }
 
+export type PointMoveT = {
+	pointId: string
+	time: number
+	value: number
+}
+
+// Moves several points as one gesture. Each keeps its place in
+// the order, so the group can not fold over a neighbor.
+export const movePoints = (laneId: string, moves: PointMoveT[], duration: number): void => {
+	const sortedMoves = [...moves].sort((first, second) => first.time - second.time)
+	for (const move of sortedMoves) movePoint(laneId, move.pointId, move.time, move.value, duration)
+}
+
 export const setPointBend = (laneId: string, pointId: string, bend: number): void => {
 	const lane = findLane(laneId)
 	if (lane === undefined) return
@@ -400,8 +560,23 @@ export const deletePoint = (laneId: string, pointId: string): void => {
 	if (lane === undefined) return
 	recordHistory()
 	lane.points = lane.points.filter((point) => point.id !== pointId)
-	const wasSelected = automation.selectedPointId === pointId
-	if (wasSelected) automation.selectedPointId = null
+	const remainingIds = automation.selectedPointIds.filter((candidate) => candidate !== pointId)
+	automation.selectedPointIds = remainingIds
+	const wasAnchor = automation.selectedPointId === pointId
+	if (wasAnchor) automation.selectedPointId = null
+}
+
+// One undo step for the whole selection.
+export const deleteSelectedPoints = (): void => {
+	const laneId = automation.selectedPointLaneId
+	if (laneId === null) return
+	const lane = findLane(laneId)
+	const hasSelection = automation.selectedPointIds.length > 0
+	if (lane === undefined || !hasSelection) return
+	recordHistory()
+	const doomedIds = new Set(automation.selectedPointIds)
+	lane.points = lane.points.filter((point) => !doomedIds.has(point.id))
+	clearPointSelection()
 }
 
 export const clampLanesToDuration = (duration: number): void => {

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import EraserIcon from 'phosphor-svelte/lib/EraserIcon'
 	import PaintBrushIcon from 'phosphor-svelte/lib/PaintBrushIcon'
-	import { PATTERN_STEPS, buildPatternHits, getStepLength, readPatternFromRange } from '../engine/hits'
-	import type { TempoT, TimeRangeT } from '../engine/hits'
+	import { PATTERN_STEPS, buildPatternImpulses, getStepLength, readPatternFromRange } from '../engine/impulses'
+	import type { TempoT, TimeRangeT } from '../engine/impulses'
 	import { getViewEnd } from '../engine/timeline'
 	import { clearTrackRange, findTrack, paintTrackRange } from '../sources.svelte'
 	import { app, getAnalysis } from '../store.svelte'
@@ -77,7 +77,7 @@
 		const startingTrack = findTrack(props.trackId)
 		if (startingTrack === undefined) return buildSteps([])
 		const tempo = getTempo()
-		return readPatternFromRange(startingTrack.hits, getPlayheadBar(tempo), tempo)
+		return readPatternFromRange(startingTrack.impulses, getPlayheadBar(tempo), tempo)
 	}
 
 	let pattern = $state<number[]>(readStartingPattern())
@@ -115,8 +115,8 @@
 	const handlePaint = () => {
 		const tempo = getTempo()
 		const range = getRange()
-		const hits = buildPatternHits(pattern, range, tempo)
-		paintTrackRange(props.trackId, range, hits)
+		const impulses = buildPatternImpulses(pattern, range, tempo)
+		paintTrackRange(props.trackId, range, impulses)
 		props.onclose()
 	}
 

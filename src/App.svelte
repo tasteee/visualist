@@ -9,8 +9,14 @@
 	import Inspector from './ui/Inspector.svelte'
 	import MidiImportDialog from './ui/MidiImportDialog.svelte'
 	import Stage from './ui/Stage.svelte'
+	import { installFocusGuard } from './ui/focus'
 	import { checkIsTyping } from './ui/keyboard'
 
+	let shell: HTMLElement
+
+	// Space plays. A focused button, select or field keeps the
+	// key, which is only possible after a Tab, since a click
+	// hands focus back to the shell.
 	const handleKeyDown = (event: KeyboardEvent) => {
 		const isSpace = event.code === 'Space'
 		if (!isSpace || checkIsTyping(event)) return
@@ -48,7 +54,7 @@
 	// MIDI lands on the song's timeline, so it needs a song.
 	const handleMidiDrop = (file: File) => {
 		if (!app.hasAudio) {
-			toaster.show({ title: 'Load a song first', description: 'MIDI hits are placed on the song’s timeline.', tone: 'warning' })
+			toaster.show({ title: 'Load a song first', description: 'MIDI impulses are placed on the song’s timeline.', tone: 'warning' })
 			return
 		}
 		void openMidiFile(file)
@@ -63,13 +69,16 @@
 	}
 
 	onMount(() => {
+		const removeFocusGuard = installFocusGuard(shell)
+		shell.focus({ preventScroll: true })
 		void bootApp()
+		return removeFocusGuard
 	})
 </script>
 
 <svelte:window onkeydown={handleKeyDown} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop} />
 
-<main class="app-shell">
+<main class="app-shell" tabindex="-1" bind:this={shell}>
 	<section class="app-workspace">
 		<div class="app-stage-area">
 			<Stage />
@@ -88,7 +97,7 @@
 	{#if app.isDraggingFile}
 		<div class="app-drop-overlay">
 			<span class="app-drop-title">Drop a song or a MIDI file</span>
-			<span class="app-drop-hint">Songs are analyzed in a few seconds. MIDI becomes hit tracks.</span>
+			<span class="app-drop-hint">Songs are analyzed in a few seconds. MIDI becomes impulse tracks.</span>
 		</div>
 	{/if}
 </main>

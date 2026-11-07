@@ -16,8 +16,9 @@ export const PATH_WIDTH = 1000
 export const PATH_HEIGHT = 100
 export const MIN_POINT_GAP = 0.02
 
-// A full bend squeezes the segment by this factor.
-const BEND_BASE = 8
+// A full bend lifts the middle of a segment by this share of
+// the lane's range.
+const BOW_AMOUNT = 0.5
 const BENT_SAMPLES = 32
 
 export const AUTOMATION_CONTROLS: AutomationControlT[] = [
@@ -58,13 +59,6 @@ export const toControlValue = (control: LaneControlT, normalized: number): numbe
 
 export const formatControlValue = (value: number): string => value.toFixed(2)
 
-// Positive bend bulges the segment upward, negative sags it.
-const shapeProgress = (progress: number, bend: number, isRising: boolean): number => {
-	const direction = isRising ? -1 : 1
-	const exponent = Math.pow(BEND_BASE, bend * direction)
-	return Math.pow(progress, exponent)
-}
-
 export const findSegmentStart = (points: AutomationPointT[], time: number): number => {
 	const lastIndex = points.length - 1
 	for (let index = 0; index < lastIndex; index++) {
@@ -75,12 +69,15 @@ export const findSegmentStart = (points: AutomationPointT[], time: number): numb
 	return -1
 }
 
-const interpolateSegment = (start: AutomationPointT, end: AutomationPointT, time: number): number => {
+// A bent segment bows around its temporal midpoint, the same
+// from either end. Positive bend bulges up, negative sags.
+export const interpolateSegment = (start: AutomationPointT, end: AutomationPointT, time: number): number => {
 	const span = end.time - start.time
-	const progress = span <= 0 ? 1 : (time - start.time) / span
-	const isRising = end.value >= start.value
-	const shaped = shapeProgress(clamp(progress, 0, 1), start.bend, isRising)
-	return start.value + (end.value - start.value) * shaped
+	const progress = span <= 0 ? 1 : clamp((time - start.time) / span, 0, 1)
+	const straight = start.value + (end.value - start.value) * progress
+	const bowShape = 4 * progress * (1 - progress)
+	const bowed = straight + start.bend * bowShape * BOW_AMOUNT
+	return clamp(bowed, 0, 1)
 }
 
 // Returns a normalized 0-1 value. Without points the lane
@@ -188,7 +185,7 @@ export const findLaneForTarget = (lanes: AutomationLaneT[], target: LaneTargetT)
 export const checkIsTargetAutomated = (lanes: AutomationLaneT[], target: LaneTargetT): boolean => {
 	const lane = findLaneForTarget(lanes, target)
 	if (lane === undefined) return false
-	return lane.points.length > 0
+	return checkHasPoints(lane)
 }
 
 // The lane's value at this instant, in the control's own units.
@@ -201,7 +198,8 @@ export const getLiveLaneValue = (lane: AutomationLaneT, settings: SettingsT, lay
 	return toControlValue(control, normalized)
 }
 
-const checkHasPoints = (lane: AutomationLaneT): boolean => lane.points.length > 0
+export const checkIsLaneDriving = (lane: AutomationLaneT): boolean => lane.points.length > 0 && lane.isBypassed !== true
+const checkHasPoints = checkIsLaneDriving
 
 // Frame-time settings: the base settings with every automated
 // control replaced by its lane value.

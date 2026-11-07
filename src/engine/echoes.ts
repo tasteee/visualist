@@ -1,4 +1,4 @@
-import { findFirstHitIndex, getLevels } from './analysis'
+import { findFirstImpulseIndex, getLevels } from './analysis'
 import { clamp } from './settings'
 import type { EchoStyleNameT, FrameInputT, SettingsT } from './types'
 
@@ -135,7 +135,7 @@ const collectKickEchoes = (input: FrameInputT, enabled: EchoStyleNameT[]): EchoT
 	const halfBeat = 30 / input.bpm
 	const life = KICK_ECHO_LIFE / settings.echoSpeed
 	const kicks = input.analysis.kicks
-	const startIndex = findFirstHitIndex(kicks, input.time - life)
+	const startIndex = findFirstImpulseIndex(kicks, input.time - life)
 	const echoes: EchoT[] = []
 
 	for (let kickIndex = startIndex; kickIndex < kicks.length; kickIndex++) {

@@ -1,7 +1,7 @@
 import { getLevels } from './analysis'
 import { AUTOMATION_CONTROLS } from './automation'
 import { clamp } from './settings'
-import { checkIsCustomSource, getBandSignal, getCustomSourceName, getDetectedHitSignal, getTrackSignal } from './sources'
+import { checkIsCustomSource, getBandSignal, getCustomSourceName, getDetectedImpulseSignal, getTrackSignal } from './sources'
 import type { AnalysisT, BuiltInSourceT, CompiledSourcesT, ModSourceT, ModulationT, SettingsT, SignalsT } from './types'
 
 export type ModSourceOptionT = {
@@ -63,7 +63,7 @@ const getBeatCount = (time: number, bpm: number, beatOffset: number): number => 
 
 const getFraction = (value: number): number => value - Math.floor(value)
 
-// A sharp hit on every beat that fades before the next one.
+// A sharp impulse on every beat that fades before the next one.
 const getBeatPulse = (beatCount: number): number => {
 	const phase = getFraction(beatCount)
 	return Math.exp(-phase * BEAT_DECAY)
@@ -86,8 +86,8 @@ export const computeSignals = (analysis: AnalysisT, time: number, sources: Compi
 		mids: clamp(levels.mid, 0, 1),
 		highs: clamp(levels.high, 0, 1),
 		energy: clamp(levels.energy, 0, 1),
-		kick: getDetectedHitSignal(analysis.kicks, time),
-		snare: getDetectedHitSignal(analysis.snaps, time),
+		kick: getDetectedImpulseSignal(analysis.kicks, time),
+		snare: getDetectedImpulseSignal(analysis.snaps, time),
 		beat: getBeatPulse(beatCount),
 		bar: getBarWave(beatCount)
 	}

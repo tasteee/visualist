@@ -12,28 +12,35 @@
 		checkCanAddSettingLane,
 		checkIsGroupCollapsed,
 		getLanesInGroup,
+		movePoints,
+		recordHistory,
+		recordHistoryCoalesced,
 		redo,
 		revealLane,
+		selectAllPoints,
 		toggleAllCollapsed,
-		toggleGroupCollapsed,
 		undo
 	} from '../automation.svelte'
 	import { GLOBAL_GROUP_ID } from '../engine/automation'
 	import { getOutputLatency, getPlaybackTime } from '../engine/audio'
-	import { snapToStep } from '../engine/hits'
+	import { snapToStep } from '../engine/impulses'
 	import { getBandSourceId } from '../engine/sources'
 	import type { CompiledBandT } from '../engine/types'
-	import { buildGrid, formatBpm, ratioToTime } from '../engine/timeline'
+	import { buildGrid, ratioToTime } from '../engine/timeline'
 	import type { LayerT } from '../engine/types'
 	import { showInspectorTab } from '../inspector.svelte'
-	import { focusLayer, layerStore, moveLayer, moveLayerToFrontIndex, toggleLayerVisible } from '../layers.svelte'
+	import { layerStore, moveLayer, moveLayerToFrontIndex, toggleLayerVisible } from '../layers.svelte'
+	import { rowInspector } from '../rowInspector.svelte'
+	import { toggleRowFolded } from '../rowLayout.svelte'
+	import type { RowRefT } from '../rowLayout.svelte'
+	import { checkHasSelection, clearSelection, deleteSelection, pickLayer, readModifiers } from '../selection.svelte'
+	import { nudgeSelectedLayers } from '../stage.svelte'
 	import {
 		addEmptyTrack,
-		clearHitSelection,
-		deleteSelectedHits,
 		getCompiledSources,
+		moveImpulses,
 		recordTap,
-		selectAllHits,
+		selectAllImpulses,
 		sources,
 		toggleTriggersCollapsed
 	} from '../sources.svelte'
@@ -41,7 +48,8 @@
 	import { pickColorForId } from '../engine/palette'
 	import type { ColorNameT } from '../engine/palette'
 	import { openGridMenu } from '../timelineMenus.svelte'
-	import { app, formatTime, getAnalysis, seekTo } from '../store.svelte'
+	import { app, getAnalysis, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
+	import type { ImpulseMoveT } from '../sources.svelte'
 	import {
 		MAX_DOCK_SHARE,
 		fitView,
@@ -60,11 +68,12 @@
 	import AutomationLane from './AutomationLane.svelte'
 	import AutomationPopover from './AutomationPopover.svelte'
 	import BandLane from './BandLane.svelte'
-	import HitLane from './HitLane.svelte'
+	import ImpulseLane from './ImpulseLane.svelte'
 	import TimelineLayer from './TimelineLayer.svelte'
 	import LayerClip from './LayerClip.svelte'
 	import OverviewBar from './OverviewBar.svelte'
 	import PatternPopover from './PatternPopover.svelte'
+	import RowInspector from './RowInspector.svelte'
 	import TimelineMenus from './TimelineMenus.svelte'
 	import TimeRuler from './TimeRuler.svelte'
 	import TransportBar from './TransportBar.svelte'
@@ -134,11 +143,6 @@
 
 	const laneCount = $derived(automation.lanes.length)
 	const hasLanes = $derived(laneCount > 0)
-	const formatLaneCount = (count: number): string => {
-		if (count === 0) return 'No automations'
-		if (count === 1) return '1 automation'
-		return `${count} automations`
-	}
 
 	const canAddSettingLane = $derived(checkCanAddSettingLane())
 	const areAllCollapsed = $derived(checkAreAllCollapsed())
@@ -146,7 +150,6 @@
 	const addLaneLabel = $derived(canAddSettingLane ? 'Add a scene and post lane' : 'Every scene and post control already has a lane')
 	const globalLanes = $derived(getLanesInGroup(GLOBAL_GROUP_ID))
 	const isGlobalCollapsed = $derived(checkIsGroupCollapsed(GLOBAL_GROUP_ID))
-	const globalDetail = $derived(formatLaneCount(globalLanes.length))
 
 	const trackCount = $derived(sources.tracks.length)
 	const bandCount = $derived(sources.bands.length)
@@ -154,19 +157,6 @@
 	const isTriggersCollapsed = $derived(sources.isTriggersCollapsed)
 	const compiledBands = $derived(getCompiledSources().bands)
 
-	const formatTriggersDetail = (tracks: number, bands: number): string => {
-		const hasNone = tracks === 0 && bands === 0
-		if (hasNone) return 'No hit tracks'
-		const trackLabel = tracks === 1 ? '1 track' : `${tracks} tracks`
-		const bandLabel = bands === 1 ? '1 band' : `${bands} bands`
-		const hasNoBands = bands === 0
-		if (hasNoBands) return trackLabel
-		const hasNoTracks = tracks === 0
-		if (hasNoTracks) return bandLabel
-		return `${trackLabel} · ${bandLabel}`
-	}
-
-	const triggersDetail = $derived(formatTriggersDetail(trackCount, bandCount))
 	const audioColor = $derived(getRowColor(AUDIO_ROW_ID, 'amber'))
 	const globalColor = $derived(getRowColor(GLOBAL_GROUP_ID, 'slate'))
 
@@ -175,9 +165,14 @@
 	// Front to back, matching the Layers panel.
 	const layersFrontToBack = $derived([...layerStore.layers].reverse() as LayerT[])
 	const laneCountLabel = $derived(String(laneCount))
+	const layerIdsInOrder = $derived(layersFrontToBack.map((layer) => layer.id))
+	const trackIdsInOrder = $derived([...sources.tracks.map((track) => track.id), ...sources.bands.map((band) => band.id)])
+	const globalLaneIds = $derived(globalLanes.map((lane) => lane.id))
+	const getLaneIdsInGroup = (groupId: string): string[] => getLanesInGroup(groupId).map((lane) => lane.id)
+
+	// A layer's siblings are every other layer.
+	const layerSiblings = $derived(layerIdsInOrder.map((layerId): RowRefT => ({ kind: 'layer', id: layerId })))
 	const songName = $derived(app.fileName === '' ? 'Untitled' : app.fileName)
-	const songMeta = $derived(`${formatTime(app.duration)} · ${formatBpm(analysis.bpm)} BPM`)
-	const audioDetail = $derived(`${songMeta} · ${triggersDetail}`)
 
 	// A new song opens fully zoomed out.
 	$effect(() => {
@@ -304,6 +299,8 @@
 		const isTap = checkIsTapKey(event) && !checkIsTextEntry(event)
 		if (isTap) return handleTap()
 		if (checkIsTyping(event)) return
+		const isHandled = event.defaultPrevented
+		if (isHandled) return
 		const isCommand = event.metaKey || event.ctrlKey
 		const key = event.key.toLowerCase()
 		const isUndo = isCommand && key === 'z' && !event.shiftKey
@@ -316,32 +313,137 @@
 			event.preventDefault()
 			return redo()
 		}
-		const isSelectionKey = handleSelectionKey(event, key, isCommand)
-		if (isSelectionKey) return
+		if (key === 'escape') return handleEscapeKey(event)
+		const isDeleteKey = key === 'delete' || key === 'backspace'
+		if (isDeleteKey) return handleDeleteKey(event)
+		const isSelectAll = isCommand && key === 'a'
+		if (isSelectAll) return handleSelectAllKey(event)
+		if (key.startsWith('arrow')) return handleArrowKey(event, key)
 		if (isCommand || event.altKey) return
 		if (key === '=' || key === '+') return zoomIn()
 		if (key === '-' || key === '_') return zoomOut()
 		if (key === '0') return fitView()
 		if (key === 'f') return toggleFollowing()
 		if (key === 's') return toggleSnapping()
-		if (key === 'home') return seekTo(0)
+		if (key === 'l') return toggleLoop()
+		if (key === 'home') return goToBeginning()
 	}
 
-	// Keys for selected hits. True when the key was used.
-	const handleSelectionKey = (event: KeyboardEvent, key: string, isCommand: boolean): boolean => {
-		const selectedTrackId = sources.hitSelection.trackId
-		const hasSelection = selectedTrackId !== null && sources.hitSelection.hitIds.length > 0
-		if (!hasSelection || selectedTrackId === null) return false
-		const isDelete = key === 'delete' || key === 'backspace'
-		const isSelectAll = isCommand && key === 'a'
-		const isClear = key === 'escape'
-		const isUsed = isDelete || isSelectAll || isClear
-		if (!isUsed) return false
+	// The inspector popover closes first, on its own Escape. The
+	// next one clears the selection.
+	const handleEscapeKey = (event: KeyboardEvent) => {
+		const isInspectorOpen = rowInspector.open !== null
+		if (isInspectorOpen) return
+		const hadSelection = checkHasSelection()
+		if (!hadSelection) return
 		event.preventDefault()
-		if (isDelete) deleteSelectedHits()
-		if (isSelectAll) selectAllHits(selectedTrackId)
-		if (isClear) clearHitSelection()
+		clearSelection()
+	}
+
+	const handleDeleteKey = (event: KeyboardEvent) => {
+		const didDelete = deleteSelection()
+		if (didDelete) event.preventDefault()
+	}
+
+	const handleSelectAllKey = (event: KeyboardEvent) => {
+		const selectedTrackId = sources.impulseSelection.trackId
+		const hasImpulses = selectedTrackId !== null && sources.impulseSelection.impulseIds.length > 0
+		if (hasImpulses && selectedTrackId !== null) {
+			event.preventDefault()
+			return selectAllImpulses(selectedTrackId)
+		}
+		const pointLaneId = automation.selectedPointLaneId
+		const hasPoints = pointLaneId !== null && automation.selectedPointIds.length > 0
+		if (!hasPoints || pointLaneId === null) return
+		event.preventDefault()
+		selectAllPoints(pointLaneId)
+	}
+
+	// ---- Arrow keys ----------------------------------------
+	//
+	// With impulses or points selected, arrows nudge them. With a
+	// stage layer selected, they nudge its position (a channel
+	// that is automated stays put). With nothing selected, Left
+	// and Right step the playhead by one visible grid division.
+
+	const POINT_VALUE_STEP = 0.05
+	const FINE_VALUE_STEP = 0.01
+	const FINE_TIME_STEP = 0.01
+	const LAYER_STEP_PERCENT = 1
+	const FINE_LAYER_STEP_PERCENT = 0.1
+
+	type ArrowDirectionT = {
+		horizontal: number
+		vertical: number
+	}
+
+	const readArrowDirection = (key: string): ArrowDirectionT => {
+		const horizontal = key === 'arrowright' ? 1 : key === 'arrowleft' ? -1 : 0
+		const vertical = key === 'arrowup' ? 1 : key === 'arrowdown' ? -1 : 0
+		return { horizontal, vertical }
+	}
+
+	// Snap on: a whole grid division. Shift, or snap off: a
+	// fine step.
+	const getTimeNudge = (event: KeyboardEvent): number => {
+		const isSnapped = timeline.isSnapping && !event.shiftKey
+		return isSnapped ? grid.snapStep : FINE_TIME_STEP
+	}
+
+	const nudgeImpulses = (event: KeyboardEvent, direction: ArrowDirectionT): boolean => {
+		const trackId = sources.impulseSelection.trackId
+		const impulseIds = sources.impulseSelection.impulseIds
+		const track = sources.tracks.find((candidate) => candidate.id === trackId)
+		const hasImpulses = track !== undefined && impulseIds.length > 0
+		if (!hasImpulses) return false
+		const timeDelta = direction.horizontal * getTimeNudge(event)
+		const strengthStep = event.shiftKey ? FINE_VALUE_STEP : POINT_VALUE_STEP
+		const strengthDelta = direction.vertical * strengthStep
+		const selected = track.impulses.filter((impulse) => impulseIds.includes(impulse.id))
+		const moves: ImpulseMoveT[] = selected.map((impulse) => ({ impulseId: impulse.id, time: impulse.time + timeDelta, strength: impulse.strength + strengthDelta }))
+		recordHistoryCoalesced('nudge-impulses')
+		moveImpulses(track.id, moves)
 		return true
+	}
+
+	const nudgePoints = (event: KeyboardEvent, direction: ArrowDirectionT): boolean => {
+		const laneId = automation.selectedPointLaneId
+		const lane = automation.lanes.find((candidate) => candidate.id === laneId)
+		const pointIds = automation.selectedPointIds
+		const hasPoints = lane !== undefined && pointIds.length > 0
+		if (!hasPoints) return false
+		const timeDelta = direction.horizontal * getTimeNudge(event)
+		const valueStep = event.shiftKey ? FINE_VALUE_STEP : POINT_VALUE_STEP
+		const valueDelta = direction.vertical * valueStep
+		const selected = lane.points.filter((point) => pointIds.includes(point.id))
+		const moves = selected.map((point) => ({ pointId: point.id, time: point.time + timeDelta, value: point.value + valueDelta }))
+		const orderedMoves = timeDelta > 0 ? [...moves].reverse() : moves
+		recordHistoryCoalesced('nudge-points')
+		movePoints(lane.id, orderedMoves, app.duration)
+		return true
+	}
+
+	const nudgeLayers = (event: KeyboardEvent, direction: ArrowDirectionT): boolean => {
+		const step = event.shiftKey ? FINE_LAYER_STEP_PERCENT : LAYER_STEP_PERCENT
+		return nudgeSelectedLayers(direction.horizontal * step, -direction.vertical * step)
+	}
+
+	// One visible grid division left or right of the playhead.
+	const stepPlayhead = (direction: number) => {
+		const stepSeconds = grid.snapStep
+		const stepsFromOffset = (app.currentTime - grid.beatOffset) / stepSeconds
+		const epsilon = 1e-6
+		const nextStep = direction > 0 ? Math.floor(stepsFromOffset + epsilon) + 1 : Math.ceil(stepsFromOffset - epsilon) - 1
+		seekTo(grid.beatOffset + nextStep * stepSeconds)
+	}
+
+	const handleArrowKey = (event: KeyboardEvent, key: string) => {
+		event.preventDefault()
+		const direction = readArrowDirection(key)
+		if (nudgeImpulses(event, direction)) return
+		if (nudgePoints(event, direction)) return
+		if (nudgeLayers(event, direction)) return
+		if (direction.horizontal !== 0) stepPlayhead(direction.horizontal)
 	}
 
 	// Right-click on empty lane space opens the grid menu. Rows
@@ -362,6 +464,19 @@
 		const tapTime = getPlaybackTime() - getOutputLatency()
 		const tempo = { bpm: analysis.bpm, beatOffset: analysis.beatOffset }
 		recordTap(tapTime, tempo, snapToStep)
+	}
+
+	// The caret folds a layer's lanes. With the primary modifier,
+	// every other layer is set to the same state.
+	const handleLayerToggle = (layerId: string, event: MouseEvent) => {
+		const isPrimary = event.metaKey || event.ctrlKey
+		const siblings = isPrimary ? layerSiblings.filter((sibling) => sibling.id !== layerId) : []
+		toggleRowFolded({ kind: 'layer', id: layerId }, siblings)
+	}
+
+	const handleTriggersToggle = () => {
+		recordHistory()
+		toggleTriggersCollapsed()
 	}
 
 	const handleAddTrack = () => {
@@ -409,7 +524,6 @@
 		const laneId = addLayerLane(layerId)
 		if (laneId === null) return
 		revealLane(laneId)
-		focusLayer(layerId)
 	}
 
 	// ---- Reordering layers by dragging their header ----------
@@ -478,9 +592,9 @@
 		window.addEventListener('pointercancel', stopReorder)
 	}
 
-	const handleGroupSelect = (layerId: string) => {
+	const handleGroupSelect = (layerId: string, event: PointerEvent) => {
 		if (shouldSkipSelect) return
-		focusLayer(layerId)
+		pickLayer(layerId, layerIdsInOrder, readModifiers(event))
 	}
 
 	const getDropEdge = (layerId: string): 'before' | 'after' | null => {
@@ -495,12 +609,6 @@
 		return reorder.isActive && reorder.layerId === layerId
 	}
 
-	const getLayerDetail = (layer: LayerT): string => {
-		const laneCount = getLanesInGroup(layer.id).length
-		const isHidden = !layer.isVisible
-		if (isHidden) return `Hidden · ${formatLaneCount(laneCount)}`
-		return formatLaneCount(laneCount)
-	}
 </script>
 
 <svelte:window onkeydown={handleKeyDown} />
@@ -552,25 +660,23 @@
 				rowId={AUDIO_ROW_ID}
 				color={audioColor}
 				title={songName}
-				detail={audioDetail}
 				{grid}
 				isCollapsed={isTriggersCollapsed}
 				canAddLane
-				addLabel="Add a hit track"
-				ontoggle={toggleTriggersCollapsed}
+				addLabel="Add an impulse track"
+				ontoggle={handleTriggersToggle}
 				onadd={handleAddTrack}
-				onselect={openSourcesPanel}
-			>
+>
 				{#snippet track()}
-					<WaveformTrack />
+					<WaveformTrack {grid} />
 				{/snippet}
 			</TimelineLayer>
 			{#if !isTriggersCollapsed && hasTriggers}
 				{#each sources.tracks as track (track.id)}
-					<HitLane {track} {grid} onpattern={openPatternEditor} />
+					<ImpulseLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} />
 				{/each}
 				{#each sources.bands as band (band.id)}
-					<BandLane {band} compiled={findCompiledBand(band.id)} {grid} onedit={openSourcesPanel} />
+					<BandLane {band} compiled={findCompiledBand(band.id)} {grid} siblingTrackIds={trackIdsInOrder} />
 				{/each}
 			{/if}
 
@@ -579,36 +685,35 @@
 				rowId={GLOBAL_GROUP_ID}
 				color={globalColor}
 				title="Scene and post"
-				detail={globalDetail}
 				{grid}
 				isCollapsed={isGlobalCollapsed}
 				canAddLane={canAddSettingLane}
-				ontoggle={() => toggleGroupCollapsed(GLOBAL_GROUP_ID)}
+				ontoggle={(event) => handleLayerToggle(GLOBAL_GROUP_ID, event)}
 				onadd={handleAddSettingLane}
 			/>
 			{#if !isGlobalCollapsed}
 				{#each globalLanes as lane (lane.id)}
-					<AutomationLane {lane} {grid} isNested onedit={openEditor} />
+					<AutomationLane {lane} {grid} isNested siblingLaneIds={globalLaneIds} onedit={openEditor} />
 				{/each}
 			{/if}
 
 			{#each layersFrontToBack as layer (layer.id)}
 				{@const isCollapsed = checkIsGroupCollapsed(layer.id)}
-				{@const isSelected = layerStore.selectedLayerId === layer.id}
+				{@const isSelected = layerStore.selectedLayerIds.includes(layer.id)}
 				<TimelineLayer
 					kind={layer.kind}
 					rowId={layer.id}
 					color={getLayerColor(layer)}
 					title={layer.name}
-					detail={getLayerDetail(layer)}
 					{grid}
 					{isCollapsed}
 					{isSelected}
+					siblings={layerSiblings.filter((sibling) => sibling.id !== layer.id)}
 					isHidden={!layer.isVisible}
 					canAddLane={checkCanAddLayerLane(layer.id)}
-					ontoggle={() => toggleGroupCollapsed(layer.id)}
+					ontoggle={(event) => handleLayerToggle(layer.id, event)}
 					onadd={() => handleAddLayerLane(layer.id)}
-					onselect={() => handleGroupSelect(layer.id)}
+					onselect={(event) => handleGroupSelect(layer.id, event)}
 					ontogglevisible={() => toggleLayerVisible(layer.id)}
 					layerId={layer.id}
 					isDragSource={checkIsDragSource(layer.id)}
@@ -621,9 +726,10 @@
 					{/snippet}
 				</TimelineLayer>
 				{#if !isCollapsed}
-					<div class="editor-layer-lanes" role="presentation" onpointerdowncapture={() => focusLayer(layer.id)}>
+					{@const laneIds = getLaneIdsInGroup(layer.id)}
+					<div class="editor-layer-lanes" role="presentation">
 						{#each getLanesInGroup(layer.id) as lane (lane.id)}
-							<AutomationLane {lane} {grid} isNested onedit={openEditor} />
+							<AutomationLane {lane} {grid} isNested siblingLaneIds={laneIds} onedit={openEditor} />
 						{/each}
 					</div>
 				{/if}
@@ -650,6 +756,8 @@
 	{#if patternEditor !== null}
 		<PatternPopover trackId={patternEditor.trackId} anchorX={patternEditor.anchorX} anchorY={patternEditor.anchorY} onclose={closePatternEditor} />
 	{/if}
+
+	<RowInspector />
 
 	{#if editor !== null}
 		<AutomationPopover laneId={editor.laneId} pointId={editor.pointId} anchorX={editor.anchorX} anchorY={editor.anchorY} onclose={closeEditor} />

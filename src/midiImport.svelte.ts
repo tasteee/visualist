@@ -1,7 +1,7 @@
 import { toaster } from '@tasteee/zest'
 import { groupMidiNotes, parseMidi, placeMidiNote } from './engine/midi'
 import type { MidiFileT, MidiGroupT, MidiGroupingT, MidiPlacementT, MidiTimingT } from './engine/midi'
-import type { HitRoleT } from './engine/types'
+import type { ImpulseRoleT } from './engine/types'
 import { showInspectorTab } from './inspector.svelte'
 import { addTracksFromMidi } from './sources.svelte'
 import { app, getAnalysis, setStatus } from './store.svelte'
@@ -11,7 +11,7 @@ import { app, getAnalysis, setStatus } from './store.svelte'
 export type MidiImportRowT = {
 	key: string
 	name: string
-	role: HitRoleT
+	role: ImpulseRoleT
 	isIncluded: boolean
 	noteCount: number
 }
@@ -110,7 +110,7 @@ export const updateMidiRow = (key: string, changes: Partial<MidiImportRowT>): vo
 }
 
 // Only one row may drive each role, like the tracks themselves.
-export const setMidiRowRole = (key: string, role: HitRoleT): void => {
+export const setMidiRowRole = (key: string, role: ImpulseRoleT): void => {
 	const isRole = role !== 'none'
 	for (const row of midiImport.rows) {
 		const isOtherOwner = isRole && row.key !== key && row.role === role
@@ -149,7 +149,7 @@ export const confirmMidiImport = (): void => {
 	midiImport.isOpen = false
 	const hasImported = importedCount > 0
 	if (!hasImported) return
-	const trackLabel = importedCount === 1 ? '1 hit track' : `${importedCount} hit tracks`
+	const trackLabel = importedCount === 1 ? '1 impulse track' : `${importedCount} impulse tracks`
 	setStatus(`Imported ${trackLabel} from ${midiImport.fileName}`, 'success')
 	showInspectorTab('sources')
 }

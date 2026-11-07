@@ -1,6 +1,6 @@
 import { GRID_STEP, clamp } from './settings'
 import { buildSpectrum } from './spectrum'
-import type { AnalysisT, AudioLevelsT, HitT } from './types'
+import type { AnalysisT, AudioLevelsT, ImpulseT } from './types'
 
 const FRAMES_PER_SECOND = 100
 const ENERGY_WINDOW_FRAMES = 180
@@ -149,15 +149,15 @@ export const buildRise = (series: Float32Array): Float32Array => {
 
 // thresholdScale above 1 asks for stronger onsets, below 1
 // lets quieter ones through.
-export const pickHits = (rise: Float32Array, minGapSeconds: number, thresholdScale = 1): HitT[] => {
+export const pickImpulses = (rise: Float32Array, minGapSeconds: number, thresholdScale = 1): ImpulseT[] => {
 	const prefix = new Float64Array(rise.length + 1)
 	for (let index = 0; index < rise.length; index++) prefix[index + 1] = prefix[index] + rise[index]
 
 	const referenceRise = Math.max(getPercentile(rise, 0.9), 1e-6)
 	const floorThreshold = 0.12 * referenceRise
 	const minGapFrames = Math.round(minGapSeconds * FRAMES_PER_SECOND)
-	const hits: HitT[] = []
-	let lastHitFrame = -minGapFrames
+	const impulses: ImpulseT[] = []
+	let lastImpulseFrame = -minGapFrames
 
 	for (let frame = 1; frame < rise.length - 1; frame++) {
 		const value = rise[frame]
@@ -172,17 +172,17 @@ export const pickHits = (rise: Float32Array, minGapSeconds: number, thresholdSca
 		if (!isAboveThreshold) continue
 
 		const strength = clamp((value / referenceRise) * 0.8, 0.35, 1.2)
-		const hit: HitT = { time: frame * GRID_STEP, strength }
-		const isTooClose = frame - lastHitFrame < minGapFrames
-		const lastHit = hits[hits.length - 1]
-		const isStrongerThanLast = lastHit !== undefined && strength > lastHit.strength
-		if (isTooClose && isStrongerThanLast) hits[hits.length - 1] = hit
+		const impulse: ImpulseT = { time: frame * GRID_STEP, strength }
+		const isTooClose = frame - lastImpulseFrame < minGapFrames
+		const lastImpulse = impulses[impulses.length - 1]
+		const isStrongerThanLast = lastImpulse !== undefined && strength > lastImpulse.strength
+		if (isTooClose && isStrongerThanLast) impulses[impulses.length - 1] = impulse
 		if (isTooClose) continue
-		hits.push(hit)
-		lastHitFrame = frame
+		impulses.push(impulse)
+		lastImpulseFrame = frame
 	}
 
-	return hits
+	return impulses
 }
 
 type TempoScoreT = {
@@ -289,8 +289,8 @@ export const analyzeAudio = async (buffer: AudioBuffer, onProgress?: AnalysisPro
 
 	const lowRise = buildRise(lowRaw)
 	const snapRise = buildRise(snapSource)
-	const kicks = pickHits(lowRise, 0.14)
-	const snaps = pickHits(snapRise, 0.09)
+	const kicks = pickImpulses(lowRise, 0.14)
+	const snaps = pickImpulses(snapRise, 0.09)
 
 	const flux = new Float32Array(lowRise.length)
 	for (let index = 0; index < flux.length; index++) flux[index] = lowRise[index] + snapRise[index]
@@ -335,13 +335,13 @@ export const getLevels = (analysis: AnalysisT, time: number): AudioLevelsT => ({
 	energy: readSeries(analysis.energy, time)
 })
 
-// First hit at or after the given time, by binary search.
-export const findFirstHitIndex = (hits: HitT[], time: number): number => {
+// First impulse at or after the given time, by binary search.
+export const findFirstImpulseIndex = (impulses: ImpulseT[], time: number): number => {
 	let low = 0
-	let high = hits.length
+	let high = impulses.length
 	while (low < high) {
 		const middle = (low + high) >> 1
-		const isBefore = hits[middle].time < time
+		const isBefore = impulses[middle].time < time
 		if (isBefore) low = middle + 1
 		if (!isBefore) high = middle
 	}

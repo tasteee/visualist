@@ -5,6 +5,8 @@ import {
 	decodeAudioFile,
 	getPlaybackTime,
 	pausePlayback,
+	retargetLoop,
+	setActiveLoop,
 	setPausedPosition,
 	startPlayback
 } from './engine/audio'
@@ -14,8 +16,8 @@ import { applySettingsModulation, computeSignals } from './engine/modulation'
 import { checkHasPost, getPostAmounts } from './engine/post'
 import { startAppearanceWatchers } from './appearance.svelte'
 import { layerStore, restoreLayerAssets, startLayerWatchers } from './layers.svelte'
-import { buildSongKey, getCompiledSources, getRoleHits, startSourceWatchers, switchSong } from './sources.svelte'
-import type { RoleHitsT } from './sources.svelte'
+import { buildSongKey, getCompiledSources, getRoleImpulses, startSourceWatchers, switchSong } from './sources.svelte'
+import type { RoleImpulsesT } from './sources.svelte'
 import { buildDemoAnalysis } from './engine/demo'
 import { buildLogoLayers } from './engine/logoLayers'
 import type { LogoLayersT } from './engine/logoLayers'
@@ -27,6 +29,7 @@ import { saveSongFile } from './engine/assets'
 import { getFadeLevel } from './engine/fades'
 import { getSizeForShortSide } from './engine/formats'
 import type { SizeT } from './engine/formats'
+import type { LoopRegionT } from './engine/audio'
 import {
 	DEMO_LOOP_SECONDS,
 	MIN_CLIP_SECONDS,
@@ -57,6 +60,11 @@ type AppStateT = {
 	duration: number
 	trimStart: number
 	trimEnd: number
+	// The loop is its own region. While it is on, it is the only
+	// legal range for the playhead.
+	loopStart: number
+	loopEnd: number
+	isLoopEnabled: boolean
 	kickCount: number
 	isAnalyzing: boolean
 	analysisProgress: number
@@ -94,6 +102,9 @@ export const app = $state<AppStateT>({
 	duration: 0,
 	trimStart: 0,
 	trimEnd: 0,
+	loopStart: 0,
+	loopEnd: 0,
+	isLoopEnabled: false,
 	kickCount: 0,
 	isAnalyzing: false,
 	analysisProgress: 0,
@@ -136,16 +147,16 @@ function readPalette(settings: SettingsT): PaletteT {
 export const getDetectedAnalysis = (): AnalysisT => detectedAnalysis
 
 // The analysis everything renders from: the user's tempo and
-// downbeat, and any hit tracks standing in for kicks or snares.
-const buildEffectiveAnalysis = (detected: AnalysisT, bpm: number, beatOffset: number, roleHits: RoleHitsT): AnalysisT => ({
+// downbeat, and any impulse tracks standing in for kicks or snares.
+const buildEffectiveAnalysis = (detected: AnalysisT, bpm: number, beatOffset: number, roleImpulses: RoleImpulsesT): AnalysisT => ({
 	...detected,
 	bpm,
 	beatOffset,
-	kicks: roleHits.kicks ?? detected.kicks,
-	snaps: roleHits.snaps ?? detected.snaps
+	kicks: roleImpulses.kicks ?? detected.kicks,
+	snaps: roleImpulses.snaps ?? detected.snaps
 })
 
-const effectiveAnalysis = $derived(buildEffectiveAnalysis(detectedAnalysis, app.bpm, app.beatOffset, getRoleHits()))
+const effectiveAnalysis = $derived(buildEffectiveAnalysis(detectedAnalysis, app.bpm, app.beatOffset, getRoleImpulses()))
 
 export const getAnalysis = (): AnalysisT => effectiveAnalysis
 export const getLogoLayers = (): LogoLayersT | null => layers
@@ -398,6 +409,67 @@ const handleEnded = (): void => {
 	returnToMarker()
 }
 
+// ---- Loop ---------------------------------------------------
+
+const BARS_IN_DEFAULT_LOOP = 4
+
+const getLoopRegion = (): LoopRegionT | null => {
+	if (!app.isLoopEnabled) return null
+	return { start: app.loopStart, end: app.loopEnd }
+}
+
+// With loop on, a time before the region lands on its start and
+// a time after it lands on its end.
+export const clampToLoop = (seconds: number): number => {
+	if (!app.isLoopEnabled) return seconds
+	return clamp(seconds, app.loopStart, app.loopEnd)
+}
+
+// The playhead is inside the region again, and the audio loops
+// over it. Called whenever the region or its switch changes.
+const applyLoopToTransport = (): void => {
+	const canApply = app.hasAudio && audioBuffer !== null && !app.isRecording
+	if (!canApply || audioBuffer === null) return
+	const region = getLoopRegion()
+	const liveTime = app.isPlaying ? getPlaybackTime() : app.currentTime
+	const clampedTime = clampToLoop(liveTime)
+	const clampedMarker = clampToLoop(app.playMarker)
+	app.playMarker = clampedMarker
+	app.currentTime = clampedTime
+	markDirty()
+	const isInsideRegion = clampedTime === liveTime
+	const canRetarget = app.isPlaying && isInsideRegion
+	if (canRetarget) return retargetLoop(region)
+	setActiveLoop(region)
+	if (app.isPlaying) startPlayback(audioBuffer, clampedTime, null, handleEnded)
+	if (!app.isPlaying) setPausedPosition(clampedMarker)
+}
+
+export const setLoopRegion = (start: number, end: number): void => {
+	if (app.isRecording) return
+	const length = Math.max(MIN_CLIP_SECONDS, end - start)
+	const safeStart = clamp(start, 0, Math.max(0, app.duration - length))
+	const safeEnd = Math.min(app.duration, safeStart + length)
+	app.loopStart = safeStart
+	app.loopEnd = safeEnd
+	applyLoopToTransport()
+}
+
+export const setLoopEnabled = (isEnabled: boolean): void => {
+	if (app.isRecording) return
+	app.isLoopEnabled = isEnabled
+	applyLoopToTransport()
+}
+
+export const toggleLoop = (): void => setLoopEnabled(!app.isLoopEnabled)
+
+const resetLoopRegion = (): void => {
+	const barLength = getBarLength(app.bpm)
+	const defaultEnd = Math.min(app.duration, barLength * BARS_IN_DEFAULT_LOOP)
+	app.loopStart = 0
+	app.loopEnd = Math.max(MIN_CLIP_SECONDS, defaultEnd)
+}
+
 // Stop goes back to the marker instead of pausing in place.
 export const togglePlay = (): void => {
 	const canPlay = app.hasAudio && audioBuffer !== null && !app.isRecording
@@ -410,7 +482,14 @@ export const togglePlay = (): void => {
 		return
 	}
 
-	startPlayback(audioBuffer, app.playMarker, null, handleEnded)
+	// Starting from the loop's end wraps first, so transport
+	// never sits on an empty instant.
+	const isAtLoopEnd = app.isLoopEnabled && app.playMarker >= app.loopEnd - 0.001
+	const startTime = isAtLoopEnd ? app.loopStart : clampToLoop(app.playMarker)
+	app.playMarker = startTime
+	app.currentTime = startTime
+	setActiveLoop(getLoopRegion())
+	startPlayback(audioBuffer, startTime, null, handleEnded)
 	app.isPlaying = true
 }
 
@@ -420,13 +499,18 @@ export const seekTo = (seconds: number): void => {
 	const canSeek = app.hasAudio && audioBuffer !== null && !app.isRecording
 	if (!canSeek || audioBuffer === null) return
 
-	const target = clamp(seconds, 0, Math.max(0, app.duration - 0.01))
+	const songTarget = clamp(seconds, 0, Math.max(0, app.duration - 0.01))
+	const target = clampToLoop(songTarget)
 	app.currentTime = target
 	app.playMarker = target
 	markDirty()
+	const isOnLoopEnd = app.isLoopEnabled && target >= app.loopEnd - 0.001
+	if (app.isPlaying && isOnLoopEnd) return seekTo(app.loopStart)
 	if (app.isPlaying) startPlayback(audioBuffer, target, null, handleEnded)
 	if (!app.isPlaying) setPausedPosition(target)
 }
+
+export const goToBeginning = (): void => seekTo(0)
 
 export const startRecording = async (): Promise<void> => {
 	const canvas = canvasElement
@@ -443,6 +527,7 @@ export const startRecording = async (): Promise<void> => {
 	}
 
 	pausePlayback()
+	setActiveLoop(null)
 	app.isPlaying = false
 	setPausedPosition(app.trimStart)
 	recorderFormat = format
@@ -506,6 +591,8 @@ export const loadAudioFile = async (file: File, options: LoadOptionsT = { isRest
 		app.duration = decoded.duration
 		app.trimStart = 0
 		app.trimEnd = decoded.duration
+		app.isLoopEnabled = false
+		setActiveLoop(null)
 		clampLanesToDuration(decoded.duration)
 		app.fileName = file.name
 		switchSong(buildSongKey(file.name, decoded.duration))
@@ -514,6 +601,7 @@ export const loadAudioFile = async (file: File, options: LoadOptionsT = { isRest
 		app.playMarker = 0
 		setPausedPosition(0)
 		applyAnalysis(result)
+		resetLoopRegion()
 		if (!app.isTitleEdited) app.title = titleFromFileName(file.name)
 		markDirty()
 

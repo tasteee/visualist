@@ -45,7 +45,7 @@ export const pickColorForId = (id: string): ColorNameT => {
 	return COLOR_NAMES[hash % COLOR_NAMES.length]
 }
 
-// A hit track's default color follows what it drives.
+// An impulse track's default color follows what it drives.
 export const getRoleColor = (role: 'none' | 'kick' | 'snare'): ColorNameT => {
 	if (role === 'kick') return 'purple'
 	if (role === 'snare') return 'pink'

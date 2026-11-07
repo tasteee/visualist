@@ -3,21 +3,25 @@
 	import CaretUpIcon from 'phosphor-svelte/lib/CaretUpIcon'
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
+	import { recordHistory, recordHistoryCoalesced } from '../automation.svelte'
 	import { getAsset } from '../engine/assets'
 	import { BLEND_OPTIONS, FX_SPECS, LAYER_PARAMS, PALETTE_SLOT_OPTIONS, SVG_COLOR_OPTIONS, TEXT_WEIGHT_OPTIONS } from '../engine/layers'
 	import { DEMO_LOOP_SECONDS } from '../engine/settings'
 	import type { BlendModeT, FxKindT, LayerT, PaletteSlotT, SvgColorT, TextWeightT } from '../engine/types'
-	import { addLayerFx, checkCanMove, layerStore, moveLayer, removeLayer, removeLayerFx } from '../layers.svelte'
+	import { addLayerFx, checkCanMove, layerStore, moveLayer, removeLayer, removeLayerFx, renameLayer } from '../layers.svelte'
 	import { app } from '../store.svelte'
 	import { formatPreciseTime } from '../engine/timeline'
 	import FxRow from './FxRow.svelte'
 	import LayerParamSlider from './LayerParamSlider.svelte'
+	import RenameField from './RenameField.svelte'
 	import Section from './Section.svelte'
 	import Segmented from './Segmented.svelte'
 	import './LayerEditor.css'
 
 	type LayerEditorPropsT = {
 		layer: LayerT
+		// The inspector popover has its own name field.
+		showName?: boolean
 	}
 
 	const props: LayerEditorPropsT = $props()
@@ -50,22 +54,21 @@
 
 	const readText = (event: Event): string => (event as CustomEvent<{ value: string }>).detail.value
 
-	const handleNameChange = (event: Event) => {
-		const name = readText(event).slice(0, NAME_LIMIT)
-		const isBlank = name.trim().length === 0
-		if (isBlank) return
-		props.layer.name = name
-	}
+	const showName = $derived(props.showName ?? true)
+
+	const handleNameCommit = (name: string) => renameLayer(props.layer.id, name)
 
 	const handleTextChange = (event: Event) => {
 		const content = props.layer.text
 		if (content === null) return
+		recordHistoryCoalesced(`layer-text:${props.layer.id}`)
 		content.text = readText(event)
 	}
 
 	const handleWeightChange = (value: string) => {
 		const content = props.layer.text
 		if (content === null) return
+		recordHistory()
 		content.weight = Number(value) as TextWeightT
 	}
 
@@ -73,20 +76,24 @@
 		const content = props.layer.text
 		if (content === null) return
 		const detail = (event as CustomEvent<{ checked: boolean }>).detail
+		recordHistory()
 		content.isUppercase = detail.checked
 	}
 
 	const handleTextColorChange = (event: Event) => {
 		const content = props.layer.text
 		if (content === null) return
+		recordHistory()
 		content.color = readText(event) as PaletteSlotT
 	}
 
 	const handleSvgColorChange = (event: Event) => {
+		recordHistory()
 		props.layer.svgColor = readText(event) as SvgColorT
 	}
 
 	const handleBlendChange = (event: Event) => {
+		recordHistory()
 		props.layer.blend = readText(event) as BlendModeT
 	}
 
@@ -107,7 +114,9 @@
 <div class="layer-editor">
 	<Section title="Layer">
 		<div class="layer-editor-name">
-			<z-input value={props.layer.name} aria-label="Layer name" onchange={handleNameChange}></z-input>
+			{#if showName}
+				<RenameField value={props.layer.name} label="Layer name" limit={NAME_LIMIT} oncommit={handleNameCommit} />
+			{/if}
 			<z-button-group>
 				<z-tooltip content="Bring forward" placement="top" openDelay={300}>
 					<z-button size="md" kind="outline" tone="neutral" aria-label="Bring forward" isDisabled={!canMoveForward} onclick={handleMoveForward}>

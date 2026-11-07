@@ -4,7 +4,8 @@
 	import { formatPreciseTime, ratioToTime, snapToGrid, timeToPercent } from '../engine/timeline'
 	import type { TimelineGridT } from '../engine/timeline'
 	import type { LayerT } from '../engine/types'
-	import { focusLayer, setLayerTimeRange } from '../layers.svelte'
+	import { layerStore, setLayerTimeRange } from '../layers.svelte'
+	import { pickLayer, readModifiers } from '../selection.svelte'
 	import { app } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import './LayerClip.css'
@@ -75,7 +76,8 @@
 		const pointerTime = readTime(event)
 		const mode = readMode(event)
 		drag = { mode, grabOffset: pointerTime - startTime, length: endTime - startTime, hasMoved: false, startX: event.clientX }
-		focusLayer(props.layer.id)
+		const orderedIds = [...layerStore.layers].reverse().map((layer) => layer.id)
+		pickLayer(props.layer.id, orderedIds, readModifiers(event))
 	}
 
 	const moveClip = (event: PointerEvent, activeDrag: ClipDragT) => {

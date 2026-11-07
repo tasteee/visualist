@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getLaneColor } from '../appearance.svelte'
 	import { automateTarget, automation, revealLane } from '../automation.svelte'
-	import { findControl, findLaneForTarget, getLiveLaneValue } from '../engine/automation'
+	import { checkIsLaneDriving, findControl, findLaneForTarget, getLiveLaneValue } from '../engine/automation'
 	import { applyModulation } from '../engine/modulation'
 	import { app, getLiveSignals } from '../store.svelte'
 	import type { AutomatableKeyT, LaneTargetT, ModulationT } from '../engine/types'
@@ -24,7 +24,7 @@
 	const max = $derived(control === null ? 1 : control.max)
 	const step = $derived(control === null ? 0.01 : control.step)
 	const lane = $derived(findLaneForTarget(automation.lanes, target))
-	const isAutomated = $derived(lane !== undefined && lane.points.length > 0)
+	const isAutomated = $derived(lane !== undefined && checkIsLaneDriving(lane))
 	const automationColor = $derived(isAutomated && lane !== undefined ? getLaneColor(lane, []) : null)
 	const modulation = $derived(app.settings.modulations[props.controlKey] ?? null)
 

@@ -14,13 +14,13 @@ export type BandPresetT = {
 // rule: every mix sits a little differently.
 export const BAND_PRESETS: BandPresetT[] = [
 	{ value: 'sub', label: 'Sub', lowHz: 25, highHz: 60, output: 'level' },
-	{ value: 'kick', label: 'Kick punch', lowHz: 45, highHz: 110, output: 'hits' },
+	{ value: 'kick', label: 'Kick punch', lowHz: 45, highHz: 110, output: 'impulses' },
 	{ value: 'bass', label: 'Bass', lowHz: 60, highHz: 250, output: 'level' },
-	{ value: 'snareBody', label: 'Snare body', lowHz: 150, highHz: 300, output: 'hits' },
+	{ value: 'snareBody', label: 'Snare body', lowHz: 150, highHz: 300, output: 'impulses' },
 	{ value: 'lowMids', label: 'Low mids', lowHz: 250, highHz: 500, output: 'level' },
 	{ value: 'vocals', label: 'Vocals', lowHz: 300, highHz: 3000, output: 'level' },
-	{ value: 'snap', label: 'Snare snap', lowHz: 2000, highHz: 5000, output: 'hits' },
-	{ value: 'hats', label: 'Hats', lowHz: 6000, highHz: 12000, output: 'hits' },
+	{ value: 'snap', label: 'Snare snap', lowHz: 2000, highHz: 5000, output: 'impulses' },
+	{ value: 'hats', label: 'Hats', lowHz: 6000, highHz: 12000, output: 'impulses' },
 	{ value: 'air', label: 'Air', lowHz: 10000, highHz: 16000, output: 'level' }
 ]
 
@@ -33,7 +33,7 @@ export const DEFAULT_BAND_SENSITIVITY = 0.5
 
 export const BAND_OUTPUT_OPTIONS: { value: BandOutputT; label: string }[] = [
 	{ value: 'level', label: 'Level' },
-	{ value: 'hits', label: 'Hits' }
+	{ value: 'impulses', label: 'Impulses' }
 ]
 
 export type BandRangeT = {

@@ -1,26 +1,32 @@
 <script lang="ts">
-	import SlidersHorizontalIcon from 'phosphor-svelte/lib/SlidersHorizontalIcon'
-	import { getRowColor, getRowHeightStyle } from '../appearance.svelte'
+	import GearSixIcon from 'phosphor-svelte/lib/GearSixIcon'
+	import { getRowColor } from '../appearance.svelte'
 	import { PATH_WIDTH } from '../engine/automation'
 	import { formatBandRange } from '../engine/bands'
 	import { getBandSignal, getBandSourceId } from '../engine/sources'
 	import { checkIsTimeVisible, getViewEnd, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
-	import type { BandSourceT, CompiledBandT, HitT } from '../engine/types'
+	import type { BandSourceT, CompiledBandT, ImpulseT } from '../engine/types'
 	import { app, getLiveSignals } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
-	import ColorDot from './ColorDot.svelte'
+	import { openRowInspector } from '../rowInspector.svelte'
+	import { getRowHeightCss } from '../rowLayout.svelte'
+	import type { RowRefT } from '../rowLayout.svelte'
+	import { clearSelection } from '../selection.svelte'
 	import RowResizer from './RowResizer.svelte'
+	import { rowHeader } from './rowHeader'
 	import './BandLane.css'
 
 	// A read-only view of what a frequency band responds to, so
-	// its range can be tuned against the song. Edited in the
-	// Audio panel.
+	// its range can be tuned against the song. Its controls are
+	// in the inspector popover.
 	type BandLanePropsT = {
 		band: BandSourceT
 		compiled: CompiledBandT | undefined
 		grid: TimelineGridT
-		onedit: () => void
+		// The tracks in this lane's group, for the primary
+		// modifier gestures.
+		siblingTrackIds: string[]
 	}
 
 	const props: BandLanePropsT = $props()
@@ -30,10 +36,12 @@
 
 	const view = $derived(timeline.view)
 	const bandColor = $derived(getRowColor(props.band.id, 'amber'))
-	const customHeight = $derived(getRowHeightStyle(props.band.id))
+	const row = $derived<RowRefT>({ kind: 'impulse', id: props.band.id })
+	const siblingRows = $derived(props.siblingTrackIds.filter((trackId) => trackId !== props.band.id).map((trackId): RowRefT => ({ kind: 'impulse', id: trackId })))
+	const customHeight = $derived(getRowHeightCss(row))
 	const rangeLabel = $derived(formatBandRange(props.band))
-	const isHits = $derived(props.band.output === 'hits')
-	const outputLabel = $derived(isHits ? 'Hits' : 'Level')
+	const isImpulses = $derived(props.band.output === 'impulses')
+	const outputLabel = $derived(isImpulses ? 'Impulses' : 'Level')
 	const metaLabel = $derived(`${rangeLabel} · ${outputLabel}`)
 	const sourceId = $derived(getBandSourceId(props.band.id))
 	const liveLevel = $derived(getLiveSignals()[sourceId] ?? 0)
@@ -42,6 +50,17 @@
 	const playheadPercent = $derived(timeToPercent(app.currentTime, view))
 	const isPlayheadVisible = $derived(checkIsTimeVisible(app.currentTime, view))
 	const hasCurve = $derived(props.compiled !== undefined && props.compiled.series.length > 0)
+
+	let header: HTMLDivElement
+
+	const handleSettings = () => openRowInspector('band', props.band.id, header)
+
+	const headerOptions = $derived({
+		row,
+		getSiblings: () => siblingRows,
+		onselect: () => clearSelection(),
+		oninspect: (anchor: HTMLElement) => openRowInspector('band', props.band.id, anchor)
+	})
 
 	const getGridX = (line: GridLineT): number => timeToRatio(line.time, view) * PATH_WIDTH
 
@@ -69,24 +88,23 @@
 	const curvePath = $derived(buildCurvePath(props.compiled))
 	const areaPath = $derived(buildAreaPath(curvePath))
 
-	const visibleHits = $derived.by((): HitT[] => {
+	const visibleImpulses = $derived.by((): ImpulseT[] => {
 		const compiled = props.compiled
-		if (compiled === undefined || !isHits) return []
+		if (compiled === undefined || !isImpulses) return []
 		const end = getViewEnd(view)
-		return compiled.hits.filter((hit) => hit.time >= view.start && hit.time <= end)
+		return compiled.impulses.filter((impulse) => impulse.time >= view.start && impulse.time <= end)
 	})
 
-	const getHitX = (hit: HitT): number => timeToPercent(hit.time, view)
+	const getImpulseX = (impulse: ImpulseT): number => timeToPercent(impulse.time, view)
 </script>
 
 <div class="band-lane" data-tone={bandColor} style:--band-lane-custom-height={customHeight}>
-	<div class="band-lane-header">
+	<div class="band-lane-header" role="presentation" bind:this={header} use:rowHeader={headerOptions}>
 		<div class="band-lane-title">
-			<ColorDot rowId={props.band.id} color={bandColor} label={props.band.name} />
 			<span class="band-lane-name">{props.band.name}</span>
-			<z-tooltip content="Edit in the Audio panel" placement="top" openDelay={300}>
-				<button class="band-lane-action" type="button" aria-label="Edit {props.band.name} in the Audio panel" onclick={props.onedit}>
-					<SlidersHorizontalIcon weight="bold" />
+			<z-tooltip content="Lane settings" placement="top" openDelay={300}>
+				<button class="band-lane-action" type="button" aria-label="Settings for {props.band.name}" onclick={handleSettings}>
+					<GearSixIcon weight="bold" />
 				</button>
 			</z-tooltip>
 		</div>
@@ -107,8 +125,8 @@
 			<path class="band-lane-line" d={curvePath} />
 		</svg>
 
-		{#each visibleHits as hit (hit.time)}
-			<span class="band-lane-hit" style:--band-x="{getHitX(hit)}%"></span>
+		{#each visibleImpulses as impulse (impulse.time)}
+			<span class="band-lane-impulse" style:--band-x="{getImpulseX(impulse)}%"></span>
 		{/each}
 
 		{#if isPlayheadVisible}
@@ -120,5 +138,5 @@
 		{/if}
 	</div>
 
-	<RowResizer rowId={props.band.id} label={props.band.name} />
+	<RowResizer rowId={props.band.id} kind="impulse" label={props.band.name} siblings={siblingRows} />
 </div>

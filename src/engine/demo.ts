@@ -1,6 +1,6 @@
 import { GRID_STEP, DEMO_LOOP_SECONDS } from './settings'
 import { buildEmptySpectrum } from './spectrum'
-import type { AnalysisT, HitT } from './types'
+import type { AnalysisT, ImpulseT } from './types'
 
 const DEMO_BPM = 120
 
@@ -14,8 +14,8 @@ export const buildDemoAnalysis = (): AnalysisT => {
 	const level = new Float32Array(frameCount)
 	const energy = new Float32Array(frameCount)
 	const flux = new Float32Array(frameCount)
-	const kicks: HitT[] = []
-	const snaps: HitT[] = []
+	const kicks: ImpulseT[] = []
+	const snaps: ImpulseT[] = []
 	const beatLength = 60 / DEMO_BPM
 
 	for (let frame = 0; frame < frameCount; frame++) {

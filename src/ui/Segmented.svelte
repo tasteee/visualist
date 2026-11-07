@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { recordHistory } from '../automation.svelte'
 	import './controls.css'
 
 	type SegmentOptionT = {
@@ -15,6 +16,12 @@
 	}
 
 	const props: SegmentedPropsT = $props()
+
+	const handlePick = (optionValue: string) => {
+		const isChange = optionValue !== props.value
+		if (isChange) recordHistory()
+		props.onchange(optionValue)
+	}
 
 	const getKind = (optionValue: string): string => {
 		const isSelected = optionValue === props.value
@@ -38,7 +45,7 @@
 				tone={getTone(option.value)}
 				isDisabled={props.isDisabled ?? false}
 				aria-pressed={option.value === props.value}
-				onclick={() => props.onchange(option.value)}
+				onclick={() => handlePick(option.value)}
 			>
 				{option.label}
 			</z-button>

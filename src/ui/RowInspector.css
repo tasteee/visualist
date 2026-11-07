@@ -1,0 +1,95 @@
+.row-inspector {
+	--inspector-width: 19rem;
+	position: fixed;
+	top: var(--inspector-top);
+	left: var(--inspector-left);
+	z-index: 45;
+	display: flex;
+	flex-direction: column;
+	width: var(--inspector-width);
+	max-height: calc(100vh - var(--spacing-4));
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--popover);
+	color: var(--popover-foreground);
+	transform: translate(var(--inspector-shift-x, 0), var(--inspector-shift-y, 0));
+}
+
+.row-inspector-header {
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	gap: var(--spacing-2);
+	padding: var(--spacing-3);
+	border-bottom: 1px solid var(--border);
+}
+
+.row-inspector-eyebrow {
+	color: var(--muted);
+	font-size: var(--font-size-0);
+	font-weight: var(--font-weight-semibold);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.row-inspector-title {
+	font-size: var(--font-size-3);
+	font-weight: var(--font-weight-semibold);
+}
+
+.row-inspector-swatches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--spacing-1);
+}
+
+.row-inspector-swatch {
+	position: relative;
+	width: var(--spacing-6);
+	height: var(--spacing-6);
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	background: transparent;
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease;
+}
+
+.row-inspector-swatch::after {
+	position: absolute;
+	inset: 25%;
+	border-radius: 50%;
+	background: var(--tone);
+	content: '';
+}
+
+.row-inspector-swatch:hover {
+	background: var(--paper-soft);
+}
+
+.row-inspector-swatch.isActive {
+	border-color: var(--tone);
+}
+
+.row-inspector-swatch:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.row-inspector-body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--spacing-3);
+	min-height: 0;
+	padding: var(--spacing-3);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.row-inspector-actions {
+	display: flex;
+	gap: var(--spacing-2);
+}

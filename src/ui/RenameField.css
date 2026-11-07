@@ -1,0 +1,22 @@
+.rename-field {
+	width: 100%;
+	height: var(--spacing-8);
+	padding: 0 var(--spacing-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg);
+	color: var(--foreground);
+	font: inherit;
+	font-size: var(--font-size-small);
+	font-weight: var(--font-weight-semibold);
+	transition: border-color var(--motion-fast) ease;
+}
+
+.rename-field:hover {
+	border-color: var(--color-neutral-4);
+}
+
+.rename-field:focus {
+	border-color: var(--accent);
+	outline: none;
+}
