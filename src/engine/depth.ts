@@ -1,16 +1,25 @@
-import { resolveLayerDepth } from './layerRender'
+import { resolveLayerAngles, resolveLayerDepth } from './layerRender'
 import type { FrameInputT, LayerT, SettingsT } from './types'
 
 // Small enough to count as "on the frame". Modulated depth that
 // settles back near zero snaps onto the base sheet.
 const FLAT_DEPTH = 0.05
+const FLAT_ANGLE = 0.05
 
-// One sheet of the 3D stage. Layers that share a depth share a
-// sheet and blend with each other exactly like the flat render.
-export type DepthSliceT = {
+// A layer that leaves the frame: drawn by the GPU, in front of
+// the base sheet.
+export type FloatingLayerT = {
+	layer: LayerT
 	depth: number
-	layers: LayerT[]
-	isBase: boolean
+	// Position in the stack, bottom first. Breaks depth ties.
+	order: number
+}
+
+// Layers on the frame are drawn by the 2D renderer onto one base
+// sheet together with the background, every blend mode exact.
+export type StageLayersT = {
+	flat: LayerT[]
+	floating: FloatingLayerT[]
 }
 
 export const checkIsCameraMoved = (settings: SettingsT): boolean => {
@@ -21,29 +30,37 @@ export const checkIsCameraMoved = (settings: SettingsT): boolean => {
 }
 
 const getLayerDepth = (layer: LayerT, input: FrameInputT): number => {
-	if (!layer.isVisible) return 0
 	const depth = resolveLayerDepth(layer, input.signals)
 	if (depth < FLAT_DEPTH) return 0
-	return Math.round(depth * 100) / 100
+	return depth
+}
+
+const checkIsAngled = (layer: LayerT, input: FrameInputT): boolean => {
+	const angles = resolveLayerAngles(layer, input.signals)
+	return Math.abs(angles.tilt) > FLAT_ANGLE || Math.abs(angles.turn) > FLAT_ANGLE
+}
+
+const checkIsFloating = (layer: LayerT, input: FrameInputT): boolean => {
+	if (!layer.isVisible) return false
+	return getLayerDepth(layer, input) > 0 || checkIsAngled(layer, input)
 }
 
 // The flat render is used whenever nothing would look different
 // in 3D, so projects without depth render exactly as before.
 export const checkNeedsDepth = (input: FrameInputT): boolean => {
 	if (checkIsCameraMoved(input.settings)) return true
-	return input.layers.some((layer) => getLayerDepth(layer, input) > 0)
+	return input.layers.some((layer) => checkIsFloating(layer, input))
 }
 
-// Back to front. The base slice (depth 0) always exists because
-// it carries the background.
-export const buildDepthSlices = (input: FrameInputT): DepthSliceT[] => {
-	const byDepth = new Map<number, LayerT[]>([[0, []]])
-	for (const layer of input.layers) {
-		const depth = getLayerDepth(layer, input)
-		const slice = byDepth.get(depth) ?? []
-		slice.push(layer)
-		byDepth.set(depth, slice)
-	}
-	const depths = [...byDepth.keys()].sort((first, second) => first - second)
-	return depths.map((depth) => ({ depth, layers: byDepth.get(depth) ?? [], isBase: depth === 0 }))
+export const splitStageLayers = (input: FrameInputT): StageLayersT => {
+	const flat: LayerT[] = []
+	const floating: FloatingLayerT[] = []
+	input.layers.forEach((layer, order) => {
+		const isFloating = checkIsFloating(layer, input)
+		if (!isFloating) flat.push(layer)
+		if (isFloating) floating.push({ layer, depth: getLayerDepth(layer, input), order })
+	})
+	// Back to front: farther first, then stack order.
+	floating.sort((first, second) => first.depth - second.depth || first.order - second.order)
+	return { flat, floating }
 }

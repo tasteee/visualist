@@ -260,6 +260,9 @@ export type TextWeightT = 400 | 700 | 900
 // x and y are percent of the frame from its center. scale 1 is
 // the layer's natural size. rotation is in degrees. depth is how
 // far the layer floats off the frame toward the camera, 0-100.
+// tilt and turn swing the layer in 3D, in degrees: tilt around
+// its horizontal axis (positive leans the top away), turn around
+// its vertical axis (positive swings the right side away).
 export type LayerTransformT = {
 	x: number
 	y: number
@@ -267,6 +270,8 @@ export type LayerTransformT = {
 	rotation: number
 	opacity: number
 	depth: number
+	tilt: number
+	turn: number
 }
 
 export type LayerParamKeyT = keyof LayerTransformT

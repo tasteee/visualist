@@ -66,8 +66,9 @@ src/
     logoLayers.ts  splits the logo raster into masks, tints and distresses them
     echoes.ts      which echoes exist at time t, and how they look
     render.ts      one frame, back to front
-    depth.ts       splits the layer stack into depth slices
-    scene3d.ts     3D stage: slices on sheets in front of a perspective camera
+    depth.ts       splits the layer stack into flat and floating layers
+    gpuLayers.ts   floating layers as GPU quads: shaders for every layer effect
+    scene3d.ts     3D stage: base sheet, floating quads, perspective camera
     audio.ts       the audio clock (visuals follow it, never drift)
     recorder.ts    format pick + MediaRecorder
   store.svelte.ts  app state, render loop, load / play / seek / record
@@ -114,7 +115,8 @@ Frame flow:
 time -> signals -> settings (lanes, then mods)
      -> background -> each layer: resolve params -> FX -> blend
      -> 3D stage, only when depth, the camera, Lens or Film is in use:
-        depth slices -> sheets -> camera -> bloom -> Lens and Film
+        base sheet (background + flat layers) + floating layer quads
+        -> camera -> bloom -> Lens and Film
      -> video fade -> canvas -> recorder
 ```
 
@@ -138,6 +140,23 @@ The thin bar under a modulated slider shows its value at the playhead.
 Glow, color split, glitch, shake, flicker and blur. Each has one
 amount, and each amount can be modulated. Glow and blur are painted
 at reduced size, then scaled up, which keeps them cheap.
+
+## Floating layers
+
+A layer floats when its depth is above 0 or its tilt or turn is not 0.
+Tilt leans it around the horizontal axis (positive tips the top away),
+turn swings it around the vertical axis (positive swings the right side
+away), each from -80 to 80 degrees.
+
+Floating layers are their own quads on the GPU. The picture is uploaded
+once (the logo is redrawn every frame), and every effect runs in a
+shader: glow and blur are blurred on the GPU at reduced size, split,
+glitch and flicker are shader inputs, and shake moves the quad. Layers
+on the frame stay on one 2D sheet with the background, so every blend
+mode is exact there. Floating layers support normal, add, screen and
+multiply; overlay, soft light and difference draw as normal. They are
+drawn back to front by depth, then stack order, without depth testing,
+so tilted layers that cross each other do not cut through each other.
 
 ## Post
 
