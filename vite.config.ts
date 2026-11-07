@@ -2,12 +2,11 @@ import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { resolve } from 'node:path'
 
-// vink: the tasteink audio visualizer. Svelte 5 + a 2D canvas,
+// visualist: the tasteink audio visualizer. Svelte 5 + a 2D canvas,
 // with the compiled @tasteee/zest web components for all UI.
 //
-// The site build (root `pnpm build`) ships this app inside
-// the main site at <site base>/vink/. VITE_BASE_PATH is the
-// site base (e.g. /tink/ on Pages).
+// VITE_BASE_PATH is the public base the build is served from
+// (e.g. /visualist/ on GitHub Pages). Defaults to /.
 const getSiteBase = (): string => {
 	const siteBase = process.env.VITE_BASE_PATH ?? '/'
 	const hasTrailingSlash = siteBase.endsWith('/')
@@ -17,7 +16,7 @@ const getSiteBase = (): string => {
 
 export default defineConfig((environment) => {
 	const isBuild = environment.command === 'build'
-	const base = isBuild ? `${getSiteBase()}vink/` : '/'
+	const base = isBuild ? getSiteBase() : '/'
 
 	return {
 		base,
@@ -25,8 +24,7 @@ export default defineConfig((environment) => {
 		plugins: [svelte()],
 		server: {
 			port: 5179,
-			host: true,
-			fs: { allow: [resolve(__dirname, '../..')] }
+			host: true
 		},
 		build: {
 			outDir: resolve(__dirname, 'dist'),

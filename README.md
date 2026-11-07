@@ -1,4 +1,4 @@
-# vink
+# visualist
 
 The tasteink visualizer. Load a finished song, tune the look, and record
 a video for YouTube, TikTok, Reels, Shorts or the Instagram and
@@ -9,9 +9,18 @@ be taken over by spreading ink, and carries the track title.
 Runs entirely in the browser. No backend, no accounts, works offline.
 
 ```sh
-pnpm dev:vink     # from the repo root, http://localhost:5179
-pnpm build:vink
+pnpm install      # pulls @tasteee/zest from github:tasteee/zest#build
+pnpm dev          # http://localhost:5179
+pnpm build        # svelte-check + vite build to dist/
 ```
+
+`@tasteee/zest` isn't on npm yet, so it's installed straight from the
+`build` branch of [tasteee/zest](https://github.com/tasteee/zest). Run
+`pnpm update @tasteee/zest` to pick up a newer build. Once it's published,
+swap the specifier in `package.json` for a version range.
+
+Pushes to `main` deploy to GitHub Pages at `/visualist/`
+(override with the `PAGES_BASE_PATH` repository variable).
 
 ## Stack
 
