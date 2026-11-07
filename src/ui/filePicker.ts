@@ -1,25 +1,13 @@
-import { addAudioFile, loadAudioFile } from '../store.svelte'
+import { addAudioFile } from '../store.svelte'
 
-// Opens the system file chooser. Video files are accepted too,
-// for their audio track.
+const AUDIO_ACCEPT = 'audio/wav,audio/mpeg,.wav,.mp3'
+const VIDEO_ACCEPT = 'video/mp4,video/webm,.mp4,.webm'
+
+// Opens the system file chooser for audio. Each file is a layer.
 export const openAudioPicker = (): void => {
 	const input = document.createElement('input')
 	input.type = 'file'
-	input.accept = 'audio/*,video/*,.wav,.mp3,.m4a,.aac,.ogg,.flac'
-	input.onchange = () => {
-		const file = input.files?.[0]
-		if (file === undefined) return
-		void loadAudioFile(file)
-	}
-	input.click()
-}
-
-// Adds audio to the project: the song if there is none yet, an
-// audio layer if there is.
-export const openAddAudioPicker = (): void => {
-	const input = document.createElement('input')
-	input.type = 'file'
-	input.accept = 'audio/*,video/*,.wav,.mp3,.m4a,.aac,.ogg,.flac'
+	input.accept = AUDIO_ACCEPT
 	input.onchange = () => {
 		const file = input.files?.[0]
 		if (file === undefined) return
@@ -28,7 +16,20 @@ export const openAddAudioPicker = (): void => {
 	input.click()
 }
 
-const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/avif'
+// Opens the system file chooser for a video layer.
+export const openVideoPicker = (onfile: (file: File) => void): void => {
+	const input = document.createElement('input')
+	input.type = 'file'
+	input.accept = VIDEO_ACCEPT
+	input.onchange = () => {
+		const file = input.files?.[0]
+		if (file === undefined) return
+		onfile(file)
+	}
+	input.click()
+}
+
+const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif'
 const SVG_ACCEPT = 'image/svg+xml,.svg'
 
 export type LayerFileKindT = 'image' | 'svg'

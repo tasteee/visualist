@@ -23,7 +23,7 @@
 	// or a visual layer. Its automation lanes render below it
 	// when it is open.
 	type TimelineLayerPropsT = {
-		kind: 'global' | 'song' | LayerKindT
+		kind: LayerKindT
 		rowId: string
 		color: ColorNameT
 		title: string
@@ -53,9 +53,7 @@
 	const props: TimelineLayerPropsT = $props()
 
 	const view = $derived(timeline.view)
-	const isGlobal = $derived(props.kind === 'global')
-	// The song's own row, pinned to the top with its waveform.
-	const isAudio = $derived(props.kind === 'song')
+	const isAudio = $derived(props.kind === 'audio')
 	const canToggleVisible = $derived(props.ontogglevisible !== undefined)
 	const collapseLabel = $derived(props.isCollapsed ? `Show ${props.title} automations` : `Hide ${props.title} automations`)
 	const defaultAddLabel = $derived(props.canAddLane ? `Automate a ${props.title} control` : `Every ${props.title} control is automated`)
@@ -67,10 +65,7 @@
 	const isPlayheadVisible = $derived(checkIsTimeVisible(app.currentTime, view))
 	const row = $derived<RowRefT>({ kind: 'layer', id: props.rowId })
 	const siblingRows = $derived(props.siblings ?? [])
-	const inspectorKind = $derived<InspectorRowKindT>(isAudio ? 'audio' : isGlobal ? 'global' : 'layer')
-
-	// The audio row draws its own waveform, playhead and grid.
-	const hasOverlay = $derived(!isAudio)
+	const inspectorKind: InspectorRowKindT = 'layer'
 
 	const getGridX = (line: GridLineT): number => timeToRatio(line.time, view) * PATH_WIDTH
 
@@ -81,10 +76,9 @@
 	// A click on empty space in a layer's row sets the playhead there.
 	// Clips and their handles keep their own clicks.
 	const handleTrackClick = (event: MouseEvent) => {
-		const isSong = props.kind === 'song'
 		const target = event.target as Element
-		const isOnClip = target.closest('.layer-clip, [data-clip-control]') !== null
-		if (isSong || isOnClip) return
+		const isOnClip = target.closest('.layer-clip, .audio-clip, [data-clip-control]') !== null
+		if (isOnClip) return
 		const bounds = event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : null
 		if (bounds === null) return
 		const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
@@ -158,17 +152,15 @@
 	</div>
 
 	<div class="timeline-layer-track" data-track="layer" role="presentation" onclick={handleTrackClick}>
-		{#if hasOverlay}
-			<svg class="timeline-layer-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
-				{#each gridLines as line (line.time)}
-					<line class="timeline-layer-gridline" class:isLabel={line.kind === 'label'} class:isSub={line.kind === 'sub'} x1={getGridX(line)} x2={getGridX(line)} y1="0" y2="100" />
-				{/each}
-			</svg>
-		{/if}
+		<svg class="timeline-layer-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+			{#each gridLines as line (line.time)}
+				<line class="timeline-layer-gridline" class:isLabel={line.kind === 'label'} class:isSub={line.kind === 'sub'} x1={getGridX(line)} x2={getGridX(line)} y1="0" y2="100" />
+			{/each}
+		</svg>
 		{#if props.track}
 			{@render props.track()}
 		{/if}
-		{#if hasOverlay && isPlayheadVisible}
+		{#if isPlayheadVisible}
 			<div class="timeline-layer-playhead" style:--layer-x="{playheadPercent}%"></div>
 		{/if}
 	</div>

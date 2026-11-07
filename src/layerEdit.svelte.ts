@@ -3,6 +3,7 @@ import { LOGO_LAYER_ID } from './engine/layers'
 import type { LayerT } from './engine/types'
 import { layerStore, selectLayers } from './layers.svelte'
 import { shareAudioLayerBuffer } from './store.svelte'
+import { copyVideo } from './engine/video'
 
 // Copy, paste, duplicate and deactivate for the selected layers,
 // the way clips behave in an audio editor.
@@ -27,20 +28,33 @@ const cloneLayer = (layer: LayerT): LayerT => {
 	return { ...plain, id: crypto.randomUUID(), fx }
 }
 
-// Where an audio layer's sound ends on the timeline.
+// Audio and video are clips: they paste at the playhead and
+// duplicate right after the original.
+const checkIsClip = (layer: LayerT): boolean => layer.kind === 'audio' || layer.kind === 'video'
+
+// A copied video gets its own decoded file, since a video can be
+// at only one time.
+const copyVideoFile = (copy: LayerT, sourceAssetId: string | null): void => {
+	if (sourceAssetId === null) return
+	copy.assetId = copy.id
+	void copyVideo(sourceAssetId, copy.id, copy.name).then(() => (layerStore.assetVersion += 1))
+}
+
+// Where a clip ends on the timeline.
 const getClipEnd = (layer: LayerT, fileLength: number): number => {
 	if (layer.endTime !== null) return layer.endTime
-	return layer.startTime + Math.max(0, fileLength - layer.audioOffset)
+	return layer.startTime + Math.max(0, fileLength - layer.sourceOffset)
 }
 
 const placeCopy = (copy: LayerT, sourceId: string, startTime: number): void => {
-	const isAudio = copy.kind === 'audio'
+	const isClip = checkIsClip(copy)
+	if (!isClip) return
 	const length = copy.endTime === null ? null : copy.endTime - copy.startTime
-	if (isAudio) {
-		copy.startTime = Math.max(0, startTime)
-		copy.endTime = length === null ? null : copy.startTime + length
-		shareAudioLayerBuffer(sourceId, copy.id)
-	}
+	const sourceAssetId = copy.assetId
+	copy.startTime = Math.max(0, startTime)
+	copy.endTime = length === null ? null : copy.startTime + length
+	if (copy.kind === 'audio') shareAudioLayerBuffer(sourceId, copy.id)
+	if (copy.kind === 'video') copyVideoFile(copy, sourceAssetId)
 }
 
 export const copySelectedLayers = (): boolean => {
@@ -60,7 +74,7 @@ const addCopies = (copies: LayerT[]): void => {
 	selectLayers(ids, ids[ids.length - 1] ?? null)
 }
 
-// Audio lands where the playhead is. Everything else lands as it was.
+// Clips land where the playhead is. Everything else lands as it was.
 export const pasteLayers = (playheadTime: number): boolean => {
 	const hasClipboard = clipboard.length > 0
 	if (!hasClipboard) return false
@@ -74,15 +88,15 @@ export const pasteLayers = (playheadTime: number): boolean => {
 	return true
 }
 
-// Audio repeats right after the original. Other layers sit on top of it.
+// Clips repeat right after the original. Other layers sit on top of it.
 export const duplicateSelectedLayers = (getFileLength: (layerId: string) => number): boolean => {
 	const selected = getSelectedLayers()
 	const hasLayers = selected.length > 0
 	if (!hasLayers) return false
 	const copies = selected.map((layer) => {
 		const copy = cloneLayer(layer)
-		const isAudio = layer.kind === 'audio'
-		if (isAudio) placeCopy(copy, layer.id, getClipEnd(layer, getFileLength(layer.id)))
+		const isClip = checkIsClip(layer)
+		if (isClip) placeCopy(copy, layer.id, getClipEnd(layer, getFileLength(layer.id)))
 		return copy
 	})
 	addCopies(copies)

@@ -9,6 +9,7 @@
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import { recordHistory, recordHistoryCoalesced } from '../automation.svelte'
 	import { getAsset } from '../engine/assets'
+	import { getVideo } from '../engine/video'
 	import { BLEND_OPTIONS, FX_SPECS, TEXT_WEIGHT_OPTIONS, getLayerParams } from '../engine/layers'
 	import { DEMO_LOOP_SECONDS } from '../engine/settings'
 	import type { BlendModeT, FxKindT, LayerT, ShapeFillT, ShapeKindT, TextWeightT } from '../engine/types'
@@ -38,6 +39,7 @@
 	const isLogo = $derived(props.layer.kind === 'logo')
 	const isText = $derived(props.layer.kind === 'text')
 	const isSvg = $derived(props.layer.kind === 'svg')
+	const isVideo = $derived(props.layer.kind === 'video')
 	const textContent = $derived(props.layer.text)
 	const hasTextContent = $derived(isText && textContent !== null)
 	const hasFx = $derived(props.layer.fx.length > 0)
@@ -103,8 +105,10 @@
 
 	const getIsMissingFile = (): boolean => {
 		void layerStore.assetVersion
+		if (props.layer.assetId === null) return false
+		if (props.layer.kind === 'video') return getVideo(props.layer.assetId) === null
 		const isAssetLayer = props.layer.kind === 'image' || props.layer.kind === 'svg'
-		if (!isAssetLayer || props.layer.assetId === null) return false
+		if (!isAssetLayer) return false
 		return getAsset(props.layer.assetId) === null
 	}
 
@@ -204,6 +208,10 @@
 
 		{#if isMissingFile}
 			<p class="layer-editor-note isWarning">This layer's file could not be restored. Upload it again.</p>
+		{/if}
+
+		{#if isVideo}
+			<p class="layer-editor-note">Drag the clip in the timeline to move it. Drag its edges to trim. Video plays without sound.</p>
 		{/if}
 
 		{#if hasTextContent}

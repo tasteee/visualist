@@ -255,7 +255,7 @@ export type AutomationLaneT = {
 	isBypassed?: boolean
 }
 
-export type LayerKindT = 'logo' | 'text' | 'image' | 'svg' | 'audio' | 'shape'
+export type LayerKindT = 'logo' | 'text' | 'image' | 'svg' | 'audio' | 'video' | 'shape'
 
 export type BlendModeT = 'normal' | 'screen' | 'multiply' | 'overlay' | 'softLight' | 'add' | 'difference'
 
@@ -339,7 +339,7 @@ export type LayerT = {
 	shape: ShapeT | null
 	assetId: string | null
 	svgColor: SvgColorT
-	// Audio layers only: how far into the file the clip begins (trimming
-	// its start moves this).
-	audioOffset: number
+	// Audio and video layers: how far into the file the clip begins
+	// (trimming its start moves this).
+	sourceOffset: number
 }

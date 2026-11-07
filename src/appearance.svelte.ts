@@ -13,7 +13,6 @@ type AppearanceStateT = {
 }
 
 const STORAGE_KEY = 'vink.appearance.v1'
-export const AUDIO_ROW_ID = 'audio'
 
 const readStored = (): AppearanceStateT => {
 	try {

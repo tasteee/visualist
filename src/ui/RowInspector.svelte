@@ -26,7 +26,6 @@
 	import { findLayer, layerStore, removeLayer, renameLayer } from '../layers.svelte'
 	import { closeRowInspector, rowInspector } from '../rowInspector.svelte'
 	import { findBand, findTrack, removeBand, removeTrack, renameBand, renameTrack } from '../sources.svelte'
-	import { AUDIO_ROW_ID } from '../appearance.svelte'
 	import { focusShell } from './focus'
 	import AudioControls from './AudioControls.svelte'
 	import BandControls from './BandControls.svelte'
@@ -70,11 +69,10 @@
 		if (open.kind === 'lane') return 'Automation lane'
 		if (open.kind === 'impulse') return 'Impulse lane'
 		if (open.kind === 'band') return 'Band lane'
-		if (open.kind === 'audio') return 'Audio'
-		return 'Scene and post'
+		return ''
 	})
 
-	const canRename = $derived(open !== null && (open.kind === 'layer' || open.kind === 'lane' || open.kind === 'impulse' || open.kind === 'band'))
+	const canRename = $derived(open !== null)
 
 	const currentName = $derived.by(() => {
 		if (layer !== undefined) return layer.name
@@ -90,11 +88,10 @@
 		if (lane !== undefined) return getToneColor(getTargetTone(lane.target, layers))
 		if (track !== undefined) return getRoleColor(track.role)
 		if (open.kind === 'band') return 'amber'
-		if (open.kind === 'audio') return 'amber'
 		return 'slate'
 	})
 
-	const rowColorId = $derived(open === null ? '' : open.kind === 'audio' ? AUDIO_ROW_ID : open.kind === 'global' ? open.rowId : open.rowId)
+	const rowColorId = $derived(open === null ? '' : open.rowId)
 	const currentColor = $derived(getRowColor(rowColorId, defaultColor))
 
 	// A lane can switch to any free control in its own group.
@@ -249,9 +246,6 @@
 			{#if canRename}
 				<RenameField value={currentName} label="Name" oncommit={handleRename} />
 			{/if}
-			{#if !canRename}
-				<span class="row-inspector-title">{open.kind === 'audio' ? 'Song' : 'Scene and post'}</span>
-			{/if}
 			<div class="row-inspector-swatches" role="group" aria-label="Color">
 				{#each PALETTE as option (option.name)}
 					<button
@@ -275,10 +269,6 @@
 
 			{#if layer !== undefined && layer.kind === 'audio'}
 				<AudioControls layerId={layer.id} />
-			{/if}
-
-			{#if open.kind === 'audio'}
-				<AudioControls layerId={null} />
 			{/if}
 
 			{#if lane !== undefined}

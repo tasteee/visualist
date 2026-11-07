@@ -2,7 +2,8 @@ import { toaster } from '@tasteee/zest'
 import { recordHistory, removeLanesForFx, removeLanesForLayer } from './automation.svelte'
 import { importAssetFile, restoreAssets } from './engine/assets'
 import type { AssetRequestT } from './engine/assets'
-import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createShapeLayer, createTextLayer } from './engine/layers'
+import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createShapeLayer, createTextLayer, createVideoLayer } from './engine/layers'
+import { importVideoFile, restoreVideos } from './engine/video'
 import type { FxKindT, LayerFxT, LayerT, ShapeT, TextContentT } from './engine/types'
 
 type LayerStoreT = {
@@ -43,7 +44,7 @@ const migrateColorId = (value: unknown, fallback: string): string => {
 // saves gain any field added since.
 const normalizeLayer = (stored: Partial<LayerT>): LayerT | null => {
 	const kind = stored.kind
-	const isKnownKind = kind === 'logo' || kind === 'text' || kind === 'image' || kind === 'svg' || kind === 'audio' || kind === 'shape'
+	const isKnownKind = kind === 'logo' || kind === 'text' || kind === 'image' || kind === 'svg' || kind === 'audio' || kind === 'video' || kind === 'shape'
 	if (!isKnownKind) return null
 	const base = kind === 'logo' ? createLogoLayer() : createTextLayer('')
 	const legacyVolume = (stored as { volume?: unknown }).volume
@@ -57,7 +58,9 @@ const normalizeLayer = (stored: Partial<LayerT>): LayerT | null => {
 	const mergedShape = { ...shapeBase, ...stored.shape } as ShapeT
 	const shape = kind === 'shape' ? { ...mergedShape, color: migrateColorId(mergedShape.color, 'white'), color2: migrateColorId(mergedShape.color2, 'accent-1') } : null
 	const svgColor = migrateColorId(stored.svgColor, 'original')
-	const normalized = { ...base, ...stored, kind, transform, modulations, fx, text, shape, svgColor } as LayerT
+	const legacyOffset = (stored as { audioOffset?: unknown }).audioOffset
+	const offsetFallback = typeof legacyOffset === 'number' ? { sourceOffset: legacyOffset } : {}
+	const normalized = { ...base, ...offsetFallback, ...stored, kind, transform, modulations, fx, text, shape, svgColor } as LayerT
 	return normalized
 }
 
@@ -193,6 +196,26 @@ export const setLayerImageFile = async (layerId: string, file: File): Promise<vo
 	}
 }
 
+// A video lands on the timeline at the playhead and plays for its
+// own length.
+export const addVideoLayer = async (file: File, startTime: number): Promise<void> => {
+	layerStore.isImporting = true
+	try {
+		const layer = createVideoLayer('', getFileBaseName(file.name))
+		layer.assetId = layer.id
+		const asset = await importVideoFile(layer.id, file)
+		layer.startTime = Math.max(0, startTime)
+		layer.endTime = layer.startTime + asset.duration
+		pushLayer(layer)
+		layerStore.assetVersion += 1
+	} catch {
+		const message = 'That video could not be read. Try an MP4 or WebM.'
+		toaster.show({ title: 'Could not add the video', description: message, tone: 'danger' })
+	} finally {
+		layerStore.isImporting = false
+	}
+}
+
 export const addAssetLayer = async (file: File): Promise<void> => {
 	layerStore.isImporting = true
 	try {
@@ -301,13 +324,21 @@ const collectAssetRequests = (): AssetRequestT[] => {
 	return requests
 }
 
+const collectVideoRequests = (): { assetId: string; name: string }[] => {
+	const videoLayers = layerStore.layers.filter((layer) => layer.kind === 'video' && layer.assetId !== null)
+	return videoLayers.map((layer) => ({ assetId: layer.assetId as string, name: layer.name }))
+}
+
 // Layers whose file is gone stay in the list, so their settings
 // are not lost, but they draw nothing until replaced.
 export const restoreLayerAssets = async (): Promise<void> => {
 	const requests = collectAssetRequests()
-	const hasRequests = requests.length > 0
+	const videoRequests = collectVideoRequests()
+	const hasRequests = requests.length > 0 || videoRequests.length > 0
 	if (!hasRequests) return
-	const missingIds = await restoreAssets(requests)
+	const missingPictureIds = await restoreAssets(requests)
+	const missingVideoIds = await restoreVideos(videoRequests)
+	const missingIds = [...missingPictureIds, ...missingVideoIds]
 	layerStore.assetVersion += 1
 	const hasMissing = missingIds.length > 0
 	if (!hasMissing) return

@@ -110,7 +110,7 @@
 		<div class="export-fact"><dt>Bitrate</dt><dd>16 Mbps video · 256 kbps audio</dd></div>
 		<div class="export-fact"><dt>Range</dt><dd>{rangeLabel}</dd></div>
 		<div class="export-fact"><dt>Length</dt><dd>{lengthLabel}</dd></div>
-		<div class="export-fact"><dt>Name</dt><dd>{app.hasAudio ? `${app.fileName.replace(/\.[^.]+$/, '')}-visualizer` : '–'}</dd></div>
+		<div class="export-fact"><dt>Name</dt><dd>{app.hasSong ? `${app.projectName}-visualizer` : '–'}</dd></div>
 	</dl>
 </Section>
 

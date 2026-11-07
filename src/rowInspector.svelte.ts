@@ -1,7 +1,7 @@
 // The inspector popover. One at most, anchored to the header
 // that opened it. It holds the controls a row owns: its name,
 // color and everything the sidebar used to show for it.
-export type InspectorRowKindT = 'layer' | 'lane' | 'impulse' | 'band' | 'audio' | 'global'
+export type InspectorRowKindT = 'layer' | 'lane' | 'impulse' | 'band'
 
 export type InspectorAnchorT = {
 	left: number
