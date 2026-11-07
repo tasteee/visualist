@@ -2,15 +2,13 @@
 	import CaretLeftIcon from 'phosphor-svelte/lib/CaretLeftIcon'
 	import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon'
 	import CrosshairSimpleIcon from 'phosphor-svelte/lib/CrosshairSimpleIcon'
-	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
-	import { app, checkIsTempoEdited, detectBpm, nudgeDownbeat, setBpm, setDownbeatAt, setProjectName } from '../store.svelte'
+	import { app, nudgeDownbeat, setBpm, setDownbeatAt, setProjectName } from '../store.svelte'
 	import ControlSlider from './ControlSlider.svelte'
 	import Section from './Section.svelte'
 	import './SettingsPanel.css'
 
 	const DOWNBEAT_NUDGE_SECONDS = 0.005
 
-	const isTempoEdited = $derived(checkIsTempoEdited())
 	const downbeatLabel = $derived(`${app.beatOffset.toFixed(3)} s`)
 	const canSetDownbeat = $derived(app.hasAudio && !app.isRecording)
 
@@ -42,12 +40,6 @@
 				<z-field label="BPM">
 					<z-number-input value={app.bpm} min={40} max={240} step={0.1} hasStepperButtons isFullWidth onchange={handleBpmChange}></z-number-input>
 				</z-field>
-				<z-tooltip content="Back to the detected tempo and downbeat" placement="top" openDelay={300}>
-					<z-button size="md" kind="outline" tone="neutral" isDisabled={!isTempoEdited} onclick={detectBpm}>
-						<WaveformIcon weight="bold" />
-						Detect
-					</z-button>
-				</z-tooltip>
 			</div>
 
 			<div class="settings-downbeat">

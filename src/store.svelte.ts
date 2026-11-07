@@ -1,7 +1,6 @@
 import { toaster } from '@tasteee/zest'
 import { untrack } from 'svelte'
-import { analyzeAudio, computeBeatOffset, placeAnalysis } from './engine/analysis'
-import type { ClipPlacementT } from './engine/analysis'
+import { analyzeAudio, computeBeatOffset } from './engine/analysis'
 import {
 	createRecordingTap,
 	getAudioContext,
@@ -64,12 +63,11 @@ type AppStateT = {
 	// Set when the user picks the downbeat by hand, so a later
 	// tempo change keeps that bar line where they put it.
 	downbeatAnchor: number | null
-	// The audio layer the picture listens to, and its name. It is the
-	// first audio added. Every audio layer is mixed in and heard.
-	songLayerId: string | null
+	// The name of the first audio layer, for saving.
 	fileName: string
-	// hasAudio: there is a timeline to play. hasSong: some audio layer
-	// drives the picture. A new project has a silent timeline.
+	// hasAudio: there is a timeline to play. hasSong: the project has an
+	// audio layer. Audio is heard but does not drive the picture; a new
+	// project has a silent timeline.
 	hasAudio: boolean
 	hasSong: boolean
 	duration: number
@@ -105,8 +103,6 @@ const MIN_PROJECT_SECONDS = 1
 // The lowest rate Web Audio accepts. The base is silent, so quality
 // does not matter, only length.
 const SILENT_SAMPLE_RATE = 8000
-// Dragging a clip moves its analysis only once it settles.
-const PLACEMENT_DELAY = 120
 const PALETTE_DELAY = 120
 // The live preview draws smaller than the export, so heavy
 // effects stay smooth. Recording always uses the export size.
@@ -120,7 +116,6 @@ export const app = $state<AppStateT>({
 	bpm: 120,
 	beatOffset: 0,
 	downbeatAnchor: null,
-	songLayerId: null,
 	fileName: '',
 	hasAudio: false,
 	hasSong: false,
@@ -147,23 +142,13 @@ export const app = $state<AppStateT>({
 })
 
 // Big typed arrays stay out of the deep proxy.
-type SongSourceT = {
-	layerId: string
-	analysis: AnalysisT
-}
-
 const demoAnalysis = buildDemoAnalysis()
-let songSource = $state.raw<SongSourceT | null>(null)
-let songPlacement = $state.raw<ClipPlacementT | null>(null)
 
-// What the audio analysis found, as it sits on the timeline, before
-// any user corrections. Without audio it is the demo beat.
-const buildDetectedAnalysis = (source: SongSourceT | null, placement: ClipPlacementT | null, duration: number): AnalysisT => {
-	if (source === null || placement === null) return demoAnalysis
-	return placeAnalysis(source.analysis, placement, duration)
-}
+// No audio drives the picture. It follows the built-in demo beat, until
+// the user maps a sound to a value themselves.
+const detectedAnalysis = demoAnalysis
 
-const detectedAnalysis = $derived(buildDetectedAnalysis(songSource, songPlacement, app.duration))
+// Big typed arrays stay out of the deep proxy.
 let appliedPalette = $state.raw<PaletteT>(readPalette(app.settings))
 
 let audioBuffer: AudioBuffer | null = null
@@ -656,11 +641,8 @@ const useSilentBase = (): void => {
 	pausePlayback()
 	setActiveLoop(null)
 	audioBuffer = buildSilentBuffer(DEFAULT_PROJECT_SECONDS)
-	songSource = null
-	songPlacement = null
 	app.hasAudio = true
 	app.hasSong = false
-	app.songLayerId = null
 	app.isPlaying = false
 	app.duration = DEFAULT_PROJECT_SECONDS
 	app.trimStart = 0
@@ -793,12 +775,6 @@ export const dismissPendingBpm = (): void => {
 	app.pendingBpm = null
 }
 
-const takeTempo = (found: AnalysisT): void => {
-	app.bpm = found.bpm
-	app.beatOffset = found.beatOffset
-	app.downbeatAnchor = null
-}
-
 export const setProjectName = (text: string): void => {
 	app.projectName = text.slice(0, 80)
 	app.isProjectNameEdited = true
@@ -818,13 +794,13 @@ const wrapToFirstBar = (time: number, bpm: number): number => {
 	return wrapped
 }
 
-// A hand-set downbeat stays put. Otherwise the phase is found
-// again for the new tempo, the same way detection finds it.
+// A hand-set downbeat stays put. Otherwise the bar line stays where
+// it was, wrapped into the first bar.
 const resolveBeatOffset = (bpm: number): number => {
 	const anchor = app.downbeatAnchor
 	const hasAnchor = anchor !== null
 	if (hasAnchor) return wrapToFirstBar(anchor, bpm)
-	return computeBeatOffset(detectedAnalysis.flux, bpm)
+	return wrapToFirstBar(app.beatOffset, bpm)
 }
 
 export const setBpm = (value: number): void => {
@@ -835,13 +811,6 @@ export const setBpm = (value: number): void => {
 	app.beatOffset = resolveBeatOffset(value)
 }
 
-// Back to what the analysis found, tempo and downbeat both.
-export const detectBpm = (): void => {
-	app.bpm = detectedAnalysis.bpm
-	app.beatOffset = detectedAnalysis.beatOffset
-	app.downbeatAnchor = null
-}
-
 export const setDownbeatAt = (time: number): void => {
 	app.downbeatAnchor = time
 	app.beatOffset = wrapToFirstBar(time, app.bpm)
@@ -850,12 +819,6 @@ export const setDownbeatAt = (time: number): void => {
 export const nudgeDownbeat = (seconds: number): void => {
 	const anchor = app.downbeatAnchor ?? app.beatOffset
 	setDownbeatAt(anchor + seconds)
-}
-
-export const checkIsTempoEdited = (): boolean => {
-	const isBpmEdited = app.bpm !== detectedAnalysis.bpm
-	const isDownbeatEdited = app.downbeatAnchor !== null
-	return isBpmEdited || isDownbeatEdited
 }
 
 // Switching theme swaps the two colors, so custom colors survive.
@@ -904,18 +867,6 @@ const startWatchers = (): void => {
 			saveSettings($state.snapshot(app.settings))
 		})
 
-		// The song's analysis follows its clip around the timeline.
-		$effect(() => {
-			const next = readSongPlacement()
-			const isFirstPlacement = untrack(() => songPlacement === null)
-			if (isFirstPlacement) {
-				songPlacement = next
-				return
-			}
-			const timer = setTimeout(() => (songPlacement = next), PLACEMENT_DELAY)
-			return () => clearTimeout(timer)
-		})
-
 		// The project is as long as its audio and video.
 		$effect(() => {
 			void audioVersion
@@ -928,7 +879,7 @@ const startWatchers = (): void => {
 			void audioVersion
 			const layerKey = layerStore.layers.map((layer) => `${layer.id}:${layer.kind}`).join('|')
 			void layerKey
-			untrack(syncSongSource)
+			untrack(syncHasAudioLayers)
 		})
 
 		// Changing an audio layer while the song plays restarts the mix
@@ -994,54 +945,21 @@ const getFileAnalysis = async (buffer: AudioBuffer, onProgress: (fraction: numbe
 	return found
 }
 
-type AdoptModeT = 'offer' | 'restore' | 'quiet'
-
-// The audio layer the picture listens to. 'offer' is a first audio
-// being added, whose tempo is offered. 'restore' brings back the
-// project's tempo. 'quiet' keeps the tempo as it is.
-const adoptSong = async (layerId: string, mode: AdoptModeT): Promise<void> => {
-	const layer = findLayer(layerId)
+// The first audio added offers its tempo to the project. The audio
+// itself is only mixed in; nothing is bound to it.
+const offerTempoFor = async (layerId: string): Promise<void> => {
 	const buffer = audioLayerBuffers.get(layerId)
-	if (layer === undefined || buffer === undefined) return
-	app.songLayerId = layerId
-	app.hasSong = true
-	app.fileName = layer.name
+	if (buffer === undefined) return
 	app.isAnalyzing = true
 	app.analysisProgress = 0
-	setStatus(`Reading ${layer.name}…`)
 	try {
 		const found = await getFileAnalysis(buffer, (fraction) => (app.analysisProgress = fraction))
-		const isStillSong = app.songLayerId === layerId
-		if (!isStillSong) return
-		songSource = { layerId, analysis: found }
-		app.kickCount = found.kicks.length
-		if (mode === 'offer') offerTempo(found)
-		if (mode === 'restore') takeTempo(found)
-		if (mode === 'offer') resetLoopRegion()
-		const isNamable = mode === 'offer' && !app.isProjectNameEdited
-		if (isNamable) app.projectName = titleFromFileName(layer.name)
-		markDirty()
-		const length = formatTime(buffer.duration)
-		setStatus(`${layer.name} · ${length} · ${found.kicks.length} kicks · ${Math.round(found.bpm)} BPM`, 'success')
+		offerTempo(found)
 	} catch {
-		const message = 'That audio could not be analyzed.'
-		setStatus(message, 'danger')
-		toaster.show({ title: 'Could not analyze audio', description: message, tone: 'danger' })
+		toaster.show({ title: 'Could not find the tempo', description: 'You can try again in the audio layer settings.', tone: 'warning' })
 	} finally {
 		app.isAnalyzing = false
 	}
-}
-
-const clearSong = (): void => {
-	songSource = null
-	songPlacement = null
-	app.songLayerId = null
-	app.hasSong = false
-	app.fileName = ''
-	app.kickCount = 0
-	app.pendingBpm = null
-	setStatus(DEMO_STATUS)
-	markDirty()
 }
 
 const findFirstAudioLayer = (): LayerT | undefined => {
@@ -1049,6 +967,7 @@ const findFirstAudioLayer = (): LayerT | undefined => {
 	return audioLayers.find((layer) => audioLayerBuffers.has(layer.id))
 }
 
+<<<<<<< HEAD
 let isRestoringAudio = false
 
 // Deleting the audio the picture listens to hands the job to the next
@@ -1079,6 +998,13 @@ const readSongPlacement = (): ClipPlacementT | null => {
 	const naturalEnd = clip.startTime + Math.max(0, buffer.duration - clip.sourceOffset)
 	const endTime = clip.endTime ?? naturalEnd
 	return { startTime: clip.startTime, endTime: Math.min(endTime, naturalEnd), sourceOffset: clip.sourceOffset }
+=======
+// Whether the project has audio, as layers come and go.
+const syncHasAudioLayers = (): void => {
+	const first = findFirstAudioLayer()
+	app.hasSong = first !== undefined
+	app.fileName = first === undefined ? '' : first.name
+>>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 }
 
 export type AddAudioOptionsT = {
@@ -1100,13 +1026,14 @@ export const addAudioFile = async (file: File, options: AddAudioOptionsT = { isR
 		if (!options.isRestore) recordHistory()
 		layerStore.layers.push(layer)
 		if (!options.isRestore) selectLayer(layer.id)
-		const isFirstAudio = app.songLayerId === null
-		const mode: AdoptModeT = options.isRestore ? 'restore' : 'offer'
-		const adoption = isFirstAudio ? adoptSong(layer.id, mode) : null
+		const isFirstAudio = !app.hasSong
+		syncHasAudioLayers()
+		const shouldOffer = isFirstAudio && !options.isRestore
+		const offer = shouldOffer ? offerTempoFor(layer.id) : null
 		if (!options.isRestore) await storeLayerFile(layer.id, file).catch(() => {
 			toaster.show({ title: 'Audio not saved', description: 'It will need adding again after a reload.', tone: 'warning' })
 		})
-		if (adoption !== null) await adoption
+		if (offer !== null) await offer
 	} catch {
 		const message = 'That file could not be read. Try a WAV or MP3.'
 		toaster.show({ title: 'Could not add the audio', description: message, tone: 'danger' })
@@ -1114,7 +1041,6 @@ export const addAudioFile = async (file: File, options: AddAudioOptionsT = { isR
 }
 
 export const restoreAudioLayers = async (): Promise<void> => {
-	isRestoringAudio = true
 	let missingCount = 0
 	try {
 		const audioLayers = layerStore.layers.filter((layer) => layer.kind === 'audio' && layer.assetId !== null)
@@ -1131,10 +1057,8 @@ export const restoreAudioLayers = async (): Promise<void> => {
 		}
 		audioVersion += 1
 	} finally {
-		isRestoringAudio = false
+		syncHasAudioLayers()
 	}
-	const first = findFirstAudioLayer()
-	if (first !== undefined) await adoptSong(first.id, 'restore')
 	const hasMissing = missingCount > 0
 	if (!hasMissing) return
 	toaster.show({ title: 'Some audio layers are missing', description: `${missingCount} audio file(s) could not be restored. Those layers are silent.`, tone: 'warning' })
