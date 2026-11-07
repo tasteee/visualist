@@ -10,7 +10,7 @@
 
 	// The readout above the timeline. The buttons that act on the
 	// timeline live in the toolbar beside the editor.
-	const canChangeSong = $derived(!app.isRecording && !app.isAnalyzing)
+	const canAddAudio = $derived(!app.isRecording)
 
 	const elapsedLabel = $derived(formatPreciseTime(app.currentTime))
 	const totalLabel = $derived(formatPreciseTime(app.duration))
@@ -53,8 +53,8 @@
 
 	<span class="transport-bar-divider"></span>
 
-	<z-button size="sm" kind="ghost" tone="neutral" isDisabled={!canChangeSong} onclick={openAudioPicker}>
+	<z-button size="sm" kind="ghost" tone="neutral" isDisabled={!canAddAudio} onclick={openAudioPicker}>
 		<MusicNotesIcon weight="bold" />
-		Change song
+		Add audio
 	</z-button>
 </div>

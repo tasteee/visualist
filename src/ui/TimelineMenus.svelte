@@ -7,9 +7,10 @@
 	import TextTIcon from 'phosphor-svelte/lib/TextTIcon'
 	import VideoCameraIcon from 'phosphor-svelte/lib/VideoCameraIcon'
 	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
-	import { addImageLayer, addShapeLayer, addTextLayer } from '../layers.svelte'
+	import { addAssetLayer, addShapeLayer, addTextLayer, addVideoLayer } from '../layers.svelte'
+	import { app } from '../store.svelte'
 	import { addEmptyTrack } from '../sources.svelte'
-	import { openAddAudioPicker } from './filePicker'
+	import { openAudioPicker, openPicturePicker, openVideoPicker } from './filePicker'
 	import { GRID_DIVISIONS, formatGridDivision } from '../engine/timeline'
 	import type { GridDivisionT } from '../engine/timeline'
 	import { setGridDivision, timeline, toggleSnapping, toggleTriplet } from '../timeline.svelte'
@@ -74,7 +75,7 @@
 
 	const handleAddAudio = () => {
 		closeTimelineMenus()
-		openAddAudioPicker()
+		openAudioPicker()
 	}
 
 	const handleAddText = () => {
@@ -83,8 +84,13 @@
 	}
 
 	const handleAddImage = () => {
-		addImageLayer()
 		closeTimelineMenus()
+		openPicturePicker((file) => void addAssetLayer(file))
+	}
+
+	const handleAddVideo = () => {
+		closeTimelineMenus()
+		openVideoPicker((file) => void addVideoLayer(file, app.currentTime))
 	}
 
 	const handleAddShape = () => {
@@ -172,10 +178,9 @@
 			<span class="timeline-menu-check"><SquareIcon weight="bold" /></span>
 			Shape
 		</button>
-		<button class="timeline-menu-item" type="button" role="menuitem" disabled>
+		<button class="timeline-menu-item" type="button" role="menuitem" onclick={handleAddVideo}>
 			<span class="timeline-menu-check"><VideoCameraIcon weight="bold" /></span>
 			Video
-			<span class="timeline-menu-shortcut">Soon</span>
 		</button>
 		<button class="timeline-menu-item" type="button" role="menuitem" disabled>
 			<span class="timeline-menu-check"><CubeIcon weight="bold" /></span>

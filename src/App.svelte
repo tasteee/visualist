@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { toaster } from '@tasteee/zest'
-	import { checkIsMidiFile, openMidiFile } from './midiImport.svelte'
+	import { openMidiFile } from './midiImport.svelte'
 	import { restoreProject, startProjectWatchers } from './project.svelte'
 	import { addAudioFile, app, startApp, togglePlay } from './store.svelte'
+	import { addAssetLayer, addVideoLayer } from './layers.svelte'
+	import { readDroppedKind } from './droppedFiles'
 	import BpmDialog from './ui/BpmDialog.svelte'
 	import DockToolbar from './ui/DockToolbar.svelte'
 	import DropZone from './ui/DropZone.svelte'
@@ -64,11 +66,19 @@
 		if (!checkHasFiles(event)) return
 		event.preventDefault()
 		app.isDraggingFile = false
-		const file = event.dataTransfer?.files[0]
-		if (file === undefined) return
-		const isMidi = checkIsMidiFile(file)
-		if (isMidi) return handleMidiDrop(file)
-		void addAudioFile(file)
+		const files = Array.from(event.dataTransfer?.files ?? [])
+		for (const file of files) handleDroppedFile(file)
+	}
+
+	// Each dropped file becomes what it is: MIDI impulses, an audio
+	// layer, a video layer or a picture layer.
+	const handleDroppedFile = (file: File) => {
+		const kind = readDroppedKind(file)
+		if (kind === 'midi') return handleMidiDrop(file)
+		if (kind === 'audio') return void addAudioFile(file)
+		if (kind === 'video') return void addVideoLayer(file, app.currentTime)
+		if (kind === 'image') return void addAssetLayer(file)
+		toaster.show({ title: 'Unsupported file', description: `${file.name} is not audio, video, a picture or MIDI.`, tone: 'warning' })
 	}
 
 	// MIDI lands on the song's timeline, so it needs a song.
@@ -127,8 +137,8 @@
 
 	{#if app.isDraggingFile}
 		<div class="app-drop-overlay">
-			<span class="app-drop-title">Drop a song or a MIDI file</span>
-			<span class="app-drop-hint">Songs are analyzed in a few seconds. MIDI becomes impulse tracks.</span>
+			<span class="app-drop-title">Drop audio, video, pictures or MIDI</span>
+			<span class="app-drop-hint">Each file becomes a layer on the timeline. MIDI becomes impulse tracks.</span>
 		</div>
 	{/if}
 </main>

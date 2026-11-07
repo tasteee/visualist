@@ -1,4 +1,5 @@
 import { getAsset } from './assets'
+import { getVideoFrame, getVideoSize } from './video'
 import type { FrameLayoutT } from './formats'
 import { LAYER_PARAMS, getBlendOperation, getTimeRangeLevel } from './layers'
 import { getTinted } from './logoLayers'
@@ -230,6 +231,20 @@ const getAssetSource = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT): 
 	return { canvas, width: canvas.width * unitsPerPixel, height: canvas.height * unitsPerPixel }
 }
 
+const fitCanvasToFrame = (canvas: HTMLCanvasElement, frame: FrameLayoutT): LayerSourceT => {
+	const longestPixelSide = Math.max(canvas.width, canvas.height)
+	const fitSide = getShortSide(frame) * ASSET_FIT_SHARE
+	const unitsPerPixel = fitSide / longestPixelSide
+	return { canvas, width: canvas.width * unitsPerPixel, height: canvas.height * unitsPerPixel }
+}
+
+// A video draws the frame for this moment of the timeline.
+const getVideoSource = (layer: LayerT, input: LayerStackInputT): LayerSourceT | null => {
+	const canvas = getVideoFrame(layer.assetId, input.time, layer.startTime, layer.sourceOffset)
+	if (canvas === null) return null
+	return fitCanvasToFrame(canvas, input.frame)
+}
+
 // The built-in logo scene is painted into a frame-sized canvas
 // when it needs a transform, a blend or FX.
 const getLogoSource = (target: CanvasRenderingContext2D, input: LayerStackInputT): LayerSourceT => {
@@ -264,6 +279,14 @@ export type LayerSizeT = {
 	height: number
 }
 
+const measureVideo = (layer: LayerT, frame: FrameLayoutT): LayerSizeT | null => {
+	const size = getVideoSize(layer.assetId)
+	if (size === null) return null
+	const longestPixelSide = Math.max(size.width, size.height)
+	const unitsPerPixel = (getShortSide(frame) * ASSET_FIT_SHARE) / longestPixelSide
+	return { width: size.width * unitsPerPixel, height: size.height * unitsPerPixel }
+}
+
 export const measureLayerSize = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT): LayerSizeT | null => {
 	const isLogo = layer.kind === 'logo'
 	if (isLogo) return { width: LOGO_ART_WIDTH * frame.sceneScale, height: LOGO_ART_HEIGHT * frame.sceneScale }
@@ -279,9 +302,14 @@ export const measureLayerSize = (layer: LayerT, palette: PaletteT, frame: FrameL
 		const source = getTextSource(content, palette)
 		return source === null ? null : { width: source.width, height: source.height }
 	}
+	const isVideo = layer.kind === 'video'
+	if (isVideo) return measureVideo(layer, frame)
 	const source = getAssetSource(layer, palette, frame)
 	return source === null ? null : { width: source.width, height: source.height }
 }
+
+// Logo and video pictures change every frame.
+const checkIsDynamicKind = (kind: LayerT['kind']): boolean => kind === 'logo' || kind === 'video'
 
 const getLayerSource = (target: CanvasRenderingContext2D, layer: LayerT, input: LayerStackInputT): LayerSourceT | null => {
 	const isLogo = layer.kind === 'logo'
@@ -289,10 +317,13 @@ const getLayerSource = (target: CanvasRenderingContext2D, layer: LayerT, input: 
 	return getStaticSource(layer, input)
 }
 
-// Text, image and SVG pictures, cached until they change.
+// Text, image and SVG pictures are cached until they change.
+// Video frames are copied fresh on every draw.
 const getStaticSource = (layer: LayerT, input: LayerStackInputT): LayerSourceT | null => {
 	const isShape = layer.kind === 'shape'
 	if (isShape) return getShapeSource(layer, input.palette, input.frame)
+	const isVideo = layer.kind === 'video'
+	if (isVideo) return getVideoSource(layer, input)
 	const isText = layer.kind === 'text'
 	if (!isText) return getAssetSource(layer, input.palette, input.frame)
 	const content = layer.text
@@ -509,7 +540,7 @@ const drawGlow = (context: CanvasRenderingContext2D, source: LayerSourceT, pass:
 const drawSplit = (context: CanvasRenderingContext2D, source: LayerSourceT, pass: LayerPassT, palette: PaletteT): void => {
 	const amount = pass.fx.split
 	if (amount <= 0) return
-	const isDynamic = pass.layer.kind === 'logo'
+	const isDynamic = checkIsDynamicKind(pass.layer.kind)
 	const distance = source.width * 0.025 * amount + 2
 	const leftCopy = tintSource(source, palette.accent1, isDynamic, 1)
 	const rightCopy = tintSource(source, palette.accent2, isDynamic, 2)
@@ -695,7 +726,7 @@ export const planGpuLayer = (
 	return {
 		layer,
 		source,
-		isDynamic: isLogo,
+		isDynamic: checkIsDynamicKind(layer.kind),
 		offsetX: (pass.transform.x / 100) * input.frame.width + shake.x,
 		offsetY: (pass.transform.y / 100) * input.frame.height + shake.y,
 		rotation: pass.transform.rotation + shake.rotation,

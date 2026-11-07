@@ -129,7 +129,7 @@ const createBaseLayer = (kind: LayerKindT, name: string): LayerT => ({
 	shape: null,
 	assetId: null,
 	svgColor: 'original',
-	audioOffset: 0
+	sourceOffset: 0
 })
 
 export const createLogoLayer = (): LayerT => {
@@ -162,6 +162,11 @@ export const createShapeLayer = (): LayerT => {
 
 export const createAssetLayer = (kind: 'image' | 'svg', assetId: string | null, name: string): LayerT => {
 	const layer = createBaseLayer(kind, name)
+	return { ...layer, assetId }
+}
+
+export const createVideoLayer = (assetId: string, name: string): LayerT => {
+	const layer = createBaseLayer('video', name)
 	return { ...layer, assetId }
 }
 

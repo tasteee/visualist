@@ -5,11 +5,9 @@
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import {
 		addLayerLane,
-		addSettingLane,
 		automation,
 		checkAreAllCollapsed,
 		checkCanAddLayerLane,
-		checkCanAddSettingLane,
 		checkIsGroupCollapsed,
 		getLanesInGroup,
 		movePoints,
@@ -21,7 +19,7 @@
 		toggleAllCollapsed,
 		undo
 	} from '../automation.svelte'
-	import { POST_GROUP_ID, SCENE_GROUP_ID, getTargetControl } from '../engine/automation'
+	import { getTargetControl } from '../engine/automation'
 	import { getOutputLatency, getPlaybackTime } from '../engine/audio'
 	import { snapToStep } from '../engine/impulses'
 	import { getBandSourceId } from '../engine/sources'
@@ -32,7 +30,7 @@
 	import { rowInspector } from '../rowInspector.svelte'
 	import { toggleRowFolded } from '../rowLayout.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
-	import { checkHasSelection, clearSelection, deleteSelection, pickLayer, readModifiers, selectSong, selection } from '../selection.svelte'
+	import { checkHasSelection, clearSelection, deleteSelection, pickLayer, readModifiers } from '../selection.svelte'
 	import { copySelectedLayers, duplicateSelectedLayers, pasteLayers, toggleSelectedLayersActive } from '../layerEdit.svelte'
 	import { nudgeSelectedLayers } from '../stage.svelte'
 	import {
@@ -44,11 +42,12 @@
 		sources,
 		toggleTriggersCollapsed
 	} from '../sources.svelte'
-	import { AUDIO_ROW_ID, getRowColor } from '../appearance.svelte'
+	import { getRowColor } from '../appearance.svelte'
 	import { pickColorForId } from '../engine/palette'
 	import type { ColorNameT } from '../engine/palette'
 	import { openGridMenu } from '../timelineMenus.svelte'
 	import { app, getAnalysis, getAudioLayerBuffer, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
+	import { getVideoDuration } from '../engine/video'
 	import type { ImpulseMoveT } from '../sources.svelte'
 	import {
 			DEFAULT_HEADER_WIDTH,
@@ -82,7 +81,6 @@
 	import TimelineMenus from './TimelineMenus.svelte'
 	import TimeRuler from './TimeRuler.svelte'
 	import TransportBar from './TransportBar.svelte'
-	import WaveformTrack from './WaveformTrack.svelte'
 	import { checkIsTextEntry, checkIsTyping } from './keyboard'
 	import './EditorDock.css'
 
@@ -129,7 +127,7 @@
 	const PINCH_ZOOM_RATE = 0.01
 	const RESIZE_KEY_PX = 24
 	const REORDER_START_PX = 4
-	const ZOOMING_ZONES = ['ruler', 'wave', 'overview']
+	const ZOOMING_ZONES = ['ruler', 'overview']
 
 	let dock: HTMLDivElement
 	let frame: HTMLDivElement
@@ -158,24 +156,14 @@
 	const laneCount = $derived(automation.lanes.length)
 	const hasLanes = $derived(laneCount > 0)
 
-	const canAddSceneLane = $derived(checkCanAddSettingLane(SCENE_GROUP_ID))
-	const canAddPostLane = $derived(checkCanAddSettingLane(POST_GROUP_ID))
 	const areAllCollapsed = $derived(checkAreAllCollapsed())
 	const collapseAllLabel = $derived(areAllCollapsed ? 'Expand all lanes' : 'Collapse all lanes')
-	const sceneLanes = $derived(getLanesInGroup(SCENE_GROUP_ID))
-	const postLanes = $derived(getLanesInGroup(POST_GROUP_ID))
-	const isSceneCollapsed = $derived(checkIsGroupCollapsed(SCENE_GROUP_ID))
-	const isPostCollapsed = $derived(checkIsGroupCollapsed(POST_GROUP_ID))
 
 	const trackCount = $derived(sources.tracks.length)
 	const bandCount = $derived(sources.bands.length)
 	const hasTriggers = $derived(trackCount > 0 || bandCount > 0)
 	const isTriggersCollapsed = $derived(sources.isTriggersCollapsed)
 	const compiledBands = $derived(getCompiledSources().bands)
-
-	const audioColor = $derived(getRowColor(AUDIO_ROW_ID, 'amber'))
-	const sceneColor = $derived(getRowColor(SCENE_GROUP_ID, 'slate'))
-	const postColor = $derived(getRowColor(POST_GROUP_ID, 'slate'))
 
 	const getLayerColor = (layer: LayerT): ColorNameT => getRowColor(layer.id, pickColorForId(layer.id))
 
@@ -184,13 +172,10 @@
 	const laneCountLabel = $derived(String(laneCount))
 	const layerIdsInOrder = $derived(layersFrontToBack.map((layer) => layer.id))
 	const trackIdsInOrder = $derived([...sources.tracks.map((track) => track.id), ...sources.bands.map((band) => band.id)])
-	const sceneLaneIds = $derived(sceneLanes.map((lane) => lane.id))
-	const postLaneIds = $derived(postLanes.map((lane) => lane.id))
 	const getLaneIdsInGroup = (groupId: string): string[] => getLanesInGroup(groupId).map((lane) => lane.id)
 
 	// A layer's siblings are every other layer.
 	const layerSiblings = $derived(layerIdsInOrder.map((layerId): RowRefT => ({ kind: 'layer', id: layerId })))
-	const songName = $derived(app.fileName === '' ? 'Untitled' : app.fileName)
 
 	// A new song opens fully zoomed out.
 	$effect(() => {
@@ -414,7 +399,13 @@
 		return false
 	}
 
-	const getFileLength = (layerId: string): number => getAudioLayerBuffer(layerId)?.duration ?? 0
+	// How long a clip's file is, for audio and for video.
+	const getFileLength = (layerId: string): number => {
+		const audioLength = getAudioLayerBuffer(layerId)?.duration
+		if (audioLength !== undefined) return audioLength
+		const layer = layerStore.layers.find((candidate) => candidate.id === layerId)
+		return getVideoDuration(layer?.assetId ?? null)
+	}
 
 	// Zero deactivates the selected layers, like Ableton. With nothing
 	// selected it fits the timeline.
@@ -614,12 +605,6 @@
 		impulseEditor = null
 	}
 
-	const handleAddSettingLane = (groupId: string) => {
-		const laneId = addSettingLane(groupId)
-		if (laneId === null) return
-		revealLane(laneId)
-	}
-
 	const handleAddLayerLane = (layerId: string) => {
 		const laneId = addLayerLane(layerId)
 		if (laneId === null) return
@@ -762,65 +747,12 @@
 		</div>
 
 		<div class="editor-lanes" role="presentation" oncontextmenu={handleLanesContextMenu}>
-			{#if app.hasSong}
-				<TimelineLayer
-					kind="song"
-					rowId={AUDIO_ROW_ID}
-					color={audioColor}
-					title={songName}
-					{grid}
-					isCollapsed={false}
-					isSelected={selection.isSongSelected}
-					canAddLane={false}
-					ontoggle={() => {}}
-					onadd={() => {}}
-					onselect={() => selectSong()}
-				>
-					{#snippet track()}
-						<WaveformTrack {grid} />
-					{/snippet}
-				</TimelineLayer>
-			{/if}
 			{#each sources.tracks as track (track.id)}
 				<ImpulseLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} onedit={openImpulseEditor} />
 			{/each}
 			{#each sources.bands as band (band.id)}
 				<BandLane {band} compiled={findCompiledBand(band.id)} {grid} siblingTrackIds={trackIdsInOrder} />
 			{/each}
-
-			<TimelineLayer
-				kind="global"
-				rowId={SCENE_GROUP_ID}
-				color={sceneColor}
-				title="Scene"
-				{grid}
-				isCollapsed={isSceneCollapsed}
-				canAddLane={canAddSceneLane}
-				ontoggle={(event) => handleLayerToggle(SCENE_GROUP_ID, event)}
-				onadd={() => handleAddSettingLane(SCENE_GROUP_ID)}
-			/>
-			{#if !isSceneCollapsed}
-				{#each sceneLanes as lane (lane.id)}
-					<AutomationLane {lane} {grid} isNested siblingLaneIds={sceneLaneIds} onedit={openEditor} />
-				{/each}
-			{/if}
-
-			<TimelineLayer
-				kind="global"
-				rowId={POST_GROUP_ID}
-				color={postColor}
-				title="Post"
-				{grid}
-				isCollapsed={isPostCollapsed}
-				canAddLane={canAddPostLane}
-				ontoggle={(event) => handleLayerToggle(POST_GROUP_ID, event)}
-				onadd={() => handleAddSettingLane(POST_GROUP_ID)}
-			/>
-			{#if !isPostCollapsed}
-				{#each postLanes as lane (lane.id)}
-					<AutomationLane {lane} {grid} isNested siblingLaneIds={postLaneIds} onedit={openEditor} />
-				{/each}
-			{/if}
 
 			{#each layersFrontToBack as layer (layer.id)}
 				{@const isCollapsed = checkIsGroupCollapsed(layer.id)}
@@ -867,7 +799,7 @@
 			<div class="editor-add-row">
 				<div class="editor-add-cell"></div>
 				<div class="editor-add-fill">
-					<span class="editor-add-hint">Drag a layer's bar to set when it shows. Press + on any row to automate one of its controls.</span>
+					<span class="editor-add-hint">Drag a clip to move it. Drag its edges to trim. Press 0 to turn a selected clip off. Press + on a row to automate one of its controls.</span>
 				</div>
 			</div>
 		</div>

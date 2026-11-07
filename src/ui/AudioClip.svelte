@@ -48,7 +48,7 @@
 	const buffer = $derived(getAudioLayerBuffer(props.layer.id))
 	const fileLength = $derived(buffer === undefined ? 0 : buffer.duration)
 	const startTime = $derived(props.layer.startTime)
-	const offset = $derived(props.layer.audioOffset)
+	const offset = $derived(props.layer.sourceOffset)
 	// Where the sound ends if it is never cut short.
 	const naturalEnd = $derived(startTime + Math.max(0, fileLength - offset))
 	const endTime = $derived(props.layer.endTime ?? naturalEnd)
@@ -98,7 +98,7 @@
 		const latest = endTime - MIN_CLIP_SECONDS
 		const nextStart = clamp(snapTime(readTime(event), event), Math.max(0, earliest), latest)
 		const shift = nextStart - startTime
-		props.layer.audioOffset = Math.max(0, offset + shift)
+		props.layer.sourceOffset = Math.max(0, offset + shift)
 		props.layer.startTime = nextStart
 	}
 

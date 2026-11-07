@@ -5,7 +5,8 @@ import { GRID_DIVISIONS } from './engine/timeline'
 import type { GridDivisionT, TimelineViewT } from './engine/timeline'
 import type { InspectorTabT } from './inspector.svelte'
 import { buildSongKey, sources } from './sources.svelte'
-import { app, loadAudioFile, seekTo, setLoopEnabled, setLoopRegion, setStatus } from './store.svelte'
+import { layerStore } from './layers.svelte'
+import { addAudioFile, app, seekTo, setLoopEnabled, setLoopRegion, setStatus } from './store.svelte'
 import { timeline } from './timeline.svelte'
 
 // Everything about the open project that is not already saved
@@ -137,19 +138,25 @@ const applyViewState = async (project: SavedProjectT): Promise<void> => {
 	seekTo(project.playMarker)
 }
 
-// Brings back the last song and everything around it. Quiet
+// Projects saved before audio became layers kept the song in a file
+// of its own. It becomes the first audio layer.
+const migrateLegacySong = async (project: SavedProjectT): Promise<void> => {
+	const hasAudioLayer = layerStore.layers.some((layer) => layer.kind === 'audio')
+	if (hasAudioLayer) return
+	const file = await readSongFile(project.fileName).catch(() => null)
+	if (file === null) return
+	setStatus(`Restoring ${project.fileName}…`)
+	await addAudioFile(file, { isRestore: true })
+}
+
+// Brings back the project's tempo, trim, loop and how the editor was
+// laid out. The audio layers themselves were already restored. Quiet
 // when there is nothing saved.
 export const restoreProject = async (): Promise<void> => {
 	const project = readSavedProject()
 	if (project === null) return
-	const file = await readSongFile(project.fileName).catch(() => null)
-	if (file === null) return
-	setStatus(`Restoring ${project.fileName}…`)
-	const hasLoaded = await loadAudioFile(file, { isRestore: true })
-	if (!hasLoaded) return
-	const songKey = buildSongKey(file.name, app.duration)
-	const isSameSong = songKey === project.songKey
-	if (!isSameSong) return
+	await migrateLegacySong(project)
+	if (!app.hasSong || app.isAnalyzing) return
 	applySongState(project)
 	applyEditorState(project)
 	await applyViewState(project)

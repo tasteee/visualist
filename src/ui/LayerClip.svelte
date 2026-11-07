@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { recordHistory } from '../automation.svelte'
-	import { clamp } from '../engine/settings'
+	import { MIN_CLIP_SECONDS, clamp } from '../engine/settings'
+	import { getVideoDuration } from '../engine/video'
 	import { formatPreciseTime, ratioToTime, snapToGrid, timeToPercent } from '../engine/timeline'
 	import type { TimelineGridT } from '../engine/timeline'
 	import type { LayerT } from '../engine/types'
@@ -34,10 +35,16 @@
 	let root: HTMLDivElement
 	let drag = $state<ClipDragT | null>(null)
 
+	const isVideoLayer = (): boolean => props.layer.kind === 'video'
+
 	const view = $derived(timeline.view)
 	const duration = $derived(app.duration)
-	const startTime = $derived(Math.min(props.layer.startTime, duration))
-	const endTime = $derived(props.layer.endTime ?? duration)
+	const startTime = $derived(isVideoLayer() ? props.layer.startTime : Math.min(props.layer.startTime, duration))
+	const isVideo = $derived(props.layer.kind === 'video')
+	const sourceOffset = $derived(props.layer.sourceOffset)
+	// A video plays its file once. Where it ends if it is never cut short.
+	const naturalEnd = $derived(startTime + Math.max(0, getVideoDuration(props.layer.assetId) - sourceOffset))
+	const endTime = $derived(props.layer.endTime ?? (isVideo ? naturalEnd : duration))
 	const leftPercent = $derived(clamp(timeToPercent(startTime, view), -1, 101))
 	const rightPercent = $derived(clamp(100 - timeToPercent(endTime, view), -1, 101))
 	const isDragging = $derived(drag !== null)
@@ -80,6 +87,36 @@
 		pickLayer(props.layer.id, orderedIds, readModifiers(event))
 	}
 
+	// A video can sit anywhere on the timeline, even past the end,
+	// which makes the project longer.
+	const moveVideo = (event: PointerEvent, activeDrag: ClipDragT) => {
+		const nextStart = Math.max(0, readTime(event) - activeDrag.grabOffset)
+		const snappedStart = snapTime(nextStart, event, Number.POSITIVE_INFINITY)
+		props.layer.startTime = snappedStart
+		props.layer.endTime = snappedStart + activeDrag.length
+	}
+
+	// Trimming a video's start moves where in the file it begins, so
+	// the picture stays where it was on the timeline.
+	const trimVideoStart = (event: PointerEvent) => {
+		const earliest = Math.max(0, startTime - sourceOffset)
+		const latest = endTime - MIN_CLIP_SECONDS
+		const nextStart = clamp(snapTime(readTime(event), event, latest), earliest, latest)
+		props.layer.sourceOffset = Math.max(0, sourceOffset + nextStart - startTime)
+		props.layer.startTime = nextStart
+	}
+
+	const trimVideoEnd = (event: PointerEvent) => {
+		const nextEnd = clamp(snapTime(readTime(event), event, naturalEnd), startTime + MIN_CLIP_SECONDS, naturalEnd)
+		props.layer.endTime = nextEnd
+	}
+
+	const dragVideo = (event: PointerEvent, activeDrag: ClipDragT) => {
+		if (activeDrag.mode === 'move') return moveVideo(event, activeDrag)
+		if (activeDrag.mode === 'start') return trimVideoStart(event)
+		trimVideoEnd(event)
+	}
+
 	const moveClip = (event: PointerEvent, activeDrag: ClipDragT) => {
 		const pointerTime = readTime(event)
 		const latestStart = Math.max(0, duration - activeDrag.length)
@@ -99,6 +136,7 @@
 		const isFirstMove = !activeDrag.hasMoved
 		if (isFirstMove) recordHistory()
 		activeDrag.hasMoved = true
+		if (isVideo) return dragVideo(event, activeDrag)
 		if (activeDrag.mode === 'move') return moveClip(event, activeDrag)
 		const edgeTime = snapTime(readTime(event), event, duration)
 		const isStartEdge = activeDrag.mode === 'start'
@@ -113,9 +151,21 @@
 	// Double-click fills the whole song again.
 	const handleDoubleClick = (event: MouseEvent) => {
 		event.stopPropagation()
+		if (isVideo) return
 		if (isFullSong) return
 		recordHistory()
 		setLayerTimeRange(props.layer.id, 0, duration, duration)
+	}
+
+	const nudgeVideo = (step: number, shouldMoveEnd: boolean) => {
+		if (shouldMoveEnd) {
+			props.layer.endTime = clamp(endTime + step, startTime + MIN_CLIP_SECONDS, naturalEnd)
+			return
+		}
+		const length = endTime - startTime
+		const nextStart = Math.max(0, startTime + step)
+		props.layer.startTime = nextStart
+		props.layer.endTime = nextStart + length
 	}
 
 	// Arrows move the clip, Shift+arrows move only its end.
@@ -126,6 +176,7 @@
 		event.preventDefault()
 		recordHistory()
 		const step = isLeft ? -KEY_STEP_SECONDS : KEY_STEP_SECONDS
+		if (isVideo) return nudgeVideo(step, event.shiftKey)
 		if (event.shiftKey) return setLayerTimeRange(props.layer.id, startTime, endTime + step, duration)
 		const length = endTime - startTime
 		const nextStart = clamp(startTime + step, 0, Math.max(0, duration - length))

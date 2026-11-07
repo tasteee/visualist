@@ -49,10 +49,22 @@ const checkIsTargetShape = (target: unknown): target is LaneTargetT => {
 	return kind === 'unset' || kind === 'setting' || kind === 'layer' || kind === 'fx'
 }
 
+// The timeline has layers only. Lanes saved for the old Scene and Post
+// rows have nothing to drive any more, so they are left behind.
+const LEGACY_SETTING_GROUP_IDS = ['global', 'scene', 'post']
+
+const checkIsLegacySettingLane = (lane: Partial<AutomationLaneT>): boolean => {
+	const target = lane.target
+	if (target === undefined) return false
+	if (target.kind === 'setting') return true
+	return target.kind === 'unset' && LEGACY_SETTING_GROUP_IDS.includes(target.groupId)
+}
+
 const checkIsLaneShape = (lane: Partial<AutomationLaneT>): boolean => {
 	const hasId = typeof lane.id === 'string'
 	const hasPoints = Array.isArray(lane.points)
-	return hasId && hasPoints && checkIsTargetShape(lane.target)
+	const isShape = hasId && hasPoints && checkIsTargetShape(lane.target)
+	return isShape && !checkIsLegacySettingLane(lane)
 }
 
 // Lanes are saved with the layers, so layer lanes come back
