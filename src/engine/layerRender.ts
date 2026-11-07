@@ -179,6 +179,11 @@ const getLogoSource = (target: CanvasRenderingContext2D, input: LayerStackInputT
 const getLayerSource = (target: CanvasRenderingContext2D, layer: LayerT, input: LayerStackInputT): LayerSourceT | null => {
 	const isLogo = layer.kind === 'logo'
 	if (isLogo) return getLogoSource(target, input)
+	return getStaticSource(layer, input)
+}
+
+// Text, image and SVG pictures, cached until they change.
+const getStaticSource = (layer: LayerT, input: LayerStackInputT): LayerSourceT | null => {
 	const isText = layer.kind === 'text'
 	if (!isText) return getAssetSource(layer, input.palette, input.frame)
 	const content = layer.text
@@ -287,6 +292,12 @@ const resolveTransform = (layer: LayerT, signals: SignalsT): LayerTransformT => 
 		resolved[spec.key] = applyModulation(base, spec, modulation, signals)
 	}
 	return resolved
+}
+
+// Tilt and turn after modulation, in degrees.
+export const resolveLayerAngles = (layer: LayerT, signals: SignalsT): { tilt: number; turn: number } => {
+	const transform = resolveTransform(layer, signals)
+	return { tilt: transform.tilt, turn: transform.turn }
 }
 
 // Depth after modulation, 0-100. Older projects have no depth.
@@ -473,4 +484,132 @@ export const drawLayerStack = (context: CanvasRenderingContext2D, input: LayerSt
 		}
 		drawPass(context, pass, input)
 	}
+}
+
+// ---- GPU layers -------------------------------------------------
+//
+// On the 3D stage, a layer that floats off the frame (depth above
+// 0, or tilted or turned) is drawn by the GPU instead: its picture
+// is uploaded once and everything else happens in shaders. This
+// plan is everything the GPU needs for one frame, worked out with
+// the same rules as the 2D path above so both look alike.
+
+export type GpuLayerPlanT = {
+	layer: LayerT
+	source: LayerSourceT
+	// The logo is repainted every frame; text and files are not.
+	isDynamic: boolean
+	// Frame units from the frame center, y down, shake included.
+	offsetX: number
+	offsetY: number
+	// Degrees, clockwise on screen, shake included.
+	rotation: number
+	scale: number
+	tilt: number
+	turn: number
+	// Flicker included.
+	alpha: number
+	// Radii are in output pixels, as in the 2D soft copies.
+	glow: { radius: number; alpha: number; color: string } | null
+	split: { distance: number; alpha: number; colorA: string; colorB: string } | null
+	blurRadius: number
+	// Per strip, top to bottom, as a share of the picture width.
+	glitchShifts: number[] | null
+}
+
+let gpuLogoCanvas: HTMLCanvasElement | null = null
+
+// The logo group painted alone into a frame-sized canvas at the
+// output resolution.
+const paintGpuLogo = (input: LayerStackInputT, pixelWidth: number, pixelHeight: number): LayerSourceT => {
+	const canvas = gpuLogoCanvas ?? createCanvas(pixelWidth, pixelHeight)
+	gpuLogoCanvas = canvas
+	const hasWrongSize = canvas.width !== pixelWidth || canvas.height !== pixelHeight
+	if (hasWrongSize) {
+		canvas.width = pixelWidth
+		canvas.height = pixelHeight
+	}
+	const context = getContext(canvas)
+	context.setTransform(1, 0, 0, 1, 0, 0)
+	context.clearRect(0, 0, pixelWidth, pixelHeight)
+	context.setTransform(pixelWidth / input.frame.width, 0, 0, pixelHeight / input.frame.height, 0, 0)
+	context.globalAlpha = 1
+	context.globalCompositeOperation = 'source-over'
+	input.drawLogo(context)
+	return { canvas, width: input.frame.width, height: input.frame.height }
+}
+
+const getGlitchShifts = (pass: LayerPassT): number[] | null => {
+	if (pass.fx.glitch <= 0) return null
+	const random = createRandom(pass.seed + pass.flickerStep * 7919)
+	const isGlitchFrame = random() < 0.35 + 0.65 * pass.fx.glitch
+	if (!isGlitchFrame) return null
+	const maxShare = 0.12 * pass.fx.glitch
+	return Array.from({ length: GLITCH_STRIPS }, () => {
+		const isShifted = random() < 0.55
+		const rawShift = (random() * 2 - 1) * maxShare
+		return isShifted ? rawShift : 0
+	})
+}
+
+export const GPU_GLITCH_STRIPS = GLITCH_STRIPS
+
+export const planGpuLayer = (
+	layer: LayerT,
+	input: LayerStackInputT,
+	pixelWidth: number,
+	pixelHeight: number
+): GpuLayerPlanT | null => {
+	const pass = buildPass(layer, input)
+	if (pass === null) return null
+	const isLogo = layer.kind === 'logo'
+	const source = isLogo ? paintGpuLogo(input, pixelWidth, pixelHeight) : getStaticSource(layer, input)
+	if (source === null) return null
+
+	const pixelScale = pixelWidth / input.frame.width
+	const shake = getShake(pass, input.frame)
+	const alpha = pass.alpha * getFlickerAlpha(pass)
+	const glowAmount = pass.fx.glow
+	const splitAmount = pass.fx.split
+	const glow = glowAmount > 0 ? { radius: (6 + 30 * glowAmount) * pixelScale, alpha: alpha * clamp(glowAmount * 1.3, 0, 1), color: input.palette.accent1 } : null
+	const split =
+		splitAmount > 0
+			? {
+					distance: source.width * 0.025 * splitAmount + 2,
+					alpha: alpha * clamp(0.35 + 0.6 * splitAmount, 0, 1),
+					colorA: input.palette.accent1,
+					colorB: input.palette.accent2
+				}
+			: null
+	const blurRadius = 14 * pass.fx.blur * pixelScale
+
+	return {
+		layer,
+		source,
+		isDynamic: isLogo,
+		offsetX: (pass.transform.x / 100) * input.frame.width + shake.x,
+		offsetY: (pass.transform.y / 100) * input.frame.height + shake.y,
+		rotation: pass.transform.rotation + shake.rotation,
+		scale: pass.transform.scale,
+		tilt: pass.transform.tilt,
+		turn: pass.transform.turn,
+		alpha,
+		glow,
+		split,
+		blurRadius: blurRadius > 0.5 ? blurRadius : 0,
+		glitchShifts: getGlitchShifts(pass)
+	}
+}
+
+// Sizes of a soft copy, the same arithmetic as buildSoftCopy.
+export const getSoftCopySize = (source: { width: number; height: number }, radius: number, pixelScale: number) => {
+	const downscale = clamp(radius / 3, 1, 4)
+	const smallRadius = radius / downscale
+	const margin = Math.ceil(smallRadius * 2)
+	const innerWidth = Math.max(1, Math.round((source.width * pixelScale) / downscale))
+	const innerHeight = Math.max(1, Math.round((source.height * pixelScale) / downscale))
+	const width = innerWidth + margin * 2
+	const height = innerHeight + margin * 2
+	const unitsPerPixel = downscale / pixelScale
+	return { smallRadius, innerWidth, innerHeight, width, height, unitWidth: width * unitsPerPixel, unitHeight: height * unitsPerPixel }
 }

@@ -1,38 +1,36 @@
 import {
-	AddEquation,
 	CanvasTexture,
 	ColorManagement,
-	CustomBlending,
-	DstColorFactor,
 	LinearFilter,
 	LinearSRGBColorSpace,
 	Mesh,
 	MeshBasicMaterial,
 	NoColorSpace,
 	NormalBlending,
-	OneFactor,
-	OneMinusSrcAlphaFactor,
-	OneMinusSrcColorFactor,
 	PerspectiveCamera,
 	PlaneGeometry,
 	Scene,
 	WebGLRenderer
 } from 'three'
-import { buildDepthSlices } from './depth'
-import type { DepthSliceT } from './depth'
+import { splitStageLayers } from './depth'
+import { updateGpuLayers } from './gpuLayers'
+import type { GpuLayerPlacementT } from './gpuLayers'
+import { planGpuLayer } from './layerRender'
 import { getFrameLayout } from './formats'
 import type { FrameLayoutT } from './formats'
 import type { LogoLayersT } from './logoLayers'
 import { getPostAmounts } from './post'
 import { renderWithPost } from './postPasses'
-import { drawFrameSlice } from './render'
-import type { BlendModeT, FrameInputT, SettingsT } from './types'
+import { buildStackInput, drawFrameSlice } from './render'
+import type { FrameInputT, SettingsT } from './types'
 
-// The 3D stage. Every depth slice of the layer stack is drawn by
-// the regular 2D renderer onto its own transparent sheet, and the
-// sheets hang in front of a perspective camera. Lens and Film run
-// as the last passes. With the camera at rest and every layer at
-// depth 0, the sheets alone are identical to the flat render.
+// The 3D stage. Layers on the frame (depth 0, not tilted or
+// turned) are drawn by the regular 2D renderer onto one base
+// sheet with the background, every blend mode exact. Layers that
+// float off it are GPU quads (gpuLayers.ts) hanging in front, all
+// seen through a perspective camera. Lens and Film run as the
+// last passes. With the camera at rest and nothing floating, the
+// base sheet alone is identical to the flat render.
 //
 // Colors stay in sRGB end to end, like a 2D canvas, so the base
 // sheet matches the flat render pixel for pixel.
@@ -46,7 +44,6 @@ type SheetT = {
 	canvas: HTMLCanvasElement
 	context: CanvasRenderingContext2D
 	texture: CanvasTexture
-	material: MeshBasicMaterial
 	mesh: Mesh
 }
 
@@ -54,12 +51,36 @@ type StageT = {
 	renderer: WebGLRenderer
 	scene: Scene
 	camera: PerspectiveCamera
-	geometry: PlaneGeometry
-	sheets: SheetT[]
+	sheet: SheetT
 }
 
 let stage: StageT | null = null
 let isUnavailable = false
+
+const createSheet = (renderer: WebGLRenderer, scene: Scene): SheetT => {
+	const canvas = document.createElement('canvas')
+	const context = canvas.getContext('2d')
+	if (context === null) throw new Error('2D canvas is not available')
+	const texture = new CanvasTexture(canvas)
+	texture.colorSpace = NoColorSpace
+	texture.premultiplyAlpha = true
+	texture.generateMipmaps = false
+	texture.minFilter = LinearFilter
+	texture.magFilter = LinearFilter
+	texture.anisotropy = renderer.capabilities.getMaxAnisotropy()
+	const material = new MeshBasicMaterial({
+		map: texture,
+		transparent: true,
+		premultipliedAlpha: true,
+		blending: NormalBlending,
+		depthTest: false,
+		depthWrite: false
+	})
+	const mesh = new Mesh(new PlaneGeometry(1, 1), material)
+	mesh.renderOrder = 0
+	scene.add(mesh)
+	return { canvas, context, texture, mesh }
+}
 
 const createStage = (): StageT | null => {
 	try {
@@ -70,7 +91,8 @@ const createStage = (): StageT | null => {
 		// pixels pass through untouched.
 		renderer.outputColorSpace = LinearSRGBColorSpace
 		const camera = new PerspectiveCamera(FIELD_OF_VIEW, 16 / 9, 1, 100_000)
-		return { renderer, scene: new Scene(), camera, geometry: new PlaneGeometry(1, 1), sheets: [] }
+		const scene = new Scene()
+		return { renderer, scene, camera, sheet: createSheet(renderer, scene) }
 	} catch (error) {
 		console.warn('visualist: the 3D stage is off, WebGL failed to start', error)
 		return null
@@ -87,78 +109,14 @@ const getStage = (): StageT | null => {
 
 export const checkIsStageAvailable = (): boolean => getStage() !== null
 
-const createSheet = (target: StageT): SheetT | null => {
-	const canvas = document.createElement('canvas')
-	const context = canvas.getContext('2d')
-	if (context === null) return null
-	const texture = new CanvasTexture(canvas)
-	texture.colorSpace = NoColorSpace
-	texture.premultiplyAlpha = true
-	texture.generateMipmaps = false
-	texture.minFilter = LinearFilter
-	texture.magFilter = LinearFilter
-	texture.anisotropy = target.renderer.capabilities.getMaxAnisotropy()
-	const material = new MeshBasicMaterial({
-		map: texture,
-		transparent: true,
-		premultipliedAlpha: true,
-		depthTest: false,
-		depthWrite: false
-	})
-	const mesh = new Mesh(target.geometry, material)
-	target.scene.add(mesh)
-	return { canvas, context, texture, material, mesh }
-}
-
-const ensureSheets = (target: StageT, count: number): boolean => {
-	while (target.sheets.length < count) {
-		const sheet = createSheet(target)
-		if (sheet === null) return false
-		target.sheets.push(sheet)
-	}
-	return true
-}
-
-// Sheets are premultiplied. Overlay, soft light and difference
-// need what is behind the sheet, which fixed GPU blending cannot
-// read, so floating sheets fall back to normal for those. Inside
-// a sheet, and on the base sheet, every blend mode is exact.
-const applySheetBlend = (material: MeshBasicMaterial, blend: BlendModeT): void => {
-	material.blendEquation = AddEquation
-	if (blend === 'add') {
-		material.blending = CustomBlending
-		material.blendSrc = OneFactor
-		material.blendDst = OneFactor
-		return
-	}
-	if (blend === 'screen') {
-		material.blending = CustomBlending
-		material.blendSrc = OneFactor
-		material.blendDst = OneMinusSrcColorFactor
-		return
-	}
-	if (blend === 'multiply') {
-		material.blending = CustomBlending
-		material.blendSrc = DstColorFactor
-		material.blendDst = OneMinusSrcAlphaFactor
-		return
-	}
-	material.blending = NormalBlending
-}
-
-const getSliceBlend = (slice: DepthSliceT): BlendModeT => {
-	if (slice.isBase) return 'normal'
-	const bottomLayer = slice.layers[0]
-	if (bottomLayer === undefined) return 'normal'
-	return bottomLayer.blend
-}
-
 // At rest the camera sits where the depth-0 plane exactly fills
 // the frame. Orbit and tilt swing it around the frame center.
 const getRestDistance = (frame: FrameLayoutT): number => {
 	const halfAngle = (FIELD_OF_VIEW * Math.PI) / 360
 	return frame.height / 2 / Math.tan(halfAngle)
 }
+
+const getDepthZ = (depth: number, frame: FrameLayoutT): number => (depth / 100) * getRestDistance(frame) * MAX_DEPTH_SHARE
 
 const placeCamera = (camera: PerspectiveCamera, frame: FrameLayoutT, settings: SettingsT): void => {
 	const distance = getRestDistance(frame) * Math.max(0.05, settings.cameraDistance)
@@ -173,16 +131,8 @@ const placeCamera = (camera: PerspectiveCamera, frame: FrameLayoutT, settings: S
 	camera.updateProjectionMatrix()
 }
 
-const drawSheet = (
-	sheet: SheetT,
-	slice: DepthSliceT,
-	order: number,
-	frame: FrameLayoutT,
-	input: FrameInputT,
-	logoLayers: LogoLayersT,
-	width: number,
-	height: number
-): void => {
+const drawBaseSheet = (sheet: SheetT, frame: FrameLayoutT, input: FrameInputT, logoLayers: LogoLayersT, width: number, height: number): void => {
+	const flatLayers = splitStageLayers(input).flat
 	const hasWrongSize = sheet.canvas.width !== width || sheet.canvas.height !== height
 	if (hasWrongSize) {
 		sheet.canvas.width = width
@@ -192,15 +142,24 @@ const drawSheet = (
 	}
 	sheet.context.setTransform(1, 0, 0, 1, 0, 0)
 	sheet.context.clearRect(0, 0, width, height)
-	drawFrameSlice(sheet.context, input, logoLayers, width, height, { layers: slice.layers, withBackground: slice.isBase })
+	drawFrameSlice(sheet.context, input, logoLayers, width, height, { layers: flatLayers, withBackground: true })
 	sheet.texture.needsUpdate = true
-
-	const restDistance = getRestDistance(frame)
-	sheet.mesh.position.set(0, 0, (slice.depth / 100) * restDistance * MAX_DEPTH_SHARE)
+	sheet.mesh.position.set(0, 0, 0)
 	sheet.mesh.scale.set(frame.width, frame.height, 1)
-	sheet.mesh.renderOrder = order
-	sheet.mesh.visible = true
-	applySheetBlend(sheet.material, getSliceBlend(slice))
+}
+
+// Floating layers in back-to-front order, each just in front of
+// the last so equal depths keep their stack order.
+const planFloatingLayers = (input: FrameInputT, logoLayers: LogoLayersT, frame: FrameLayoutT, width: number, height: number): GpuLayerPlacementT[] => {
+	const stackInput = buildStackInput(input, logoLayers)
+	const floating = splitStageLayers(input).floating
+	const placements: GpuLayerPlacementT[] = []
+	for (const [index, entry] of floating.entries()) {
+		const plan = planGpuLayer(entry.layer, stackInput, width, height)
+		if (plan === null) continue
+		placements.push({ plan, z: getDepthZ(entry.depth, frame), renderOrder: index + 1 })
+	}
+	return placements
 }
 
 // Draws one frame through the 3D stage, Lens and Film included,
@@ -217,13 +176,11 @@ export const drawStageFrame = (
 	const target = getStage()
 	if (target === null) return false
 
-	const slices = buildDepthSlices(input)
-	const hasSheets = ensureSheets(target, slices.length)
-	if (!hasSheets) return false
-
 	const frame = getFrameLayout(input.settings.aspectRatio)
-	slices.forEach((slice, index) => drawSheet(target.sheets[index], slice, index, frame, input, logoLayers, width, height))
-	for (const sheet of target.sheets.slice(slices.length)) sheet.mesh.visible = false
+	drawBaseSheet(target.sheet, frame, input, logoLayers, width, height)
+	const placements = planFloatingLayers(input, logoLayers, frame, width, height)
+	const liveLayerIds = new Set(input.layers.map((layer) => layer.id))
+	updateGpuLayers(target.renderer, target.scene, placements, liveLayerIds, width / frame.width)
 
 	const canvas = target.renderer.domElement
 	const hasWrongSize = canvas.width !== width || canvas.height !== height

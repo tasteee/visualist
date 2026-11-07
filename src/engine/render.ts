@@ -3,6 +3,7 @@ import { collectEchoes } from './echoes'
 import { getFrameLayout } from './formats'
 import type { FrameLayoutT } from './formats'
 import { drawLayerStack } from './layerRender'
+import type { LayerStackInputT } from './layerRender'
 import type { EchoT } from './echoes'
 import { FRAME_HEIGHT, FRAME_WIDTH, LOGO_CENTER_X, LOGO_CENTER_Y, getLayerHeight, getLayerWidth, getTinted, tintLayer } from './logoLayers'
 import type { LayerT, LogoLayersT } from './logoLayers'
@@ -410,19 +411,26 @@ type SceneOptionsT = {
 	withBackground?: boolean
 }
 
+const getStackInput = (layers: LogoLayersT, state: FrameStateT, stackLayers: StackLayerT[]): LayerStackInputT => ({
+	layers: stackLayers,
+	time: state.input.time,
+	signals: state.input.signals,
+	palette: state.input.palette,
+	frame: state.frame,
+	drawLogo: (target) => drawLogoGroup(target, layers, state)
+})
+
 const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT, options: SceneOptionsT = {}): void => {
 	const palette = getScenePalette(state.input)
 	const withBackground = options.withBackground ?? true
 	if (withBackground) drawBackground(context, layers, palette, state.frame)
+	drawLayerStack(context, getStackInput(layers, state, options.layers ?? state.input.layers))
+}
 
-	drawLayerStack(context, {
-		layers: options.layers ?? state.input.layers,
-		time: state.input.time,
-		signals: state.input.signals,
-		palette: state.input.palette,
-		frame: state.frame,
-		drawLogo: (target) => drawLogoGroup(target, layers, state)
-	})
+// What the 3D stage needs to plan GPU layers for this frame.
+export const buildStackInput = (input: FrameInputT, layers: LogoLayersT): LayerStackInputT => {
+	const state = buildFrameState(input, layers)
+	return getStackInput(layers, state, input.layers)
 }
 
 // Every frame is a pure function of the time and the settings,
