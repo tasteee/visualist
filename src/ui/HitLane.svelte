@@ -1,9 +1,10 @@
 <script lang="ts">
 	import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon'
+	import GearSixIcon from 'phosphor-svelte/lib/GearSixIcon'
 	import GridFourIcon from 'phosphor-svelte/lib/GridFourIcon'
 	import RecordIcon from 'phosphor-svelte/lib/RecordIcon'
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
-	import { getRowColor, getRowHeightStyle } from '../appearance.svelte'
+	import { getRowColor } from '../appearance.svelte'
 	import { recordHistory } from '../automation.svelte'
 	import { PATH_WIDTH } from '../engine/automation'
 	import { formatHitCount, getRoleLabel } from '../engine/hits'
@@ -13,33 +14,24 @@
 	import { checkIsTimeVisible, formatPreciseTime, getViewEnd, ratioToTime, snapToGrid, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
 	import type { HitTrackT, TrackHitT } from '../engine/types'
-	import {
-		addHit,
-		addHitsToSelection,
-		armTrack,
-		checkIsHitSelected,
-		checkIsTrackCollapsed,
-		clearHitSelection,
-		deleteHits,
-		getSelectedHitCount,
-		moveHits,
-		removeTrack,
-		renameTrack,
-		selectHits,
-		sources,
-		toggleHitSelected,
-		toggleTrackCollapsed
-	} from '../sources.svelte'
+	import { addHit, armTrack, checkIsHitSelected, deleteHits, getSelectedHitCount, moveHits, removeTrack, sources } from '../sources.svelte'
 	import type { HitMoveT } from '../sources.svelte'
+	import { openRowInspector } from '../rowInspector.svelte'
+	import { checkIsRowFolded, getRowHeightCss, toggleRowFolded } from '../rowLayout.svelte'
+	import type { RowRefT } from '../rowLayout.svelte'
+	import { clearSelection as clearAllSelection, pickImpulse, pickImpulsesInBox, readModifiers, selectPlacedImpulse } from '../selection.svelte'
 	import { app, getLiveSignals } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
-	import ColorDot from './ColorDot.svelte'
 	import RowResizer from './RowResizer.svelte'
+	import { rowHeader } from './rowHeader'
 	import './HitLane.css'
 
 	type HitLanePropsT = {
 		track: HitTrackT
 		grid: TimelineGridT
+		// The tracks in this lane's group, for the primary
+		// modifier gestures.
+		siblingTrackIds: string[]
 		onpattern: (trackId: string, anchor: HTMLElement) => void
 	}
 
@@ -73,10 +65,7 @@
 
 	const props: HitLanePropsT = $props()
 
-	const MIN_NEW_STRENGTH = 0.15
-	const TIME_KEY_STEP = 0.01
-	const STRENGTH_KEY_STEP = 0.05
-	const FINE_DIVIDER = 10
+	const FULL_STRENGTH = 1
 	const DRAG_THRESHOLD_PX = 3
 
 	let plot = $state<HTMLDivElement | undefined>(undefined)
@@ -87,11 +76,13 @@
 	const view = $derived(timeline.view)
 	const duration = $derived(app.duration)
 	const hits = $derived(props.track.hits)
-	const isCollapsed = $derived(checkIsTrackCollapsed(props.track.id))
+	const row = $derived<RowRefT>({ kind: 'impulse', id: props.track.id })
+	const siblingRows = $derived(props.siblingTrackIds.filter((trackId) => trackId !== props.track.id).map((trackId): RowRefT => ({ kind: 'impulse', id: trackId })))
+	const isCollapsed = $derived(checkIsRowFolded(row))
 	const isArmed = $derived(sources.armedTrackId === props.track.id)
 	const isGate = $derived(props.track.shape === 'gate')
 	const trackColor = $derived(getRowColor(props.track.id, getRoleColor(props.track.role)))
-	const customHeight = $derived(getRowHeightStyle(props.track.id))
+	const customHeight = $derived(getRowHeightCss(row))
 	const hitCountLabel = $derived(formatHitCount(hits.length))
 	const roleLabel = $derived(getRoleLabel(props.track.role))
 	const hasRole = $derived(props.track.role !== 'none')
@@ -100,15 +91,15 @@
 	const selectedCount = $derived(getSelectedHitCount(props.track.id))
 	const hasSelection = $derived(selectedCount > 0)
 	const countLabel = $derived(hasSelection ? `${selectedCount} selected` : hitCountLabel)
-	const collapseLabel = $derived(isCollapsed ? `Expand ${props.track.name}` : `Collapse ${props.track.name}`)
+	const collapseLabel = $derived(isCollapsed ? `Expand ${props.track.name}` : `Fold ${props.track.name}`)
 	const armLabel = $derived(isArmed ? 'Stop tapping' : 'Arm for tapping · press T while playing')
 	const isEmpty = $derived(hits.length === 0)
 	const shouldShowHint = $derived(!isCollapsed && (isEmpty || isArmed || hasSelection))
 
 	const buildHint = (): string => {
 		if (isArmed) return 'Tapping · press T in time while the song plays'
-		if (hasSelection) return 'Drag to move · Delete to remove · ⌘A selects all · Esc clears'
-		return 'Click to add · Drag across to select · Shift-click to add to a selection'
+		if (hasSelection) return 'Drag to move · Arrows nudge · Delete to remove · Esc clears'
+		return 'Click to place an impulse · Drag across to select · Shift-click selects a range'
 	}
 
 	const hintText = $derived(buildHint())
@@ -168,7 +159,7 @@
 
 	const describeHit = (hit: TrackHitT): string => {
 		const strength = Math.round(hit.strength * 100)
-		return `${props.track.name} hit at ${formatPreciseTime(hit.time)}, strength ${strength}%`
+		return `${props.track.name} impulse at ${formatPreciseTime(hit.time)}, strength ${strength}%`
 	}
 
 	const readRawTime = (clientX: number): number => {
@@ -178,15 +169,13 @@
 		return clamp(ratioToTime(xRatio, view), 0, duration)
 	}
 
-	const readPlotPosition = (event: PointerEvent): PlotPositionT => {
-		if (plot === undefined) return { time: 0, strength: 0 }
-		const bounds = plot.getBoundingClientRect()
-		const yRatio = clamp((event.clientY - bounds.top) / bounds.height, 0, 1)
-		const rawTime = readRawTime(event.clientX)
+	const snapTime = (time: number, event: PointerEvent): number => {
 		const shouldSnap = timeline.isSnapping && !event.shiftKey
-		const snappedTime = shouldSnap ? clamp(snapToGrid(rawTime, props.grid), 0, duration) : rawTime
-		return { time: snappedTime, strength: 1 - yRatio }
+		if (!shouldSnap) return time
+		return clamp(snapToGrid(time, props.grid), 0, duration)
 	}
+
+	const readSnappedTime = (event: PointerEvent): number => snapTime(readRawTime(event.clientX), event)
 
 	const readHitId = (target: EventTarget | null): string | null => {
 		const isElement = target instanceof Element
@@ -216,7 +205,7 @@
 	const startGroupDrag = (event: PointerEvent, hit: TrackHitT) => {
 		if (plot === undefined) return
 		const isAlreadySelected = checkIsSelected(hit)
-		if (!isAlreadySelected) selectHits(props.track.id, [hit.id])
+		if (!isAlreadySelected) pickImpulse(props.track.id, hit.id, { isRange: false, isToggle: false })
 		const track = event.currentTarget as HTMLElement
 		track.setPointerCapture(event.pointerId)
 		const bounds = plot.getBoundingClientRect()
@@ -232,7 +221,7 @@
 	}
 
 	// Alt-click and double-click take out the whole selection
-	// when the hit is part of it, or just that hit.
+	// when the impulse is part of it, or just that impulse.
 	const deleteFromHit = (hitId: string) => {
 		const isInSelection = checkIsHitSelected(props.track.id, hitId)
 		const doomedIds = isInSelection ? getSelectedIds() : [hitId]
@@ -243,8 +232,9 @@
 		const hit = findHit(hitId)
 		if (hit === undefined) return
 		if (event.altKey) return deleteFromHit(hitId)
-		const isToggle = event.shiftKey || event.metaKey || event.ctrlKey
-		if (isToggle) return toggleHitSelected(props.track.id, hitId)
+		const modifiers = readModifiers(event)
+		const isPicking = modifiers.isRange || modifiers.isToggle
+		if (isPicking) return pickImpulse(props.track.id, hitId, modifiers)
 		startGroupDrag(event, hit)
 	}
 
@@ -258,7 +248,7 @@
 			currentTime: startTime,
 			isAdditive: event.shiftKey,
 			isActive: false,
-			clickPosition: readPlotPosition(event)
+			clickPosition: { time: readSnappedTime(event), strength: FULL_STRENGTH }
 		}
 	}
 
@@ -292,8 +282,8 @@
 		if (!hasStartedMoving) return
 		if (!activeDrag.hasMoved) recordHistory()
 		activeDrag.hasMoved = true
-		const position = readPlotPosition(event)
-		const timeDelta = position.time - activeDrag.anchorStartTime
+		const snappedTime = readSnappedTime(event)
+		const timeDelta = snappedTime - activeDrag.anchorStartTime
 		const strengthDelta = -dy / activeDrag.plotHeight
 		moveHits(props.track.id, buildMoves(activeDrag, timeDelta, strengthDelta))
 	}
@@ -317,19 +307,27 @@
 		const endTime = Math.max(activeMarquee.startTime, activeMarquee.currentTime)
 		const boxedHits = hits.filter((hit) => hit.time >= startTime && hit.time <= endTime)
 		const boxedIds = boxedHits.map((hit) => hit.id)
-		if (activeMarquee.isAdditive) return addHitsToSelection(props.track.id, boxedIds)
-		selectHits(props.track.id, boxedIds)
+		pickImpulsesInBox(props.track.id, boxedIds, activeMarquee.isAdditive)
 	}
 
-	// A plain click on empty space clears a selection first, and
-	// only adds a hit when nothing was selected.
-	const finishClick = (activeMarquee: MarqueeT) => {
-		const hasAnySelection = sources.hitSelection.hitIds.length > 0
-		if (hasAnySelection) return clearHitSelection()
-		const position = activeMarquee.clickPosition
-		const strength = Math.max(MIN_NEW_STRENGTH, position.strength)
+	// The strength of the impulse before the new one, or full
+	// strength when there is none. The pointer's height does not
+	// set it.
+	const getStrengthForNewHit = (time: number): number => {
+		const earlierHits = hits.filter((hit) => hit.time <= time)
+		const previous = earlierHits[earlierHits.length - 1]
+		const hasPrevious = previous !== undefined
+		return hasPrevious ? previous.strength : FULL_STRENGTH
+	}
+
+	// A click on empty space places an impulse on button-up.
+	const placeHit = (activeMarquee: MarqueeT) => {
+		const time = activeMarquee.clickPosition.time
+		const strength = getStrengthForNewHit(time)
 		const holdLength = isGate ? props.grid.snapStep : 0
-		addHit(props.track.id, position.time, strength, holdLength)
+		const hitId = addHit(props.track.id, time, strength, holdLength)
+		if (hitId === null) return
+		selectPlacedImpulse(props.track.id, hitId)
 	}
 
 	const handleTrackUp = () => {
@@ -338,52 +336,33 @@
 		drag = null
 		marquee = null
 		const wasClickOnHit = activeDrag !== null && !activeDrag.hasMoved
-		if (wasClickOnHit) return selectHits(props.track.id, [activeDrag.anchorHitId])
+		if (wasClickOnHit) return pickImpulse(props.track.id, activeDrag.anchorHitId, { isRange: false, isToggle: false })
 		if (activeMarquee === null) return
 		if (activeMarquee.isActive) return finishMarquee(activeMarquee)
-		finishClick(activeMarquee)
+		placeHit(activeMarquee)
+	}
+
+	const handleTrackCancel = () => {
+		drag = null
+		marquee = null
 	}
 
 	const handleTrackDoubleClick = (event: MouseEvent) => {
-		if (isCollapsed) return toggleTrackCollapsed(props.track.id)
+		if (isCollapsed) return toggleRowFolded(row, [])
 		const hitId = readHitId(event.target)
 		if (hitId === null) return
 		deleteFromHit(hitId)
 	}
 
-	const buildKeyMoves = (timeDelta: number, strengthDelta: number): HitMoveT[] => {
-		const selected = getSelectedIds().map(findHit).filter((hit): hit is TrackHitT => hit !== undefined)
-		return selected.map((hit) => ({ hitId: hit.id, time: hit.time + timeDelta, strength: hit.strength + strengthDelta }))
+	let header: HTMLDivElement
+
+	// The caret folds the row. It does not select or deselect.
+	const handleToggle = (event: MouseEvent) => {
+		const siblings = event.metaKey || event.ctrlKey ? siblingRows : []
+		toggleRowFolded(row, siblings)
 	}
 
-	const handleHitKey = (event: KeyboardEvent) => {
-		const isFine = event.shiftKey
-		const divider = isFine ? FINE_DIVIDER : 1
-		const timeDeltas: Partial<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1 }
-		const strengthDeltas: Partial<Record<string, number>> = { ArrowDown: -1, ArrowUp: 1 }
-		const timeDelta = timeDeltas[event.key] ?? 0
-		const strengthDelta = strengthDeltas[event.key] ?? 0
-		const isArrow = timeDelta !== 0 || strengthDelta !== 0
-		if (!isArrow) return
-		event.preventDefault()
-		event.stopPropagation()
-		recordHistory()
-		const moves = buildKeyMoves((timeDelta * TIME_KEY_STEP) / divider, (strengthDelta * STRENGTH_KEY_STEP) / divider)
-		moveHits(props.track.id, moves)
-	}
-
-	const handleNameInput = (event: Event) => {
-		const detail = (event as CustomEvent<{ value: string }>).detail
-		renameTrack(props.track.id, detail.value)
-	}
-
-	const handleToggle = () => toggleTrackCollapsed(props.track.id)
-
-	// The button lets go of focus, so Space plays the song
-	// instead of pressing it again.
-	const handleArm = (event: MouseEvent) => {
-		const button = event.currentTarget as HTMLButtonElement
-		button.blur()
+	const handleArm = () => {
 		const nextArmed = isArmed ? null : props.track.id
 		armTrack(nextArmed)
 	}
@@ -394,29 +373,36 @@
 	}
 
 	const handleRemove = () => removeTrack(props.track.id)
+
+	const handleSelectRow = () => {
+		// An impulse lane is a row, not a selectable item, so a
+		// click on its header only drops other selections.
+		clearAllSelection()
+	}
+
+	const handleInspect = (anchor: HTMLElement) => openRowInspector('impulse', props.track.id, anchor)
+
+	const handleSettings = () => openRowInspector('impulse', props.track.id, header)
+
+	const headerOptions = $derived({
+		row,
+		getSiblings: () => siblingRows,
+		onselect: handleSelectRow,
+		oninspect: handleInspect
+	})
 </script>
 
 <div class="hit-lane" class:isCollapsed class:isArmed class:hasSelection data-tone={trackColor} style:--hit-lane-custom-height={customHeight}>
-	<div class="hit-lane-header">
+	<div class="hit-lane-header" role="presentation" bind:this={header} use:rowHeader={headerOptions}>
 		<div class="hit-lane-title">
 			<button class="hit-lane-caret" type="button" aria-expanded={!isCollapsed} aria-label={collapseLabel} onclick={handleToggle}>
 				<CaretRightIcon weight="bold" />
 			</button>
-			<ColorDot rowId={props.track.id} color={trackColor} label={props.track.name} isSquare />
+			<span class="hit-lane-name">{props.track.name}</span>
 			{#if isCollapsed}
-				<span class="hit-lane-name">{props.track.name}</span>
 				<span class="hit-lane-count isCompact">{hits.length}</span>
-			{:else}
-				<z-input class="hit-lane-input" size="sm" value={props.track.name} placeholder="Track name" aria-label="Track name" oninput={handleNameInput} onchange={handleNameInput}></z-input>
 			{/if}
-		</div>
-
-		{#if !isCollapsed}
-			<div class="hit-lane-meta">
-				<span class="hit-lane-meter" aria-hidden="true">
-					<span class="hit-lane-meter-fill" style:--hit-lane-level={liveStyle}></span>
-				</span>
-				<span class="hit-lane-count" class:isSelection={hasSelection} title={metaTitle}>{countLabel}</span>
+			{#if !isCollapsed}
 				<div class="hit-lane-actions">
 					<z-tooltip content={armLabel} placement="top">
 						<button class="hit-lane-action isRecord" class:isOn={isArmed} type="button" aria-label={armLabel} aria-pressed={isArmed} onclick={handleArm}>
@@ -428,12 +414,26 @@
 							<GridFourIcon weight="bold" />
 						</button>
 					</z-tooltip>
+					<z-tooltip content="Lane settings" placement="top">
+						<button class="hit-lane-action" type="button" aria-label="Lane settings" onclick={handleSettings}>
+							<GearSixIcon weight="bold" />
+						</button>
+					</z-tooltip>
 					<z-tooltip content="Remove track" placement="top">
 						<button class="hit-lane-action isDanger" type="button" aria-label="Remove track" onclick={handleRemove}>
 							<TrashIcon weight="bold" />
 						</button>
 					</z-tooltip>
 				</div>
+			{/if}
+		</div>
+
+		{#if !isCollapsed}
+			<div class="hit-lane-meta">
+				<span class="hit-lane-meter" aria-hidden="true">
+					<span class="hit-lane-meter-fill" style:--hit-lane-level={liveStyle}></span>
+				</span>
+				<span class="hit-lane-count" class:isSelection={hasSelection} title={metaTitle}>{countLabel}</span>
 			</div>
 		{/if}
 	</div>
@@ -442,11 +442,11 @@
 		class="hit-lane-track"
 		data-track="lane"
 		role="group"
-		aria-label="{props.track.name} hits"
+		aria-label="{props.track.name} impulses"
 		onpointerdown={handleTrackDown}
 		onpointermove={handleTrackMove}
 		onpointerup={handleTrackUp}
-		onpointercancel={handleTrackUp}
+		onpointercancel={handleTrackCancel}
 		ondblclick={handleTrackDoubleClick}
 	>
 		<svg class="hit-lane-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
@@ -488,7 +488,6 @@
 					aria-valuenow={hit.strength}
 					onpointerenter={() => (hoveredHitId = hit.id)}
 					onpointerleave={() => (hoveredHitId = null)}
-					onkeydown={handleHitKey}
 				></div>
 			{/each}
 
@@ -516,5 +515,5 @@
 		{/if}
 	</div>
 
-	<RowResizer rowId={props.track.id} label={props.track.name} />
+	<RowResizer rowId={props.track.id} kind="impulse" label={props.track.name} siblings={siblingRows} />
 </div>

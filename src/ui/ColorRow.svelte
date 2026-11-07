@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { recordHistoryCoalesced } from '../automation.svelte'
 	import './controls.css'
 
 	type ColorRowPropsT = {
@@ -11,7 +12,10 @@
 
 	const handleChange = (event: Event) => {
 		const detail = (event as CustomEvent<{ value: string }>).detail
-		props.onchange(detail.value.toLowerCase())
+		const nextValue = detail.value.toLowerCase()
+		const isChange = nextValue !== props.value
+		if (isChange) recordHistoryCoalesced(`color:${props.label}`)
+		props.onchange(nextValue)
 	}
 </script>
 

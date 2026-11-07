@@ -9,8 +9,14 @@
 	import Inspector from './ui/Inspector.svelte'
 	import MidiImportDialog from './ui/MidiImportDialog.svelte'
 	import Stage from './ui/Stage.svelte'
+	import { installFocusGuard } from './ui/focus'
 	import { checkIsTyping } from './ui/keyboard'
 
+	let shell: HTMLElement
+
+	// Space plays. A focused button, select or field keeps the
+	// key, which is only possible after a Tab, since a click
+	// hands focus back to the shell.
 	const handleKeyDown = (event: KeyboardEvent) => {
 		const isSpace = event.code === 'Space'
 		if (!isSpace || checkIsTyping(event)) return
@@ -63,13 +69,16 @@
 	}
 
 	onMount(() => {
+		const removeFocusGuard = installFocusGuard(shell)
+		shell.focus({ preventScroll: true })
 		void bootApp()
+		return removeFocusGuard
 	})
 </script>
 
 <svelte:window onkeydown={handleKeyDown} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop} />
 
-<main class="app-shell">
+<main class="app-shell" tabindex="-1" bind:this={shell}>
 	<section class="app-workspace">
 		<div class="app-stage-area">
 			<Stage />

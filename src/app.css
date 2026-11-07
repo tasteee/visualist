@@ -29,6 +29,10 @@ body {
 	box-sizing: border-box;
 }
 
+.app-shell:focus {
+	outline: none;
+}
+
 .app-shell {
 	--inspector-width: 23.5rem;
 	position: fixed;

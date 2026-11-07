@@ -1,6 +1,6 @@
 import { toaster } from '@tasteee/zest'
 import { recordHistory, removeLanesForFx, removeLanesForLayer } from './automation.svelte'
-import { deleteAsset, importAssetFile, restoreAssets } from './engine/assets'
+import { importAssetFile, restoreAssets } from './engine/assets'
 import type { AssetRequestT } from './engine/assets'
 import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createTextLayer } from './engine/layers'
 import type { FxKindT, LayerFxT, LayerT } from './engine/types'
@@ -8,7 +8,10 @@ import { showInspectorTab } from './inspector.svelte'
 
 type LayerStoreT = {
 	layers: LayerT[]
+	// The layer open in the panel and the stage, and every layer
+	// in the current selection. The first is always one of them.
 	selectedLayerId: string | null
+	selectedLayerIds: string[]
 	// Bumps when a decoded file arrives, so the frame redraws.
 	assetVersion: number
 	isImporting: boolean
@@ -72,6 +75,7 @@ const saveLayers = (layers: LayerT[]): void => {
 export const layerStore = $state<LayerStoreT>({
 	layers: loadLayers(),
 	selectedLayerId: null,
+	selectedLayerIds: [],
 	assetVersion: 0,
 	isImporting: false
 })
@@ -83,14 +87,35 @@ export const findLayer = (layerId: string | null): LayerT | undefined => {
 
 export const getSelectedLayer = (): LayerT | undefined => findLayer(layerStore.selectedLayerId)
 
-export const selectLayer = (layerId: string | null): void => {
-	layerStore.selectedLayerId = layerId
+export const selectLayers = (layerIds: string[], primaryId: string | null): void => {
+	layerStore.selectedLayerIds = layerIds
+	layerStore.selectedLayerId = primaryId
 }
+
+export const selectLayer = (layerId: string | null): void => {
+	const ids = layerId === null ? [] : [layerId]
+	selectLayers(ids, layerId)
+}
+
+export const checkIsLayerSelected = (layerId: string): boolean => layerStore.selectedLayerIds.includes(layerId)
 
 // Picking a layer in the timeline opens it in the panel.
 export const focusLayer = (layerId: string): void => {
-	layerStore.selectedLayerId = layerId
+	selectLayer(layerId)
 	showInspectorTab('layers')
+}
+
+// A name commits once, as the whole name. The editing field
+// keeps its own text undo until then.
+export const renameLayer = (layerId: string, name: string): void => {
+	const layer = findLayer(layerId)
+	if (layer === undefined) return
+	const trimmed = name.slice(0, NAME_LIMIT)
+	const isBlank = trimmed.trim().length === 0
+	const isChange = trimmed !== layer.name
+	if (isBlank || !isChange) return
+	recordHistory()
+	layer.name = trimmed
 }
 
 const MIN_CLIP_SECONDS = 0.1
@@ -114,8 +139,9 @@ export const setLayerTimeRange = (layerId: string, startTime: number, endTime: n
 
 // New layers land on top of the stack, in front of everything.
 const pushLayer = (layer: LayerT): void => {
+	recordHistory()
 	layerStore.layers.push(layer)
-	layerStore.selectedLayerId = layer.id
+	selectLayer(layer.id)
 }
 
 // The track title already has its own spot in the logo
@@ -138,18 +164,26 @@ export const addAssetLayer = async (file: File): Promise<void> => {
 	}
 }
 
-export const removeLayer = (layerId: string): void => {
-	const layer = findLayer(layerId)
-	if (layer === undefined) return
-	const isLogo = layer.id === LOGO_LAYER_ID
-	if (isLogo) return
-	layerStore.layers = layerStore.layers.filter((candidate) => candidate.id !== layerId)
-	const wasSelected = layerStore.selectedLayerId === layerId
-	if (wasSelected) layerStore.selectedLayerId = null
-	removeLanesForLayer(layerId)
-	const assetId = layer.assetId
-	if (assetId !== null) void deleteAsset(assetId)
+// Removing layers is one undo step. Their files stay stored,
+// so undo can bring the layers back.
+export const removeLayers = (layerIds: string[]): void => {
+	const removableIds = layerIds.filter((layerId) => {
+		const layer = findLayer(layerId)
+		const isLogo = layerId === LOGO_LAYER_ID
+		return layer !== undefined && !isLogo
+	})
+	const hasLayers = removableIds.length > 0
+	if (!hasLayers) return
+	recordHistory()
+	const doomedIds = new Set(removableIds)
+	layerStore.layers = layerStore.layers.filter((candidate) => !doomedIds.has(candidate.id))
+	const remainingIds = layerStore.selectedLayerIds.filter((candidate) => !doomedIds.has(candidate))
+	const primaryId = remainingIds[remainingIds.length - 1] ?? null
+	selectLayers(remainingIds, primaryId)
+	for (const layerId of removableIds) removeLanesForLayer(layerId)
 }
+
+export const removeLayer = (layerId: string): void => removeLayers([layerId])
 
 // forward moves toward the front, which is later in the list.
 export const moveLayer = (layerId: string, direction: LayerDirectionT): void => {
@@ -195,18 +229,21 @@ export const checkCanMove = (layerId: string, direction: LayerDirectionT): boole
 export const toggleLayerVisible = (layerId: string): void => {
 	const layer = findLayer(layerId)
 	if (layer === undefined) return
+	recordHistory()
 	layer.isVisible = !layer.isVisible
 }
 
 export const addLayerFx = (layerId: string, kind: FxKindT): void => {
 	const layer = findLayer(layerId)
 	if (layer === undefined) return
+	recordHistory()
 	layer.fx.push(createFx(kind))
 }
 
 export const removeLayerFx = (layerId: string, fxId: string): void => {
 	const layer = findLayer(layerId)
 	if (layer === undefined) return
+	recordHistory()
 	layer.fx = layer.fx.filter((fx: LayerFxT) => fx.id !== fxId)
 	removeLanesForFx(fxId)
 }

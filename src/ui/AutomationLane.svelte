@@ -1,51 +1,51 @@
 <script lang="ts">
-	import { flushSync } from 'svelte'
 	import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon'
-	import EraserIcon from 'phosphor-svelte/lib/EraserIcon'
+	import EyeIcon from 'phosphor-svelte/lib/EyeIcon'
+	import EyeSlashIcon from 'phosphor-svelte/lib/EyeSlashIcon'
+	import GearSixIcon from 'phosphor-svelte/lib/GearSixIcon'
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import {
 		automation,
-		addPoint,
-		checkIsLaneCollapsed,
+		checkIsPointSelected,
 		deletePoint,
-		movePoint,
+		getSelectedPointCount,
+		getValueForNewPoint,
+		addPoint,
+		movePoints,
 		recordHistory,
 		removeLane,
-		resetLane,
-		selectPoint,
-		setLaneTarget,
 		setPointBend,
-		toggleLaneCollapsed
+		toggleLaneBypassed
 	} from '../automation.svelte'
+	import type { PointMoveT } from '../automation.svelte'
 	import {
-		GLOBAL_GROUP_ID,
 		PATH_WIDTH,
 		buildAreaPath,
 		buildLinePath,
 		buildVertices,
-		checkIsSameTarget,
 		findSegmentStart,
 		formatControlValue,
 		getLiveLaneValue,
 		getTargetBase,
 		getTargetControl,
-		getTargetGroupId,
-		getTargetId,
-		listLayerTargets,
-		listSettingTargets,
 		toControlValue,
 		toNormalized
 	} from '../engine/automation'
 	import { clamp } from '../engine/settings'
 	import { checkIsTimeVisible, formatPreciseTime, getViewEnd, ratioToTime, snapToGrid, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
-	import type { AutomationLaneT, AutomationPointT, LaneTargetT, LayerT } from '../engine/types'
-	import { getLaneColor, getRowHeightStyle } from '../appearance.svelte'
-	import { findLayer, layerStore } from '../layers.svelte'
+	import type { AutomationLaneT, AutomationPointT, LayerT } from '../engine/types'
+	import { getLaneColor } from '../appearance.svelte'
+	import { layerStore } from '../layers.svelte'
+	import { openRowInspector } from '../rowInspector.svelte'
+	import { getRowHeightCss, toggleRowFolded, checkIsRowFolded } from '../rowLayout.svelte'
+	import type { RowRefT } from '../rowLayout.svelte'
+	import { checkIsLaneSelected, pickLane, pickPoint, pickPointsInBox, readModifiers, selectPlacedPoint } from '../selection.svelte'
 	import { app } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
-	import ColorDot from './ColorDot.svelte'
+	import { checkIsPrimaryModifierHeld } from './focus'
 	import RowResizer from './RowResizer.svelte'
+	import { rowHeader } from './rowHeader'
 	import './AutomationLane.css'
 
 	type AutomationLanePropsT = {
@@ -53,39 +53,66 @@
 		grid: TimelineGridT
 		// Lanes under a layer sit indented below its header.
 		isNested?: boolean
+		// The lanes in this lane's group, in the order shown. They
+		// are its siblings for range selection and the primary
+		// modifier gestures.
+		siblingLaneIds: string[]
 		onedit: (laneId: string, pointId: string, anchor: HTMLElement) => void
 	}
 
+	type PlotPositionT = { time: number; value: number }
+
+	// Dragging moves every selected point together: time by the
+	// grabbed point's snapped move, value by the vertical travel.
+	type PointDragT = {
+		anchorPointId: string
+		anchorStartTime: number
+		startX: number
+		startY: number
+		plotHeight: number
+		starts: Map<string, PlotPositionT>
+		hasMoved: boolean
+	}
+
+	// A press on empty plot. A click places a point when the
+	// button comes up. A drag draws a selection box instead.
+	type MarqueeT = {
+		startX: number
+		startY: number
+		startPosition: PlotPositionT
+		currentPosition: PlotPositionT
+		isAdditive: boolean
+		isActive: boolean
+		clickPosition: PlotPositionT
+	}
+
+	// An Alt-drag on a segment previews its bow, and stores it
+	// once, when the button comes up.
 	type BendDragT = {
 		pointId: string
 		startY: number
 		startBend: number
 		plotHeight: number
+		previewBend: number
+		hasMoved: boolean
 	}
-
-	type PlotPositionT = { time: number; value: number }
 
 	const props: AutomationLanePropsT = $props()
 
-	const VALUE_KEY_STEP = 0.01
-	const TIME_KEY_STEP = 0.1
-	const FINE_MULTIPLIER = 10
 	const BEND_PER_PLOT_HEIGHT = 2
 	const PILL_FLIP_VALUE = 0.62
-
-	const KEY_DELTAS: Partial<Record<string, PlotPositionT>> = {
-		ArrowUp: { time: 0, value: 1 },
-		ArrowDown: { time: 0, value: -1 },
-		ArrowLeft: { time: -1, value: 0 },
-		ArrowRight: { time: 1, value: 0 }
-	}
+	const DRAG_THRESHOLD_PX = 3
 
 	let root: HTMLDivElement
+	let header: HTMLDivElement
 	let plot = $state<HTMLDivElement | undefined>(undefined)
-	let bendDrag: BendDragT | null = null
-	let draggingPointId = $state<string | null>(null)
+	let pointDrag = $state<PointDragT | null>(null)
+	let marquee = $state<MarqueeT | null>(null)
+	let bendDrag = $state<BendDragT | null>(null)
 	let hoveredPointId = $state<string | null>(null)
 
+	const row = $derived<RowRefT>({ kind: 'lane', id: props.lane.id })
+	const siblingRows = $derived(props.siblingLaneIds.filter((laneId) => laneId !== props.lane.id).map((laneId): RowRefT => ({ kind: 'lane', id: laneId })))
 	const layers = $derived(layerStore.layers as LayerT[])
 	const control = $derived(getTargetControl(props.lane.target, layers))
 	const hasControl = $derived(control !== null)
@@ -93,14 +120,19 @@
 	const view = $derived(timeline.view)
 	const points = $derived(props.lane.points)
 	const pointCount = $derived(points.length)
-	const isCollapsed = $derived(checkIsLaneCollapsed(props.lane.id))
+	const isFolded = $derived(checkIsRowFolded(row))
+	const isBypassed = $derived(props.lane.isBypassed === true)
+	const isSelected = $derived(checkIsLaneSelected(props.lane.id))
 	const laneColor = $derived(getLaneColor(props.lane, layers))
-	const customHeight = $derived(getRowHeightStyle(props.lane.id))
+	const customHeight = $derived(getRowHeightCss(row))
 	const controlLabel = $derived(control === null ? 'No control' : control.label)
+	const laneName = $derived(props.lane.name ?? controlLabel)
 	const pointCountLabel = $derived(pointCount === 1 ? '1 point' : `${pointCount} points`)
-	const collapseLabel = $derived(isCollapsed ? `Expand ${controlLabel}` : `Collapse ${controlLabel}`)
-	const hasSelectedPoint = $derived(points.some((point) => point.id === automation.selectedPointId))
-	const shouldShowHint = $derived(hasControl && pointCount <= 1 && !isCollapsed)
+	const collapseLabel = $derived(isFolded ? `Expand ${laneName}` : `Fold ${laneName}`)
+	const bypassLabel = $derived(isBypassed ? `Use ${laneName}` : `Bypass ${laneName}`)
+	const selectedPointCount = $derived(getSelectedPointCount(props.lane.id))
+	const hasSelectedPoint = $derived(selectedPointCount > 0)
+	const shouldShowHint = $derived(hasControl && pointCount <= 1 && !isFolded)
 
 	const baseNormalized = $derived.by(() => {
 		const base = getTargetBase(props.lane.target, app.settings, layers)
@@ -108,7 +140,19 @@
 		return toNormalized(control, base)
 	})
 
-	const vertices = $derived(buildVertices(points, view, baseNormalized))
+	// While a bow is being dragged the lane draws the preview,
+	// and the stored points stay as they were.
+	const shownPoints = $derived.by(() => {
+		const activeBend = bendDrag
+		if (activeBend === null) return points
+		return points.map((point) => {
+			const isBent = point.id === activeBend.pointId
+			if (!isBent) return point
+			return { ...point, bend: activeBend.previewBend }
+		})
+	})
+
+	const vertices = $derived(buildVertices(shownPoints, view, baseNormalized))
 	const linePath = $derived(buildLinePath(vertices))
 	const areaPath = $derived(buildAreaPath(vertices))
 
@@ -130,14 +174,25 @@
 		const margin = view.span * 0.05
 		const earliest = view.start - margin
 		const latest = getViewEnd(view) + margin
+		const draggedIds = pointDrag === null ? null : pointDrag.starts
 		return points.filter((point) => {
 			const isInWindow = point.time >= earliest && point.time <= latest
-			const isActive = point.id === draggingPointId
+			const isActive = draggedIds !== null && draggedIds.has(point.id)
 			return isInWindow || isActive
 		})
 	})
 
-	const pillPointId = $derived(draggingPointId ?? hoveredPointId)
+	const isMarqueeShown = $derived(marquee !== null && marquee.isActive)
+	const marqueeLeftTime = $derived(marquee === null ? 0 : Math.min(marquee.startPosition.time, marquee.currentPosition.time))
+	const marqueeRightTime = $derived(marquee === null ? 0 : Math.max(marquee.startPosition.time, marquee.currentPosition.time))
+	const marqueeTopValue = $derived(marquee === null ? 0 : Math.max(marquee.startPosition.value, marquee.currentPosition.value))
+	const marqueeBottomValue = $derived(marquee === null ? 0 : Math.min(marquee.startPosition.value, marquee.currentPosition.value))
+	const marqueeLeft = $derived(timeToPercent(marqueeLeftTime, view))
+	const marqueeWidth = $derived(timeToPercent(marqueeRightTime, view) - marqueeLeft)
+	const marqueeTop = $derived((1 - marqueeTopValue) * 100)
+	const marqueeHeight = $derived((marqueeTopValue - marqueeBottomValue) * 100)
+
+	const pillPointId = $derived(pointDrag === null ? hoveredPointId : pointDrag.anchorPointId)
 	const pillPoint = $derived(points.find((point) => point.id === pillPointId))
 
 	const pillLabel = $derived.by(() => {
@@ -147,36 +202,6 @@
 	})
 
 	const isPillBelow = $derived(pillPoint !== undefined && pillPoint.value > PILL_FLIP_VALUE)
-
-	// A lane can switch to any free control in its own group:
-	// global settings, or the params and effects of its layer.
-	const getGroupTargets = (): LaneTargetT[] => {
-		const target = props.lane.target
-		const groupId = getTargetGroupId(target)
-		const isGlobal = groupId === GLOBAL_GROUP_ID
-		if (isGlobal) return listSettingTargets()
-		const layer = findLayer(groupId)
-		if (layer === undefined) return []
-		return listLayerTargets(layer)
-	}
-
-	const getTargetLabel = (target: LaneTargetT): string => {
-		const targetControl = getTargetControl(target, layers)
-		if (targetControl === null) return 'Missing'
-		return targetControl.label
-	}
-
-	const groupTargets = $derived(getGroupTargets())
-
-	const selectOptions = $derived.by(() => {
-		const otherLanes = automation.lanes.filter((lane) => lane.id !== props.lane.id)
-		return groupTargets.map((target) => {
-			const isUsed = otherLanes.some((lane) => checkIsSameTarget(lane.target, target))
-			return { value: getTargetId(target), label: getTargetLabel(target), isDisabled: isUsed }
-		})
-	})
-
-	const selectValue = $derived(getTargetId(props.lane.target))
 
 	const isFlashing = $derived(automation.revealedLaneId === props.lane.id)
 
@@ -197,81 +222,277 @@
 		return `${control.label} ${value} at ${formatPreciseTime(point.time)}`
 	}
 
-	const readPlotPosition = (event: PointerEvent): PlotPositionT => {
+	const checkIsSelectedPoint = (point: AutomationPointT): boolean => checkIsPointSelected(props.lane.id, point.id)
+
+	// Only selected points are in the tab order, so a dense lane
+	// is not hundreds of tab stops.
+	const getPointTabIndex = (point: AutomationPointT): number => (checkIsSelectedPoint(point) ? 0 : -1)
+
+	const checkIsDraggingPoint = (point: AutomationPointT): boolean => pointDrag !== null && pointDrag.hasMoved && pointDrag.starts.has(point.id)
+
+	const readRawPosition = (clientX: number, clientY: number): PlotPositionT => {
 		if (plot === undefined) return { time: 0, value: 0 }
 		const bounds = plot.getBoundingClientRect()
-		const xRatio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
-		const yRatio = clamp((event.clientY - bounds.top) / bounds.height, 0, 1)
-		const rawTime = clamp(ratioToTime(xRatio, view), 0, duration)
+		const xRatio = clamp((clientX - bounds.left) / bounds.width, 0, 1)
+		const yRatio = clamp((clientY - bounds.top) / bounds.height, 0, 1)
+		const time = clamp(ratioToTime(xRatio, view), 0, duration)
+		return { time, value: 1 - yRatio }
+	}
+
+	const snapTime = (time: number, event: PointerEvent): number => {
 		const shouldSnap = timeline.isSnapping && !event.shiftKey
-		const snappedTime = shouldSnap ? clamp(snapToGrid(rawTime, props.grid), 0, duration) : rawTime
-		return { time: snappedTime, value: 1 - yRatio }
+		if (!shouldSnap) return time
+		return clamp(snapToGrid(time, props.grid), 0, duration)
 	}
 
-	const findPointElement = (pointId: string): HTMLElement | null => {
-		if (plot === undefined) return null
-		return plot.querySelector<HTMLElement>(`[data-point-id="${pointId}"]`)
+	const readSnappedPosition = (event: PointerEvent): PlotPositionT => {
+		const raw = readRawPosition(event.clientX, event.clientY)
+		return { time: snapTime(raw.time, event), value: raw.value }
 	}
 
-	const handleControlChange = (event: Event) => {
-		const detail = (event as CustomEvent<{ value: string }>).detail
-		const target = groupTargets.find((candidate) => getTargetId(candidate) === detail.value)
-		if (target === undefined) return
-		setLaneTarget(props.lane.id, target)
+	const readPointId = (target: EventTarget | null): string | null => {
+		const isElement = target instanceof Element
+		if (!isElement) return null
+		const element = target.closest<HTMLElement>('[data-point-id]')
+		if (element === null) return null
+		return element.dataset.pointId ?? null
 	}
+
+	const findPoint = (pointId: string): AutomationPointT | undefined => points.find((point) => point.id === pointId)
+
+	const getSelectedIds = (): string[] => {
+		const isThisLane = automation.selectedPointLaneId === props.lane.id
+		if (!isThisLane) return []
+		return automation.selectedPointIds
+	}
+
+	const captureStarts = (pointIds: string[]): Map<string, PlotPositionT> => {
+		const starts = new Map<string, PlotPositionT>()
+		for (const pointId of pointIds) {
+			const point = findPoint(pointId)
+			if (point !== undefined) starts.set(pointId, { time: point.time, value: point.value })
+		}
+		return starts
+	}
+
+	const checkIsPastThreshold = (dx: number, dy: number): boolean => {
+		return Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX
+	}
+
+	// ---- Rows ----------------------------------------------
+
+	const handleSelectRow = (event: PointerEvent) => {
+		pickLane(props.lane.id, props.siblingLaneIds, readModifiers(event))
+	}
+
+	const handleInspect = (anchor: HTMLElement) => openRowInspector('lane', props.lane.id, anchor)
+
+	const handleSettings = () => openRowInspector('lane', props.lane.id, header)
 
 	const handleRemove = () => removeLane(props.lane.id)
 
-	const handleReset = () => resetLane(props.lane.id)
-
-	const handleToggle = () => toggleLaneCollapsed(props.lane.id)
-
-	const startBendDrag = (event: PointerEvent, time: number) => {
-		const startIndex = findSegmentStart(points, time)
-		const isOnSegment = startIndex !== -1
-		if (!isOnSegment || plot === undefined) return
-		recordHistory()
-		const point = points[startIndex]
-		const bounds = plot.getBoundingClientRect()
-		bendDrag = { pointId: point.id, startY: event.clientY, startBend: point.bend, plotHeight: bounds.height }
-		const track = event.currentTarget as HTMLElement
-		track.setPointerCapture(event.pointerId)
+	// The caret folds the row. It does not select or deselect.
+	const handleToggle = (event: MouseEvent) => {
+		const siblings = event.metaKey || event.ctrlKey ? siblingRows : []
+		toggleRowFolded(row, siblings)
 	}
 
-	const startPointDrag = (event: PointerEvent, pointId: string) => {
-		selectPoint(pointId)
-		flushSync()
-		const element = findPointElement(pointId)
-		if (element === null) return
-		element.setPointerCapture(event.pointerId)
-		element.focus({ preventScroll: true })
-		draggingPointId = pointId
+	const headerOptions = $derived({
+		row,
+		getSiblings: () => siblingRows,
+		onselect: handleSelectRow,
+		oninspect: handleInspect
+	})
+
+	// ---- Plot ----------------------------------------------
+
+	const startPointDrag = (event: PointerEvent, point: AutomationPointT) => {
+		if (plot === undefined) return
+		const isAlreadySelected = checkIsSelectedPoint(point)
+		if (!isAlreadySelected) pickPoint(props.lane.id, point.id, { isRange: false, isToggle: false })
+		const track = event.currentTarget as HTMLElement
+		track.setPointerCapture(event.pointerId)
+		const bounds = plot.getBoundingClientRect()
+		pointDrag = {
+			anchorPointId: point.id,
+			anchorStartTime: point.time,
+			startX: event.clientX,
+			startY: event.clientY,
+			plotHeight: bounds.height,
+			starts: captureStarts(getSelectedIds()),
+			hasMoved: false
+		}
+	}
+
+	const handlePointDown = (event: PointerEvent, pointId: string) => {
+		const point = findPoint(pointId)
+		if (point === undefined) return
+		const modifiers = readModifiers(event)
+		const isPicking = modifiers.isRange || modifiers.isToggle
+		if (isPicking) return pickPoint(props.lane.id, pointId, modifiers)
+		startPointDrag(event, point)
+	}
+
+	const startBend = (event: PointerEvent) => {
+		if (plot === undefined) return
+		const raw = readRawPosition(event.clientX, event.clientY)
+		const startIndex = findSegmentStart(points, raw.time)
+		const isOnSegment = startIndex !== -1
+		if (!isOnSegment) return
+		const segmentStart = points[startIndex]
+		const track = event.currentTarget as HTMLElement
+		track.setPointerCapture(event.pointerId)
+		const bounds = plot.getBoundingClientRect()
+		bendDrag = {
+			pointId: segmentStart.id,
+			startY: event.clientY,
+			startBend: segmentStart.bend,
+			plotHeight: bounds.height,
+			previewBend: segmentStart.bend,
+			hasMoved: false
+		}
+	}
+
+	const startMarquee = (event: PointerEvent) => {
+		const track = event.currentTarget as HTMLElement
+		track.setPointerCapture(event.pointerId)
+		const startPosition = readRawPosition(event.clientX, event.clientY)
+		marquee = {
+			startX: event.clientX,
+			startY: event.clientY,
+			startPosition,
+			currentPosition: startPosition,
+			isAdditive: event.shiftKey,
+			isActive: false,
+			clickPosition: readSnappedPosition(event)
+		}
 	}
 
 	const handleTrackDown = (event: PointerEvent) => {
 		const isPrimaryButton = event.button === 0
-		const canEdit = hasControl && duration > 0 && !isCollapsed
+		const canEdit = hasControl && duration > 0 && !isFolded
 		if (!isPrimaryButton || !canEdit) return
-		const position = readPlotPosition(event)
-		if (event.altKey) return startBendDrag(event, position.time)
-		const pointId = addPoint(props.lane.id, position.time, position.value)
-		if (pointId === null) return
-		startPointDrag(event, pointId)
+		const pointId = readPointId(event.target)
+		const isOnPoint = pointId !== null
+		if (isOnPoint) return handlePointDown(event, pointId)
+		if (event.altKey) return startBend(event)
+		startMarquee(event)
+	}
+
+	// One undo step per drag, recorded when it really moves.
+	const buildMoves = (activeDrag: PointDragT, timeDelta: number, valueDelta: number): PointMoveT[] => {
+		return Array.from(activeDrag.starts.entries()).map(([pointId, start]) => ({
+			pointId,
+			time: start.time + timeDelta,
+			value: start.value + valueDelta
+		}))
+	}
+
+	const moveGroup = (event: PointerEvent, activeDrag: PointDragT) => {
+		const dx = event.clientX - activeDrag.startX
+		const dy = event.clientY - activeDrag.startY
+		const hasStartedMoving = activeDrag.hasMoved || checkIsPastThreshold(dx, dy)
+		if (!hasStartedMoving) return
+		if (!activeDrag.hasMoved) recordHistory()
+		activeDrag.hasMoved = true
+		const position = readSnappedPosition(event)
+		const timeDelta = position.time - activeDrag.anchorStartTime
+		const valueDelta = -dy / activeDrag.plotHeight
+		const moves = buildMoves(activeDrag, timeDelta, valueDelta)
+		const isMovingLater = timeDelta > 0
+		const orderedMoves = isMovingLater ? [...moves].reverse() : moves
+		movePoints(props.lane.id, orderedMoves, duration)
+	}
+
+	const moveBend = (event: PointerEvent, activeBend: BendDragT) => {
+		const dy = activeBend.startY - event.clientY
+		const hasStartedMoving = activeBend.hasMoved || Math.abs(dy) > DRAG_THRESHOLD_PX
+		if (!hasStartedMoving) return
+		activeBend.hasMoved = true
+		const travel = dy / activeBend.plotHeight
+		const bend = activeBend.startBend + travel * BEND_PER_PLOT_HEIGHT
+		activeBend.previewBend = clamp(bend, -1, 1)
+	}
+
+	const moveMarquee = (event: PointerEvent, activeMarquee: MarqueeT) => {
+		const dx = event.clientX - activeMarquee.startX
+		const dy = event.clientY - activeMarquee.startY
+		const isNowActive = activeMarquee.isActive || checkIsPastThreshold(dx, dy)
+		activeMarquee.isActive = isNowActive
+		activeMarquee.currentPosition = readRawPosition(event.clientX, event.clientY)
 	}
 
 	const handleTrackMove = (event: PointerEvent) => {
-		if (bendDrag === null) return
-		const travel = (bendDrag.startY - event.clientY) / bendDrag.plotHeight
-		const bend = bendDrag.startBend + travel * BEND_PER_PLOT_HEIGHT
-		setPointBend(props.lane.id, bendDrag.pointId, bend)
+		const activeDrag = pointDrag
+		if (activeDrag !== null) return moveGroup(event, activeDrag)
+		const activeBend = bendDrag
+		if (activeBend !== null) return moveBend(event, activeBend)
+		const activeMarquee = marquee
+		if (activeMarquee !== null) moveMarquee(event, activeMarquee)
+	}
+
+	const finishMarquee = (activeMarquee: MarqueeT) => {
+		const first = activeMarquee.startPosition
+		const second = activeMarquee.currentPosition
+		const leftTime = Math.min(first.time, second.time)
+		const rightTime = Math.max(first.time, second.time)
+		const topValue = Math.max(first.value, second.value)
+		const bottomValue = Math.min(first.value, second.value)
+		const boxedPoints = points.filter((point) => {
+			const isInTime = point.time >= leftTime && point.time <= rightTime
+			const isInValue = point.value >= bottomValue && point.value <= topValue
+			return isInTime && isInValue
+		})
+		const boxedIds = boxedPoints.map((point) => point.id)
+		pickPointsInBox(props.lane.id, boxedIds, activeMarquee.isAdditive)
+	}
+
+	// A click on empty plot places a point on button-up, level
+	// with the one before it. The pointer's height does not set
+	// the value.
+	const placePoint = (activeMarquee: MarqueeT) => {
+		const time = activeMarquee.clickPosition.time
+		const value = getValueForNewPoint(props.lane.id, time)
+		const pointId = addPoint(props.lane.id, time, value)
+		if (pointId === null) return
+		selectPlacedPoint(props.lane.id, pointId)
+	}
+
+	const commitBend = (activeBend: BendDragT) => {
+		if (!activeBend.hasMoved) return
+		recordHistory()
+		setPointBend(props.lane.id, activeBend.pointId, activeBend.previewBend)
 	}
 
 	const handleTrackUp = () => {
+		const activeDrag = pointDrag
+		const activeBend = bendDrag
+		const activeMarquee = marquee
+		pointDrag = null
 		bendDrag = null
+		marquee = null
+		if (activeDrag !== null) {
+			const wasClick = !activeDrag.hasMoved
+			if (wasClick) pickPoint(props.lane.id, activeDrag.anchorPointId, { isRange: false, isToggle: false })
+			return
+		}
+		if (activeBend !== null) return commitBend(activeBend)
+		if (activeMarquee === null) return
+		if (activeMarquee.isActive) return finishMarquee(activeMarquee)
+		placePoint(activeMarquee)
+	}
+
+	const handleTrackCancel = () => {
+		pointDrag = null
+		bendDrag = null
+		marquee = null
 	}
 
 	const handleTrackDoubleClick = (event: MouseEvent) => {
-		if (isCollapsed) return handleToggle()
+		if (isFolded) return toggleRowFolded(row, [])
+		const pointId = readPointId(event.target)
+		const isOnPoint = pointId !== null
+		if (isOnPoint) return deletePoint(props.lane.id, pointId)
 		if (!event.altKey || plot === undefined) return
 		const bounds = plot.getBoundingClientRect()
 		const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
@@ -282,74 +503,25 @@
 		setPointBend(props.lane.id, points[startIndex].id, 0)
 	}
 
-	const handlePointDown = (event: PointerEvent, point: AutomationPointT) => {
-		event.stopPropagation()
-		const isPrimaryButton = event.button === 0
-		if (!isPrimaryButton) return
-		recordHistory()
-		startPointDrag(event, point.id)
-	}
-
-	const handlePointMove = (event: PointerEvent, point: AutomationPointT) => {
-		const element = event.currentTarget as HTMLElement
-		const isDragging = element.hasPointerCapture(event.pointerId)
-		if (!isDragging) return
-		const position = readPlotPosition(event)
-		movePoint(props.lane.id, point.id, position.time, position.value, duration)
-	}
-
-	const handlePointUp = () => {
-		draggingPointId = null
-	}
-
-	const handlePointDoubleClick = (event: MouseEvent, point: AutomationPointT) => {
-		event.stopPropagation()
-		deletePoint(props.lane.id, point.id)
-	}
-
 	const handlePointContextMenu = (event: MouseEvent, point: AutomationPointT) => {
 		event.preventDefault()
 		event.stopPropagation()
-		selectPoint(point.id)
+		pickPoint(props.lane.id, point.id, { isRange: false, isToggle: false })
 		const element = event.currentTarget as HTMLElement
 		props.onedit(props.lane.id, point.id, element)
 	}
 
-	const nudgePoint = (point: AutomationPointT, delta: PlotPositionT, multiplier: number) => {
-		const time = point.time + delta.time * TIME_KEY_STEP * multiplier
-		const value = point.value + delta.value * VALUE_KEY_STEP * multiplier
-		movePoint(props.lane.id, point.id, time, value, duration)
-	}
-
 	const handlePointKey = (event: KeyboardEvent, point: AutomationPointT) => {
 		const element = event.currentTarget as HTMLElement
-		const multiplier = event.shiftKey ? FINE_MULTIPLIER : 1
-		const delta = KEY_DELTAS[event.key]
-		const isArrow = delta !== undefined
-		if (isArrow) {
-			event.preventDefault()
-			event.stopPropagation()
-			recordHistory()
-			nudgePoint(point, delta, multiplier)
-			return
-		}
-		const isDelete = event.key === 'Delete' || event.key === 'Backspace'
-		if (isDelete) {
-			event.preventDefault()
-			deletePoint(props.lane.id, point.id)
-			return
-		}
 		if (event.key === 'Enter') props.onedit(props.lane.id, point.id, element)
-		if (event.key === 'Escape') {
-			selectPoint(null)
-			element.blur()
-		}
 	}
 </script>
 
 <div
 	class="automation-lane"
-	class:isCollapsed
+	class:isFolded
+	class:isBypassed
+	class:isSelected
 	class:isActive={hasSelectedPoint}
 	class:isFlashing
 	class:isNested={props.isNested}
@@ -357,36 +529,30 @@
 	style:--lane-custom-height={customHeight}
 	bind:this={root}
 >
-	<div class="automation-lane-header">
+	<div class="automation-lane-header" role="presentation" bind:this={header} use:rowHeader={headerOptions}>
 		<div class="automation-lane-title">
-			<button class="automation-lane-caret" type="button" aria-expanded={!isCollapsed} aria-label={collapseLabel} onclick={handleToggle}>
+			<button class="automation-lane-caret" type="button" aria-expanded={!isFolded} aria-label={collapseLabel} onclick={handleToggle}>
 				<CaretRightIcon weight="bold" />
 			</button>
-			<ColorDot rowId={props.lane.id} color={laneColor} label={controlLabel} />
-			{#if isCollapsed}
-				<span class="automation-lane-name">{controlLabel}</span>
+			<z-tooltip content={bypassLabel} placement="top" openDelay={300}>
+				<button class="automation-lane-action" type="button" aria-label={bypassLabel} aria-pressed={isBypassed} onclick={() => toggleLaneBypassed(props.lane.id)}>
+					{#if isBypassed}
+						<EyeSlashIcon weight="bold" />
+					{/if}
+					{#if !isBypassed}
+						<EyeIcon weight="bold" />
+					{/if}
+				</button>
+			</z-tooltip>
+			<span class="automation-lane-name">{laneName}</span>
+			{#if isFolded}
 				<span class="automation-lane-value isCompact">{liveLabel}</span>
-			{:else}
-				<z-select
-					class="automation-lane-select"
-					size="sm"
-					value={selectValue}
-					options={selectOptions}
-					placeholder="Choose control"
-					aria-label="Automated control"
-					onchange={handleControlChange}
-				></z-select>
 			{/if}
-		</div>
-
-		{#if !isCollapsed}
-			<div class="automation-lane-meta">
-				<span class="automation-lane-value">{liveLabel}</span>
-				<span class="automation-lane-count">{pointCountLabel}</span>
+			{#if !isFolded}
 				<div class="automation-lane-actions">
-					<z-tooltip content="Reset lane" placement="top">
-						<button class="automation-lane-action" type="button" aria-label="Reset lane" disabled={pointCount <= 1} onclick={handleReset}>
-							<EraserIcon weight="bold" />
+					<z-tooltip content="Lane settings" placement="top">
+						<button class="automation-lane-action" type="button" aria-label="Lane settings" onclick={handleSettings}>
+							<GearSixIcon weight="bold" />
 						</button>
 					</z-tooltip>
 					<z-tooltip content="Remove lane" placement="top">
@@ -395,6 +561,13 @@
 						</button>
 					</z-tooltip>
 				</div>
+			{/if}
+		</div>
+
+		{#if !isFolded}
+			<div class="automation-lane-meta">
+				<span class="automation-lane-value">{liveLabel}</span>
+				<span class="automation-lane-count">{pointCountLabel}</span>
 			</div>
 		{/if}
 	</div>
@@ -404,11 +577,11 @@
 		class:isDisabled={!hasControl}
 		data-track="lane"
 		role="group"
-		aria-label="{controlLabel} automation"
+		aria-label="{laneName} automation"
 		onpointerdown={handleTrackDown}
 		onpointermove={handleTrackMove}
 		onpointerup={handleTrackUp}
-		onpointercancel={handleTrackUp}
+		onpointercancel={handleTrackCancel}
 		ondblclick={handleTrackDoubleClick}
 	>
 		<svg class="automation-lane-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
@@ -425,34 +598,32 @@
 				</svg>
 			{/if}
 
-			{#if !isCollapsed}
+			{#if !isFolded}
 				{#each visiblePoints as point (point.id)}
 					<div
 						class="automation-lane-point"
-						class:isSelected={automation.selectedPointId === point.id}
-						class:isDragging={draggingPointId === point.id}
+						class:isSelected={checkIsSelectedPoint(point)}
+						class:isDragging={checkIsDraggingPoint(point)}
 						data-point-id={point.id}
 						style:--lane-x="{getPointX(point)}%"
 						style:--lane-y="{getPointY(point)}%"
 						role="slider"
-						tabindex="0"
+						tabindex={getPointTabIndex(point)}
 						aria-label={describePoint(point)}
 						aria-orientation="vertical"
 						aria-valuemin={0}
 						aria-valuemax={1}
 						aria-valuenow={point.value}
-						onpointerdown={(event) => handlePointDown(event, point)}
-						onpointermove={(event) => handlePointMove(event, point)}
-						onpointerup={handlePointUp}
-						onpointercancel={handlePointUp}
 						onpointerenter={() => (hoveredPointId = point.id)}
 						onpointerleave={() => (hoveredPointId = null)}
-						ondblclick={(event) => handlePointDoubleClick(event, point)}
 						oncontextmenu={(event) => handlePointContextMenu(event, point)}
 						onkeydown={(event) => handlePointKey(event, point)}
-						onfocus={() => selectPoint(point.id)}
 					></div>
 				{/each}
+
+				{#if isMarqueeShown}
+					<span class="automation-lane-marquee" style:--lane-x="{marqueeLeft}%" style:--lane-y="{marqueeTop}%" style:--marquee-width="{marqueeWidth}%" style:--marquee-height="{marqueeHeight}%"></span>
+				{/if}
 
 				{#if pillPoint !== undefined}
 					<span class="automation-lane-pill" class:isBelow={isPillBelow} style:--lane-x="{getPointX(pillPoint)}%" style:--lane-y="{getPointY(pillPoint)}%">{pillLabel}</span>
@@ -471,12 +642,12 @@
 		{/if}
 
 		{#if shouldShowHint}
-			<span class="automation-lane-hint">Click to add points · Drag to shape · Alt-drag a segment to curve · Right-click to type a value</span>
+			<span class="automation-lane-hint">Click to place · Drag to select · Alt-drag a segment to curve · Right-click the row for settings</span>
 		{/if}
 		{#if !hasControl}
-			<span class="automation-lane-empty">Choose a control to automate</span>
+			<span class="automation-lane-empty">Choose a control in the lane settings</span>
 		{/if}
 	</div>
 
-	<RowResizer rowId={props.lane.id} label={controlLabel} />
+	<RowResizer rowId={props.lane.id} kind="lane" label={laneName} siblings={siblingRows} />
 </div>

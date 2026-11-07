@@ -14,8 +14,6 @@ type AppearanceStateT = {
 
 const STORAGE_KEY = 'vink.appearance.v1'
 export const AUDIO_ROW_ID = 'audio'
-export const MIN_ROW_HEIGHT = 32
-export const MAX_ROW_HEIGHT = 320
 
 const readStored = (): AppearanceStateT => {
 	try {
@@ -46,17 +44,12 @@ export const setRowColor = (rowId: string, color: ColorNameT): void => {
 
 export const getRowHeight = (rowId: string): number | null => appearance.heights[rowId] ?? null
 
-export const setRowHeight = (rowId: string, height: number): void => {
-	const clamped = Math.min(MAX_ROW_HEIGHT, Math.max(MIN_ROW_HEIGHT, Math.round(height)))
-	appearance.heights[rowId] = clamped
-}
-
 export const resetRowHeight = (rowId: string): void => {
 	delete appearance.heights[rowId]
 }
 
-// For a custom property: the stored height in px, or nothing,
-// so the row falls back to its own default.
+// For a custom property on rows that do not fold, such as the
+// audio bands: the stored height in px, or nothing.
 export const getRowHeightStyle = (rowId: string): string | undefined => {
 	const height = getRowHeight(rowId)
 	if (height === null) return undefined

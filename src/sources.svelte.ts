@@ -1,4 +1,4 @@
-import { recordHistory } from './automation.svelte'
+import { recordHistory, recordHistoryCoalesced } from './automation.svelte'
 import { BAND_PRESETS, buildBand, clampBandRange } from './engine/bands'
 import type { BandRangeT } from './engine/bands'
 import { DEFAULT_HIT_STRENGTH, buildHitTrack, convertDetectedHits, createHit, insertHit, replaceHitsInRange } from './engine/hits'
@@ -209,17 +209,20 @@ export const switchSong = (songKey: string): void => {
 export type TrackSnapshotT = {
 	songKey: string
 	tracks: HitTrackT[]
+	bands: BandSourceT[]
 }
 
 export const takeTrackSnapshot = (): TrackSnapshotT => ({
 	songKey: sources.songKey,
-	tracks: $state.snapshot(sources.tracks) as HitTrackT[]
+	tracks: $state.snapshot(sources.tracks) as HitTrackT[],
+	bands: $state.snapshot(sources.bands) as BandSourceT[]
 })
 
 export const restoreTrackSnapshot = (snapshot: TrackSnapshotT): void => {
 	const isOtherSong = snapshot.songKey !== sources.songKey
 	if (isOtherSong) return
 	sources.tracks = snapshot.tracks
+	sources.bands = snapshot.bands
 	clearHitSelection()
 }
 
@@ -300,10 +303,11 @@ export const removeTrack = (trackId: string): void => {
 	if (wasArmed) sources.armedTrackId = null
 }
 
-// Typing a name is not an undo step, like the other text fields.
+// A name commits once, as the whole name.
 export const renameTrack = (trackId: string, name: string): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
+	recordHistory()
 	track.name = name.slice(0, 40)
 }
 
@@ -318,12 +322,14 @@ export const setTrackRole = (trackId: string, role: HitRoleT): void => {
 export const setTrackShape = (trackId: string, shape: HitShapeT): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
+	recordHistory()
 	track.shape = shape
 }
 
 export const setTrackDecay = (trackId: string, decay: number): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
+	recordHistoryCoalesced(`track:${trackId}`)
 	track.decay = clamp(decay, MIN_TRACK_DECAY, MAX_TRACK_DECAY)
 }
 
@@ -488,6 +494,7 @@ export const findBand = (bandId: string): BandSourceT | undefined => {
 }
 
 export const addBand = (presetValue: string): string => {
+	recordHistory()
 	const preset = BAND_PRESETS.find((candidate) => candidate.value === presetValue) ?? BAND_PRESETS[0]
 	const band = buildBand(preset)
 	sources.bands.push(band)
@@ -495,18 +502,21 @@ export const addBand = (presetValue: string): string => {
 }
 
 export const removeBand = (bandId: string): void => {
+	recordHistory()
 	sources.bands = sources.bands.filter((band) => band.id !== bandId)
 }
 
 export const renameBand = (bandId: string, name: string): void => {
 	const band = findBand(bandId)
 	if (band === undefined) return
+	recordHistory()
 	band.name = name.slice(0, 40)
 }
 
 export const setBandRange = (bandId: string, range: BandRangeT): void => {
 	const band = findBand(bandId)
 	if (band === undefined) return
+	recordHistoryCoalesced(`band:${bandId}`)
 	const clamped = clampBandRange(range)
 	band.lowHz = clamped.lowHz
 	band.highHz = clamped.highHz
@@ -515,18 +525,21 @@ export const setBandRange = (bandId: string, range: BandRangeT): void => {
 export const setBandOutput = (bandId: string, output: BandOutputT): void => {
 	const band = findBand(bandId)
 	if (band === undefined) return
+	recordHistoryCoalesced(`band:${bandId}`)
 	band.output = output
 }
 
 export const setBandRelease = (bandId: string, release: number): void => {
 	const band = findBand(bandId)
 	if (band === undefined) return
+	recordHistoryCoalesced(`band:${bandId}`)
 	band.release = clamp(release, MIN_BAND_RELEASE, MAX_BAND_RELEASE)
 }
 
 export const setBandSensitivity = (bandId: string, sensitivity: number): void => {
 	const band = findBand(bandId)
 	if (band === undefined) return
+	recordHistoryCoalesced(`band:${bandId}`)
 	band.sensitivity = clamp(sensitivity, 0, 1)
 }
 
@@ -534,6 +547,7 @@ export const applyBandPreset = (bandId: string, presetValue: string): void => {
 	const band = findBand(bandId)
 	const preset = BAND_PRESETS.find((candidate) => candidate.value === presetValue)
 	if (band === undefined || preset === undefined) return
+	recordHistory()
 	band.name = preset.label
 	band.lowHz = preset.lowHz
 	band.highHz = preset.highHz

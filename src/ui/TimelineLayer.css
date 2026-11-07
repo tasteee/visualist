@@ -1,5 +1,5 @@
 .timeline-layer {
-	--timeline-layer-height: var(--spacing-11);
+	--timeline-layer-height: 48px;
 	position: relative;
 	display: grid;
 	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
@@ -10,7 +10,7 @@
 /* The audio layer stays pinned to the top of the list, so the
    waveform is in view while its lanes scroll under it. */
 .timeline-layer.isAudio {
-	--timeline-layer-height: var(--spacing-14);
+	--timeline-layer-height: 56px;
 	position: sticky;
 	top: 0;
 	z-index: 3;
@@ -22,10 +22,10 @@
 .timeline-layer-header {
 	position: relative;
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: var(--spacing-1);
 	min-width: 0;
-	padding: 0 var(--spacing-2);
+	padding: var(--spacing-3) var(--spacing-2) 0;
 	border-right: 1px solid var(--border);
 	background: var(--paper-soft);
 	transition: background-color var(--motion-base) ease;
@@ -51,8 +51,8 @@
 	flex: none;
 	align-items: center;
 	justify-content: center;
-	width: var(--spacing-5);
-	height: var(--spacing-5);
+	width: var(--spacing-6);
+	height: var(--spacing-6);
 	padding: 0;
 	border: 0;
 	border-radius: var(--radius-sm);
@@ -79,87 +79,21 @@
 	color: var(--foreground);
 }
 
-.timeline-layer-title {
-	display: flex;
-	flex: 1;
-	align-items: center;
-	gap: var(--spacing-2);
-	min-width: 0;
-	height: 100%;
-	padding: 0 var(--spacing-1);
-	border: 0;
-	background: transparent;
-	color: var(--foreground);
-	font: inherit;
-	text-align: left;
-}
-
-.timeline-layer-title.canSelect {
-	cursor: pointer;
-}
-
-.timeline-layer-title:disabled {
-	cursor: default;
-}
-
-.timeline-layer-icon {
-	display: inline-flex;
-	flex: none;
-	align-items: center;
-	justify-content: center;
-	width: var(--spacing-7);
-	height: var(--spacing-7);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	background: var(--bg);
-	color: var(--muted);
-	font-size: var(--font-size-2);
-	transition:
-		border-color var(--motion-fast) ease,
-		color var(--motion-fast) ease;
-}
-
-.timeline-layer.isSelected .timeline-layer-icon,
-.timeline-layer-title.canSelect:hover .timeline-layer-icon {
-	border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
-	color: var(--accent);
-}
-
-.timeline-layer-text {
-	display: flex;
-	flex-direction: column;
-	gap: 0.0625rem;
-	min-width: 0;
-}
-
 .timeline-layer-name {
+	flex: 1;
+	min-width: 0;
+	height: var(--spacing-6);
 	overflow: hidden;
 	font-size: var(--font-size-small);
 	font-weight: var(--font-weight-semibold);
-	line-height: 1.2;
+	line-height: var(--spacing-6);
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	user-select: none;
 }
 
-.timeline-layer-detail {
-	overflow: hidden;
-	color: var(--secondary);
-	font-size: var(--font-size-caption);
-	line-height: 1.25;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.timeline-layer.isHidden .timeline-layer-text,
-.timeline-layer.isHidden .timeline-layer-icon {
+.timeline-layer.isHidden .timeline-layer-name {
 	opacity: 0.45;
-}
-
-.timeline-layer-actions {
-	display: flex;
-	flex: none;
-	align-items: center;
-	gap: 0.125rem;
 }
 
 .timeline-layer-action {
@@ -191,7 +125,6 @@
 }
 
 .timeline-layer-caret:focus-visible,
-.timeline-layer-title:focus-visible,
 .timeline-layer-action:focus-visible {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 1px;
@@ -237,7 +170,7 @@
 
 /* Reordering */
 
-.timeline-layer-title.canReorder {
+.timeline-layer-header.canReorder {
 	cursor: grab;
 	touch-action: none;
 }

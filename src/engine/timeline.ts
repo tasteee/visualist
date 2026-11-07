@@ -95,16 +95,17 @@ const pickLabelBarStep = (pxPerBar: number): number => {
 	return step ?? LABEL_BAR_STEPS[LABEL_BAR_STEPS.length - 1]
 }
 
+// Beat divisions from a whole bar down to a 64th of a beat.
+// Zooming in reveals the next finer one, so snap positions
+// appear as the lines do.
+const BEAT_STEPS = [BEATS_PER_BAR, 1, 0.5, 0.25, 0.125, 0.0625, 0.03125, 0.015625]
+
 // The finest beat division that still leaves room between lines.
 const pickLineBeatStep = (pxPerBeat: number, labelBarStep: number): number => {
-	const hasRoomForSixteenths = pxPerBeat / 4 >= LINE_MIN_PX
-	if (hasRoomForSixteenths) return 0.25
-	const hasRoomForEighths = pxPerBeat / 2 >= LINE_MIN_PX
-	if (hasRoomForEighths) return 0.5
-	const hasRoomForBeats = pxPerBeat >= LINE_MIN_PX
-	if (hasRoomForBeats) return 1
-	const hasRoomForBars = pxPerBeat * BEATS_PER_BAR >= LINE_MIN_PX
-	if (hasRoomForBars) return BEATS_PER_BAR
+	const roomyCandidates = BEAT_STEPS.filter((beatStep) => beatStep * pxPerBeat >= LINE_MIN_PX)
+	const finestRoomy = roomyCandidates[roomyCandidates.length - 1]
+	const hasRoomyStep = finestRoomy !== undefined
+	if (hasRoomyStep) return finestRoomy
 	return labelBarStep * BEATS_PER_BAR
 }
 
@@ -185,7 +186,8 @@ export const buildGrid = (input: BuildGridInputT): TimelineGridT => {
 		lines.push({ time, kind: classified.kind, label: classified.label })
 	}
 
-	return { lines, snapStep: snapBeatStep * beatLength, beatLength, beatOffset }
+	// Snap only to lines that are drawn, never to a hidden grid.
+	return { lines, snapStep: stepSeconds, beatLength, beatOffset }
 }
 
 export const formatGridDivision = (division: GridDivisionT): string => {

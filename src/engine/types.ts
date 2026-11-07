@@ -244,6 +244,12 @@ export type AutomationLaneT = {
 	id: string
 	target: LaneTargetT
 	points: AutomationPointT[]
+	// A name the user chose. Without one the lane is named for
+	// the control it drives.
+	name?: string
+	// A bypassed lane keeps its points but stops driving its
+	// control, so the control falls back to its own value.
+	isBypassed?: boolean
 }
 
 export type LayerKindT = 'logo' | 'text' | 'image' | 'svg'

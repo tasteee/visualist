@@ -1,15 +1,21 @@
 <script lang="ts">
 	import { clamp } from '../engine/settings'
-	import { checkIsTimeVisible, formatPreciseTime, ratioToTime, timeToPercent } from '../engine/timeline'
+	import { checkIsTimeVisible, formatPreciseTime, ratioToTime, snapToGrid, timeToPercent } from '../engine/timeline'
+	import type { TimelineGridT } from '../engine/timeline'
 	import { readPeak } from '../engine/peaks'
 	import { app, getAnalysis, seekTo } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import './WaveformTrack.css'
 
+	type WaveformTrackPropsT = {
+		grid: TimelineGridT
+	}
+
+	const props: WaveformTrackPropsT = $props()
+
 	const BAR_WIDTH = 2
 	const BAR_PITCH = 3
 	const MIN_BAR_HALF = 0.75
-	const KEY_SEEK_SECONDS = 5
 
 	type WaveColorsT = { idle: string; played: string; outside: string }
 
@@ -95,10 +101,14 @@
 		return () => observer.disconnect()
 	})
 
+	// With snap on, a seek lands on the grid like any other.
 	const seekFromPointer = (event: PointerEvent) => {
 		const bounds = wrapper.getBoundingClientRect()
 		const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
-		seekTo(ratioToTime(ratio, timeline.view))
+		const rawTime = ratioToTime(ratio, timeline.view)
+		const shouldSnap = timeline.isSnapping && !event.shiftKey
+		const time = shouldSnap ? snapToGrid(rawTime, props.grid) : rawTime
+		seekTo(time)
 	}
 
 	const handlePointerDown = (event: PointerEvent) => {
@@ -114,10 +124,6 @@
 		if (isDragging) seekFromPointer(event)
 	}
 
-	const handleKeyDown = (event: KeyboardEvent) => {
-		if (event.key === 'ArrowRight') seekTo(app.currentTime + KEY_SEEK_SECONDS)
-		if (event.key === 'ArrowLeft') seekTo(app.currentTime - KEY_SEEK_SECONDS)
-	}
 </script>
 
 <div
@@ -126,7 +132,7 @@
 	bind:this={wrapper}
 	data-track="wave"
 	role="slider"
-	tabindex="0"
+	tabindex="-1"
 	aria-label="Seek"
 	aria-valuemin={0}
 	aria-valuemax={Math.round(duration)}
@@ -134,7 +140,6 @@
 	aria-valuetext={valueText}
 	onpointerdown={handlePointerDown}
 	onpointermove={handlePointerMove}
-	onkeydown={handleKeyDown}
 >
 	<canvas class="waveform-track-canvas" bind:this={canvas}></canvas>
 	{#if hasHover}

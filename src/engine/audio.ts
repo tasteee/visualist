@@ -4,6 +4,27 @@ let startedAtContextTime = 0
 let offsetAtStart = 0
 let isClockRunning = false
 
+export type LoopRegionT = {
+	start: number
+	end: number
+}
+
+// When set, the buffer loops between these times and the clock
+// wraps with it, so the playhead never leaves the region.
+let activeLoop: LoopRegionT | null = null
+
+export const setActiveLoop = (region: LoopRegionT | null): void => {
+	activeLoop = region
+}
+
+const wrapIntoLoop = (rawTime: number, region: LoopRegionT): number => {
+	const isInsideRegion = rawTime < region.end
+	if (isInsideRegion) return rawTime
+	const length = Math.max(0.001, region.end - region.start)
+	const overshoot = (rawTime - region.start) % length
+	return region.start + overshoot
+}
+
 export const getAudioContext = (): AudioContext => {
 	if (audioContext !== null) return audioContext
 	audioContext = new AudioContext()
@@ -21,7 +42,9 @@ export const decodeAudioFile = async (file: File): Promise<AudioBuffer> => {
 export const getPlaybackTime = (): number => {
 	if (!isClockRunning) return offsetAtStart
 	const elapsed = getAudioContext().currentTime - startedAtContextTime
-	return offsetAtStart + elapsed
+	const rawTime = offsetAtStart + elapsed
+	if (activeLoop === null) return rawTime
+	return wrapIntoLoop(rawTime, activeLoop)
 }
 
 export const getIsClockRunning = (): boolean => isClockRunning
@@ -89,11 +112,20 @@ export const startPlayback = (
 		if (isCurrent) onEnded()
 	}
 
+	const loopRegion = activeLoop
+	const isLooping = loopRegion !== null && clip === null
+	if (isLooping) {
+		source.loop = true
+		source.loopStart = loopRegion.start
+		source.loopEnd = loopRegion.end
+	}
+
 	currentSource = source
 	offsetAtStart = offset
 	startedAtContextTime = context.currentTime
 	isClockRunning = true
 	const hasClip = clip !== null
+	if (hasClip) activeLoop = null
 	if (hasClip) source.start(0, offset, clip.duration)
 	if (!hasClip) source.start(0, offset)
 }

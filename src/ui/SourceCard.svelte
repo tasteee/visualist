@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte'
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import type { ColorNameT } from '../engine/palette'
+	import RenameField from './RenameField.svelte'
 	import './SourceCard.css'
 
 	// The shell every source in the Audio panel shares: a tone
@@ -22,16 +23,14 @@
 
 	const levelStyle = $derived(`${(props.level * 100).toFixed(1)}%`)
 
-	const handleNameInput = (event: Event) => {
-		const detail = (event as CustomEvent<{ value: string }>).detail
-		props.onrename(detail.value)
-	}
 </script>
 
 <article class="source-card" class:isBand={props.isBand} data-tone={props.color}>
 	<header class="source-card-header">
 		<span class="source-card-dot"></span>
-		<z-input class="source-card-name" size="sm" value={props.name} aria-label="Name" oninput={handleNameInput} onchange={handleNameInput}></z-input>
+		<div class="source-card-name">
+			<RenameField value={props.name} label="Name" oncommit={props.onrename} />
+		</div>
 		<z-tooltip content={props.removeLabel} placement="top" openDelay={300}>
 			<button class="source-card-remove" type="button" aria-label={props.removeLabel} onclick={props.onremove}>
 				<TrashIcon weight="bold" />
