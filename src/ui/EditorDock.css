@@ -1,5 +1,4 @@
 .editor-dock {
-	--editor-header-width: 15rem;
 	position: fixed;
 	right: var(--spacing-5);
 	bottom: var(--spacing-5);
@@ -56,6 +55,7 @@
 /* Frame */
 
 .editor-frame {
+	position: relative;
 	display: flex;
 	flex: 1;
 	flex-direction: column;
@@ -222,13 +222,6 @@
 	text-align: center;
 }
 
-@container (max-width: 44rem) {
-	.editor-frame {
-		--editor-header-width: 11rem;
-	}
-
-}
-
 /* A layer's lanes stack as one block under its header. */
 .editor-layer-lanes {
 	display: flex;
@@ -237,4 +230,38 @@
 
 .editor-layer-lanes > * {
 	flex-shrink: 0;
+}
+
+/* The border between the headers and the plots. Drag it to widen
+   every header at once, click it to open or close them. */
+.editor-header-resize {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--editor-header-width) - 4px);
+	z-index: 5;
+	width: 8px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: ew-resize;
+	outline: none;
+	touch-action: none;
+}
+
+.editor-header-resize::after {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 3px;
+	width: 2px;
+	background: transparent;
+	content: '';
+	transition: background-color var(--motion-fast) ease;
+}
+
+.editor-header-resize:hover::after,
+.editor-header-resize:active::after,
+.editor-header-resize:focus-visible::after {
+	background: var(--focus-ring);
 }

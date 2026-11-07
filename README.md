@@ -59,6 +59,12 @@ browsers keep those cached.
 - **Tilde (`~`)** shows the stage over everything at 75vw. **Backslash
   (`\`)** hides every panel. The editor dock floats over the
   workspace, so resizing it never moves the stage.
+- **Headers** share one width: drag the border at their right edge
+  (up to 360px), click it to open or close them all.
+- **Audio**: the first file is the song and sets the project length.
+  Audio added after that becomes a layer, mixed in, with its own
+  start, end and volume. Any audio can find its tempo from its
+  settings, and the project only takes it if you say so.
 - **Right-click a row header**, or press its gear, for that row's
   inspector: name, color and its controls.
 - **Pinch a header** to change the row's height. Drag a row border past

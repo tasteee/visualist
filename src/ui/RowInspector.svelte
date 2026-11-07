@@ -28,6 +28,7 @@
 	import { findBand, findTrack, removeBand, removeTrack, renameBand, renameTrack } from '../sources.svelte'
 	import { AUDIO_ROW_ID } from '../appearance.svelte'
 	import { focusShell } from './focus'
+	import AudioControls from './AudioControls.svelte'
 	import BandControls from './BandControls.svelte'
 	import ImpulseTrackControls from './ImpulseTrackControls.svelte'
 	import LayerEditor from './LayerEditor.svelte'
@@ -268,8 +269,16 @@
 		</header>
 
 		<div class="row-inspector-body">
-			{#if layer !== undefined}
+			{#if layer !== undefined && layer.kind !== 'audio'}
 				<LayerEditor {layer} showName={false} />
+			{/if}
+
+			{#if layer !== undefined && layer.kind === 'audio'}
+				<AudioControls layerId={layer.id} />
+			{/if}
+
+			{#if open.kind === 'audio'}
+				<AudioControls layerId={null} />
 			{/if}
 
 			{#if lane !== undefined}

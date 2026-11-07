@@ -1,4 +1,5 @@
 import { toaster } from '@tasteee/zest'
+import { untrack } from 'svelte'
 import { analyzeAudio, computeBeatOffset } from './engine/analysis'
 import {
 	createRecordingTap,
@@ -7,15 +8,19 @@ import {
 	pausePlayback,
 	retargetLoop,
 	setActiveLoop,
+	setExtraTracks,
+	startExtras,
 	setPausedPosition,
 	startPlayback
 } from './engine/audio'
-import { automation, clampLanesToDuration, startAutomationWatchers } from './automation.svelte'
+import { automation, clampLanesToDuration, recordHistory, startAutomationWatchers } from './automation.svelte'
 import { applyAutomation, applyLayerAutomation } from './engine/automation'
 import { applySettingsModulation, computeSignals } from './engine/modulation'
 import { checkHasPost, getPostAmounts } from './engine/post'
 import { startAppearanceWatchers } from './appearance.svelte'
-import { layerStore, restoreLayerAssets, startLayerWatchers } from './layers.svelte'
+import { layerStore, restoreLayerAssets, selectLayer, startLayerWatchers } from './layers.svelte'
+import { clearSavedProject } from './project.svelte'
+import { createAudioLayer } from './engine/layers'
 import { buildSongKey, getCompiledSources, getRoleImpulses, startSourceWatchers, switchSong } from './sources.svelte'
 import type { RoleImpulsesT } from './sources.svelte'
 import { buildDemoAnalysis } from './engine/demo'
@@ -25,7 +30,7 @@ import { startRecorder, pickRecorderFormat } from './engine/recorder'
 import type { ActiveRecordingT, RecorderFormatT } from './engine/recorder'
 import { drawFrame } from './engine/render'
 import { checkNeedsDepth } from './engine/depth'
-import { saveSongFile } from './engine/assets'
+import { readLayerFile, saveSongFile, storeLayerFile } from './engine/assets'
 import { getFadeLevel } from './engine/fades'
 import { getSizeForShortSide } from './engine/formats'
 import type { SizeT } from './engine/formats'
@@ -65,6 +70,9 @@ type AppStateT = {
 	loopStart: number
 	loopEnd: number
 	isLoopEnabled: boolean
+	// A tempo found in a song, waiting for the user to say whether
+	// the project should take it.
+	pendingBpm: number | null
 	kickCount: number
 	isAnalyzing: boolean
 	analysisProgress: number
@@ -105,6 +113,7 @@ export const app = $state<AppStateT>({
 	loopStart: 0,
 	loopEnd: 0,
 	isLoopEnabled: false,
+	pendingBpm: null,
 	kickCount: 0,
 	isAnalyzing: false,
 	analysisProgress: 0,
@@ -131,6 +140,7 @@ let canvasContext: CanvasRenderingContext2D | null = null
 let animationFrame = 0
 let isDirty = true
 let demoStartedAt = performance.now()
+let lastTickTime = 0
 let activeRecording: ActiveRecordingT | null = null
 let recorderFormat: RecorderFormatT | null = null
 
@@ -190,6 +200,10 @@ const getFrameTime = (): number => {
 	return elapsed % DEMO_LOOP_SECONDS
 }
 
+// Audio layers make sound, not picture, so the renderer never
+// sees them.
+const getVisualLayers = (): LayerT[] => (layerStore.layers as LayerT[]).filter((layer) => layer.kind !== 'audio')
+
 // Lanes set each control's base for this instant, then the
 // modulations push it around with the music.
 const buildFrameInput = (time: number): FrameInputT => {
@@ -207,7 +221,7 @@ const buildFrameInput = (time: number): FrameInputT => {
 		beatOffset: analysis.beatOffset,
 		title: app.title,
 		isIntroActive: app.isPlaying || app.isRecording,
-		layers: applyLayerAutomation(layerStore.layers as LayerT[], app.settings, automation.lanes, time),
+		layers: applyLayerAutomation(getVisualLayers(), app.settings, automation.lanes, time),
 		signals
 	}
 }
@@ -375,6 +389,13 @@ const tick = (): void => {
 	if (shouldDraw && app.isRecording) drawVideoFade(context, size.width, size.height, recordingElapsed)
 	isDirty = false
 
+	const hasWrapped = app.isPlaying && !app.isRecording && app.isLoopEnabled && time < lastTickTime - 0.05
+	if (hasWrapped) {
+		syncExtraTracks()
+		startExtras(time)
+	}
+	lastTickTime = time
+
 	const visibleTime = app.hasAudio ? Math.min(time, app.duration) : time
 	const hasTimeChanged = visibleTime !== app.currentTime
 	if (hasTimeChanged) app.currentTime = visibleTime
@@ -409,6 +430,26 @@ const handleEnded = (): void => {
 	returnToMarker()
 }
 
+// ---- Extra audio layers -------------------------------------
+
+// Decoded audio for every audio layer. Kept after a layer is
+// deleted so undo can bring it back.
+const audioLayerBuffers = new Map<string, AudioBuffer>()
+
+export const getAudioLayerBuffer = (layerId: string): AudioBuffer | undefined => audioLayerBuffers.get(layerId)
+
+// A hidden audio layer is muted.
+const syncExtraTracks = (): void => {
+	const tracks = []
+	for (const layer of layerStore.layers) {
+		const isAudio = layer.kind === 'audio'
+		const buffer = isAudio ? audioLayerBuffers.get(layer.id) : undefined
+		if (!isAudio || buffer === undefined || !layer.isVisible) continue
+		tracks.push({ buffer, startTime: layer.startTime, endTime: layer.endTime, volume: layer.volume })
+	}
+	setExtraTracks(tracks)
+}
+
 // ---- Loop ---------------------------------------------------
 
 const BARS_IN_DEFAULT_LOOP = 4
@@ -439,8 +480,12 @@ const applyLoopToTransport = (): void => {
 	markDirty()
 	const isInsideRegion = clampedTime === liveTime
 	const canRetarget = app.isPlaying && isInsideRegion
-	if (canRetarget) return retargetLoop(region)
+	if (canRetarget) {
+		retargetLoop(region)
+		return
+	}
 	setActiveLoop(region)
+	syncExtraTracks()
 	if (app.isPlaying) startPlayback(audioBuffer, clampedTime, null, handleEnded)
 	if (!app.isPlaying) setPausedPosition(clampedMarker)
 }
@@ -489,6 +534,7 @@ export const togglePlay = (): void => {
 	app.playMarker = startTime
 	app.currentTime = startTime
 	setActiveLoop(getLoopRegion())
+	syncExtraTracks()
 	startPlayback(audioBuffer, startTime, null, handleEnded)
 	app.isPlaying = true
 }
@@ -506,7 +552,10 @@ export const seekTo = (seconds: number): void => {
 	markDirty()
 	const isOnLoopEnd = app.isLoopEnabled && target >= app.loopEnd - 0.001
 	if (app.isPlaying && isOnLoopEnd) return seekTo(app.loopStart)
-	if (app.isPlaying) startPlayback(audioBuffer, target, null, handleEnded)
+	if (app.isPlaying) {
+		syncExtraTracks()
+		startPlayback(audioBuffer, target, null, handleEnded)
+	}
 	if (!app.isPlaying) setPausedPosition(target)
 }
 
@@ -533,6 +582,7 @@ export const startRecording = async (): Promise<void> => {
 	recorderFormat = format
 	app.recorderLabel = format.label
 
+	syncExtraTracks()
 	const tap = createRecordingTap()
 	const frameRate = app.settings.frameRate
 	app.isRecording = true
@@ -551,6 +601,27 @@ export const startRecording = async (): Promise<void> => {
 	setStatus('Recording in real time. Keep this tab visible until it finishes.', 'warning')
 }
 
+// A new song never takes over the project's tempo by itself. The
+// tempo it found is offered, and the user decides.
+const keepTempoForNewSong = (nextAnalysis: AnalysisT): void => {
+	detectedAnalysis = nextAnalysis
+	app.beatOffset = computeBeatOffset(nextAnalysis.flux, app.bpm)
+	app.downbeatAnchor = null
+	const isDifferent = Math.abs(nextAnalysis.bpm - app.bpm) >= 0.05
+	app.pendingBpm = isDifferent ? nextAnalysis.bpm : null
+}
+
+export const applyPendingBpm = (): void => {
+	const pending = app.pendingBpm
+	app.pendingBpm = null
+	if (pending === null) return
+	setBpm(pending)
+}
+
+export const dismissPendingBpm = (): void => {
+	app.pendingBpm = null
+}
+
 const applyAnalysis = (nextAnalysis: AnalysisT): void => {
 	detectedAnalysis = nextAnalysis
 	app.bpm = nextAnalysis.bpm
@@ -559,7 +630,8 @@ const applyAnalysis = (nextAnalysis: AnalysisT): void => {
 }
 
 type LoadOptionsT = {
-	// A restored song is already stored, so it is not saved again.
+	// A restored song is already stored, so it is not saved again,
+	// and keeps the tempo the project had.
 	isRestore: boolean
 }
 
@@ -600,7 +672,8 @@ export const loadAudioFile = async (file: File, options: LoadOptionsT = { isRest
 		app.currentTime = 0
 		app.playMarker = 0
 		setPausedPosition(0)
-		applyAnalysis(result)
+		if (options.isRestore) applyAnalysis(result)
+		if (!options.isRestore) keepTempoForNewSong(result)
 		resetLoopRegion()
 		if (!app.isTitleEdited) app.title = titleFromFileName(file.name)
 		markDirty()
@@ -688,6 +761,13 @@ export const setTheme = (mode: ModeT): void => {
 	app.settings.mode = mode
 }
 
+const restartMixIfPlaying = (): void => {
+	const canRestart = app.isPlaying && !app.isRecording && audioBuffer !== null
+	if (!canRestart || audioBuffer === null) return
+	syncExtraTracks()
+	startExtras(getPlaybackTime())
+}
+
 const startWatchers = (): void => {
 	$effect.root(() => {
 		$effect(() => {
@@ -707,6 +787,15 @@ const startWatchers = (): void => {
 
 		$effect(() => {
 			saveSettings($state.snapshot(app.settings))
+		})
+
+		// Changing an audio layer while the song plays restarts the mix
+		// from where it is, so the change is heard at once.
+		$effect(() => {
+			const audioLayers = layerStore.layers.filter((layer) => layer.kind === 'audio')
+			const mixKey = audioLayers.map((layer) => [layer.id, layer.startTime, layer.endTime, layer.volume, layer.isVisible].join(':')).join('|')
+			void mixKey
+			untrack(restartMixIfPlaying)
 		})
 
 		// Color edits rebuild the tinted layers after a short delay
@@ -742,4 +831,95 @@ export const startApp = async (): Promise<void> => {
 	layers = await buildLogoLayers()
 	app.isLayersReady = true
 	await restoreLayerAssets()
+	await restoreAudioLayers()
+}
+
+// ---- Audio layers -------------------------------------------
+
+const getLayerName = (fileName: string): string => titleFromFileName(fileName).slice(0, 40)
+
+// The first audio in a project is the song, and sets its length and
+// everything the picture listens to. Audio after that becomes a
+// layer of its own, mixed in.
+export const addAudioFile = async (file: File): Promise<void> => {
+	if (app.isRecording || app.isAnalyzing) return
+	if (!app.hasAudio) {
+		await loadAudioFile(file)
+		return
+	}
+	try {
+		const decoded = await decodeAudioFile(file)
+		const layer = createAudioLayer('', getLayerName(file.name))
+		layer.assetId = layer.id
+		audioLayerBuffers.set(layer.id, decoded)
+		recordHistory()
+		layerStore.layers.push(layer)
+		selectLayer(layer.id)
+		await storeLayerFile(layer.id, file).catch(() => {
+			toaster.show({ title: 'Audio not saved', description: 'It will need adding again after a reload.', tone: 'warning' })
+		})
+	} catch {
+		const message = 'That file could not be read. Try a WAV, MP3 or M4A.'
+		toaster.show({ title: 'Could not add the audio', description: message, tone: 'danger' })
+	}
+}
+
+export const restoreAudioLayers = async (): Promise<void> => {
+	const audioLayers = layerStore.layers.filter((layer) => layer.kind === 'audio' && layer.assetId !== null)
+	let missingCount = 0
+	for (const layer of audioLayers) {
+		const assetId = layer.assetId
+		if (assetId === null) continue
+		try {
+			const file = await readLayerFile(assetId, layer.name)
+			if (file === null) throw new Error('missing')
+			audioLayerBuffers.set(layer.id, await decodeAudioFile(file))
+		} catch {
+			missingCount += 1
+		}
+	}
+	const hasMissing = missingCount > 0
+	if (!hasMissing) return
+	toaster.show({ title: 'Some audio layers are missing', description: `${missingCount} audio file(s) could not be restored. Those layers are silent.`, tone: 'warning' })
+}
+
+// The tempo found in one audio layer, or null if it can not be read.
+export const detectLayerBpm = async (layerId: string, onProgress: (fraction: number) => void): Promise<number | null> => {
+	const buffer = audioLayerBuffers.get(layerId)
+	if (buffer === undefined) return null
+	const result = await analyzeAudio(buffer, onProgress)
+	return result.bpm
+}
+
+// Removes the song. Another audio layer, if there is one, becomes
+// the song. Otherwise the project goes back to waiting for audio.
+export const removeSong = async (): Promise<void> => {
+	if (app.isRecording || !app.hasAudio) return
+	recordHistory()
+	const nextLayer = layerStore.layers.find((layer) => layer.kind === 'audio' && layer.assetId !== null)
+	const nextFile = nextLayer === undefined || nextLayer.assetId === null ? null : await readLayerFile(nextLayer.assetId, nextLayer.name)
+	pausePlayback()
+	setActiveLoop(null)
+	app.isPlaying = false
+	if (nextLayer !== undefined && nextFile !== null) {
+		layerStore.layers = layerStore.layers.filter((layer) => layer.id !== nextLayer.id)
+		await loadAudioFile(nextFile)
+		return
+	}
+	audioBuffer = null
+	detectedAnalysis = buildDemoAnalysis()
+	app.hasAudio = false
+	app.duration = 0
+	app.trimStart = 0
+	app.trimEnd = 0
+	app.currentTime = 0
+	app.playMarker = 0
+	app.fileName = ''
+	app.isLoopEnabled = false
+	app.pendingBpm = null
+	setPausedPosition(0)
+	switchSong('demo')
+	clearSavedProject()
+	setStatus(DEMO_STATUS)
+	markDirty()
 }

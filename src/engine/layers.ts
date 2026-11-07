@@ -122,7 +122,8 @@ const createBaseLayer = (kind: LayerKindT, name: string): LayerT => ({
 	fx: [],
 	text: null,
 	assetId: null,
-	svgColor: 'original'
+	svgColor: 'original',
+	volume: 1
 })
 
 export const createLogoLayer = (): LayerT => {
@@ -148,6 +149,11 @@ export const createTextLayer = (text: string): LayerT => {
 
 export const createAssetLayer = (kind: 'image' | 'svg', assetId: string | null, name: string): LayerT => {
 	const layer = createBaseLayer(kind, name)
+	return { ...layer, assetId }
+}
+
+export const createAudioLayer = (assetId: string, name: string): LayerT => {
+	const layer = createBaseLayer('audio', name)
 	return { ...layer, assetId }
 }
 

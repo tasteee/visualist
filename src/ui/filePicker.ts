@@ -1,4 +1,4 @@
-import { loadAudioFile } from '../store.svelte'
+import { addAudioFile, loadAudioFile } from '../store.svelte'
 
 // Opens the system file chooser. Video files are accepted too,
 // for their audio track.
@@ -10,6 +10,20 @@ export const openAudioPicker = (): void => {
 		const file = input.files?.[0]
 		if (file === undefined) return
 		void loadAudioFile(file)
+	}
+	input.click()
+}
+
+// Adds audio to the project: the song if there is none yet, an
+// audio layer if there is.
+export const openAddAudioPicker = (): void => {
+	const input = document.createElement('input')
+	input.type = 'file'
+	input.accept = 'audio/*,video/*,.wav,.mp3,.m4a,.aac,.ogg,.flac'
+	input.onchange = () => {
+		const file = input.files?.[0]
+		if (file === undefined) return
+		void addAudioFile(file)
 	}
 	input.click()
 }

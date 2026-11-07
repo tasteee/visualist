@@ -21,7 +21,7 @@
 	// or a visual layer. Its automation lanes render below it
 	// when it is open.
 	type TimelineLayerPropsT = {
-		kind: 'global' | 'audio' | LayerKindT
+		kind: 'global' | 'song' | LayerKindT
 		rowId: string
 		color: ColorNameT
 		title: string
@@ -52,7 +52,8 @@
 
 	const view = $derived(timeline.view)
 	const isGlobal = $derived(props.kind === 'global')
-	const isAudio = $derived(props.kind === 'audio')
+	// The song's own row, pinned to the top with its waveform.
+	const isAudio = $derived(props.kind === 'song')
 	const canToggleVisible = $derived(props.ontogglevisible !== undefined)
 	const collapseLabel = $derived(props.isCollapsed ? `Show ${props.title} automations` : `Hide ${props.title} automations`)
 	const defaultAddLabel = $derived(props.canAddLane ? `Automate a ${props.title} control` : `Every ${props.title} control is automated`)

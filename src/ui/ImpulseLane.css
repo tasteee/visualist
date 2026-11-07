@@ -106,49 +106,12 @@
 	padding-top: 2px;
 }
 
-.impulse-lane-meta {
-	display: flex;
-	align-items: center;
-	gap: var(--spacing-2);
-	min-width: 0;
-	padding-left: var(--impulse-lane-indent);
-}
-
-.impulse-lane-meter {
-	position: relative;
-	flex: none;
-	width: var(--spacing-6);
-	height: var(--spacing-1);
-	overflow: hidden;
-	border-radius: var(--radius-sm);
-	background: var(--paper-soft);
-}
-
-.impulse-lane-meter-fill {
-	position: absolute;
-	inset: 0 auto 0 0;
-	width: var(--impulse-lane-level);
-	background: var(--impulse-lane-tone);
-}
-
-.impulse-lane-count {
-	overflow: hidden;
-	color: var(--secondary);
-	font-size: var(--font-size-1);
-	font-variant-numeric: tabular-nums;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.impulse-lane-count.isSelection {
-	color: var(--impulse-lane-tone);
-	font-weight: var(--font-weight-semibold);
-}
-
-.impulse-lane-count.isCompact {
+.impulse-lane-value {
 	flex: none;
 	color: var(--muted);
-	font-weight: var(--font-weight-semibold);
+	font-size: var(--font-size-1);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
 }
 
 .impulse-lane-actions {
@@ -156,7 +119,6 @@
 	flex: none;
 	align-items: center;
 	gap: 2px;
-	margin-left: auto;
 	opacity: 0.55;
 	transition: opacity var(--motion-fast) ease;
 }

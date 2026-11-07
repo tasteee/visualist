@@ -11,9 +11,14 @@ type TimelineStateT = {
 	isTriplet: boolean
 	hoverTime: number | null
 	dockHeight: number
+	headerWidth: number
 	trackWidth: number
 }
 
+const HEADER_WIDTH_KEY = 'vink.headerWidth'
+export const DEFAULT_HEADER_WIDTH = 216
+export const MIN_HEADER_WIDTH = 160
+export const MAX_HEADER_WIDTH = 360
 const DOCK_HEIGHT_KEY = 'vink.dockHeight'
 const DEFAULT_DOCK_HEIGHT = 384
 export const MIN_DOCK_HEIGHT = 216
@@ -34,6 +39,16 @@ const readStoredDockHeight = (): number => {
 	}
 }
 
+const readStoredHeaderWidth = (): number => {
+	try {
+		const stored = Number(localStorage.getItem(HEADER_WIDTH_KEY))
+		const isUsable = Number.isFinite(stored) && stored >= MIN_HEADER_WIDTH && stored <= MAX_HEADER_WIDTH
+		return isUsable ? stored : DEFAULT_HEADER_WIDTH
+	} catch {
+		return DEFAULT_HEADER_WIDTH
+	}
+}
+
 export const timeline = $state<TimelineStateT>({
 	view: { start: 0, span: 1 },
 	isFollowing: true,
@@ -42,6 +57,7 @@ export const timeline = $state<TimelineStateT>({
 	isTriplet: false,
 	hoverTime: null,
 	dockHeight: readStoredDockHeight(),
+	headerWidth: readStoredHeaderWidth(),
 	trackWidth: 0
 })
 
@@ -149,3 +165,16 @@ export const revealTime = (time: number): void => {
 	if (isVisible) return
 	setViewStart(time - timeline.view.span / 2)
 }
+
+// Every header in the timeline shares one width, so widening one
+// widens them all.
+export const setHeaderWidth = (width: number): void => {
+	timeline.headerWidth = clamp(Math.round(width), MIN_HEADER_WIDTH, MAX_HEADER_WIDTH)
+	try {
+		localStorage.setItem(HEADER_WIDTH_KEY, String(timeline.headerWidth))
+	} catch {
+		return
+	}
+}
+
+export const resetHeaderWidth = (): void => setHeaderWidth(DEFAULT_HEADER_WIDTH)

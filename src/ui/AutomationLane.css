@@ -47,8 +47,18 @@
 	opacity: 1;
 }
 
+/* A selected lane reads at a glance: a lighter neutral for the
+   whole row, and a touch of its color down the left edge. */
 .automation-lane.isSelected .automation-lane-header {
-	background: color-mix(in oklab, var(--lane-tone) 9%, var(--paper));
+	background: var(--color-neutral-2);
+}
+
+.automation-lane.isSelected .automation-lane-track {
+	background: color-mix(in oklab, var(--foreground) 5%, var(--bg));
+}
+
+.automation-lane.isSelected .automation-lane-header::before {
+	width: 3px;
 }
 
 .automation-lane.isFolded .automation-lane-header {

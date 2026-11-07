@@ -171,3 +171,12 @@ export const startProjectWatchers = (): void => {
 		})
 	})
 }
+
+// Forgets the saved project, for when its song is removed.
+export const clearSavedProject = (): void => {
+	try {
+		window.localStorage.removeItem(STORAGE_KEY)
+	} catch {
+		return
+	}
+}

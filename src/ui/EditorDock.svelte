@@ -51,11 +51,15 @@
 	import { app, getAnalysis, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
 	import type { ImpulseMoveT } from '../sources.svelte'
 	import {
-			fitView,
+			DEFAULT_HEADER_WIDTH,
+		MAX_HEADER_WIDTH,
+		fitView,
 		followPlayhead,
 		panBy,
 		resetDockHeight,
+		resetHeaderWidth,
 		setDockHeight,
+		setHeaderWidth,
 		setHoverTime,
 		timeline,
 		toggleFollowing,
@@ -204,6 +208,40 @@
 
 	const handleResizeUp = () => {
 		resizeDrag = null
+	}
+
+	// One drag widens every header. A click with no drag opens
+	// them to the widest, or closes them back to the default.
+	type HeaderResizeDragT = {
+		startX: number
+		startWidth: number
+		hasMoved: boolean
+	}
+
+	let headerResizeDrag: HeaderResizeDragT | null = null
+
+	const handleHeaderResizeDown = (event: PointerEvent) => {
+		const handle = event.currentTarget as HTMLElement
+		handle.setPointerCapture(event.pointerId)
+		headerResizeDrag = { startX: event.clientX, startWidth: timeline.headerWidth, hasMoved: false }
+	}
+
+	const handleHeaderResizeMove = (event: PointerEvent) => {
+		const drag = headerResizeDrag
+		if (drag === null) return
+		const travel = event.clientX - drag.startX
+		const hasStarted = drag.hasMoved || Math.abs(travel) > 3
+		if (!hasStarted) return
+		drag.hasMoved = true
+		setHeaderWidth(drag.startWidth + travel)
+	}
+
+	const handleHeaderResizeUp = () => {
+		const drag = headerResizeDrag
+		headerResizeDrag = null
+		if (drag === null || drag.hasMoved) return
+		const isWide = timeline.headerWidth > DEFAULT_HEADER_WIDTH
+		setHeaderWidth(isWide ? DEFAULT_HEADER_WIDTH : MAX_HEADER_WIDTH)
 	}
 
 	const handleResizeReset = () => resetDockHeight(getMaxDockHeight())
@@ -610,7 +648,7 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div class="editor-dock" bind:this={dock} style:--editor-dock-height="{timeline.dockHeight}px">
+<div class="editor-dock" bind:this={dock} style:--editor-dock-height="{timeline.dockHeight}px" style:--editor-header-width="{timeline.headerWidth}px">
 	<button
 		class="editor-resize"
 		type="button"
@@ -627,6 +665,18 @@
 	<TransportBar />
 
 	<div class="editor-frame" id="editor-timeline" bind:this={frame} role="presentation" onpointermove={handleFramePointerMove} onpointerleave={handleFramePointerLeave}>
+		<button
+			class="editor-header-resize"
+			type="button"
+			tabindex="-1"
+			aria-label="Resize headers. Drag, click to open or close, double-click to reset."
+			title="Drag to resize every header · click to open or close"
+			onpointerdown={handleHeaderResizeDown}
+			onpointermove={handleHeaderResizeMove}
+			onpointerup={handleHeaderResizeUp}
+			onpointercancel={handleHeaderResizeUp}
+			ondblclick={resetHeaderWidth}
+		></button>
 		<div class="editor-row isRuler">
 			<div class="editor-corner">
 				<span class="editor-eyebrow">Automation</span>
@@ -653,7 +703,7 @@
 
 		<div class="editor-lanes" role="presentation" oncontextmenu={handleLanesContextMenu}>
 			<TimelineLayer
-				kind="audio"
+				kind="song"
 				rowId={AUDIO_ROW_ID}
 				color={audioColor}
 				title={songName}
@@ -707,7 +757,7 @@
 					{isSelected}
 					siblings={layerSiblings.filter((sibling) => sibling.id !== layer.id)}
 					isHidden={!layer.isVisible}
-					canAddLane={checkCanAddLayerLane(layer.id)}
+					canAddLane={layer.kind !== 'audio' && checkCanAddLayerLane(layer.id)}
 					ontoggle={(event) => handleLayerToggle(layer.id, event)}
 					onadd={() => handleAddLayerLane(layer.id)}
 					onselect={(event) => handleGroupSelect(layer.id, event)}
