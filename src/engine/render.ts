@@ -14,10 +14,6 @@ import type { FrameInputT, LayerT as StackLayerT } from './types'
 const STRIP_COUNT = 16
 const MAX_STRIP_SHIFT = 38
 const GLITCH_BURST_SECONDS = 0.18
-const TITLE_BASELINE_Y = 800
-const TITLE_FONT_SIZE = 40
-const TITLE_FONT_WEIGHT = 1000
-const TITLE_MAX_WIDTH = FRAME_WIDTH * 0.86
 const GRAIN_TILE_SIZE = 256
 
 type StripT = {
@@ -38,7 +34,6 @@ type FrameStateT = {
 	strips: StripT[]
 	echoes: EchoT[]
 	introAlpha: number
-	titleAlpha: number
 	bounceScale: number
 	wornVariant: number
 }
@@ -114,7 +109,6 @@ const buildFrameState = (input: FrameInputT, layers: LogoLayersT): FrameStateT =
 	const wornVariant = isWorn ? Math.floor(wornRandom() * layers.coreVariants.length) : -1
 
 	const introAlpha = input.isIntroActive ? clamp(input.time / 1, 0, 1) : 1
-	const titleAlpha = input.isIntroActive ? clamp((input.time - 0.8) / 0.4, 0, 1) : 1
 	const bounceScale = 1 + 0.03 * clamp(bass, 0, 1.4)
 	const padding = 12
 
@@ -130,7 +124,6 @@ const buildFrameState = (input: FrameInputT, layers: LogoLayersT): FrameStateT =
 		strips: buildStrips(glitch, flickerStep, layers.bounds.top - padding, layers.bounds.bottom + padding),
 		echoes: collectEchoes(input),
 		introAlpha,
-		titleAlpha,
 		bounceScale,
 		wornVariant
 	}
@@ -193,10 +186,11 @@ const drawLyricPattern = (context: CanvasRenderingContext2D, pattern: HTMLCanvas
 	context.drawImage(pattern, left, top, coverWidth, coverHeight)
 }
 
-const drawBackground = (context: CanvasRenderingContext2D, layers: LogoLayersT, palette: ScenePaletteT, frame: FrameLayoutT): void => {
+// The stage is its background color and nothing else. Anything that
+// sits on it, the logo's lyric pattern included, is a layer.
+const drawBackground = (context: CanvasRenderingContext2D, palette: ScenePaletteT, frame: FrameLayoutT): void => {
 	context.fillStyle = palette.background
 	context.fillRect(0, 0, frame.width, frame.height)
-	drawLyricPattern(context, getTinted(layers.lyricPattern, palette.logo), frame)
 	context.globalAlpha = 1
 }
 
@@ -346,49 +340,12 @@ const drawLogo = (context: CanvasRenderingContext2D, layers: LogoLayersT, palett
 	context.restore()
 }
 
-const drawTitle = (context: CanvasRenderingContext2D, palette: ScenePaletteT, state: FrameStateT): void => {
-	const text = state.input.title.trim().toUpperCase()
-	const isEmpty = text.length === 0
-	if (isEmpty) return
-
-	const setFont = (size: number) => {
-		context.font = `${TITLE_FONT_WEIGHT} ${size}px "DM Sans", system-ui, sans-serif`
-		context.letterSpacing = `${size * 0.22}px`
-	}
-
-	setFont(TITLE_FONT_SIZE)
-	const trailingSpace = TITLE_FONT_SIZE * 0.22
-	const naturalWidth = context.measureText(text).width - trailingSpace
-	const fitScale = Math.min(1, TITLE_MAX_WIDTH / naturalWidth)
-	const fittedSize = TITLE_FONT_SIZE * fitScale
-	setFont(fittedSize)
-
-	const fittedWidth = naturalWidth * fitScale
-	const left = FRAME_WIDTH / 2 - fittedWidth / 2
-	context.save()
-	context.globalAlpha = state.titleAlpha
-	context.textAlign = 'left'
-	context.textBaseline = 'middle'
-
-	const isSplit = state.glitch > 0.3
-	const splitDistance = 3 + 9 * state.glitch
-	if (isSplit) {
-		context.fillStyle = palette.accent1
-		context.fillText(text, left - splitDistance, TITLE_BASELINE_Y)
-		context.fillStyle = palette.accent2
-		context.fillText(text, left + splitDistance, TITLE_BASELINE_Y)
-	}
-
-	context.fillStyle = palette.logo
-	context.fillText(text, left, TITLE_BASELINE_Y)
-	context.restore()
-}
-
 // The built-in logo group: echoes, grain, logo and title. It is
 // one layer in the stack. Grain fills the frame, the rest lives
 // in the 16:9 scene.
 const drawLogoGroup = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT): void => {
 	const palette = getScenePalette(state.input)
+	drawLyricPattern(context, getTinted(layers.lyricPattern, palette.logo), state.frame)
 	context.save()
 	applySceneTransform(context, state.frame)
 	for (const echo of state.echoes) drawEcho(context, echo, layers, palette, state)
@@ -399,7 +356,6 @@ const drawLogoGroup = (context: CanvasRenderingContext2D, layers: LogoLayersT, s
 	context.save()
 	applySceneTransform(context, state.frame)
 	drawLogo(context, layers, palette, state)
-	drawTitle(context, palette, state)
 	context.restore()
 }
 
@@ -423,7 +379,7 @@ const getStackInput = (layers: LogoLayersT, state: FrameStateT, stackLayers: Sta
 const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT, options: SceneOptionsT = {}): void => {
 	const palette = getScenePalette(state.input)
 	const withBackground = options.withBackground ?? true
-	if (withBackground) drawBackground(context, layers, palette, state.frame)
+	if (withBackground) drawBackground(context, palette, state.frame)
 	drawLayerStack(context, getStackInput(layers, state, options.layers ?? state.input.layers))
 }
 

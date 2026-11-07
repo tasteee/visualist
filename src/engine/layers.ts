@@ -7,8 +7,7 @@ import type {
 	LayerParamKeyT,
 	LayerT,
 	LayerTransformT,
-	PaletteSlotT,
-	SvgColorT,
+	ShapeT,
 	TextWeightT
 } from './types'
 
@@ -38,16 +37,31 @@ export type OptionT<ValueT extends string> = {
 
 export const LOGO_LAYER_ID = 'logo'
 
+// The color ids saved layers use. They live in the palette.
+const WHITE_COLOR_ID = 'white'
+const ACCENT_ONE_COLOR_ID = 'accent-1'
+
 export const LAYER_PARAMS: LayerParamSpecT[] = [
-	{ key: 'x', label: 'Position X', min: -60, max: 60, step: 0.5, suffix: '%' },
-	{ key: 'y', label: 'Position Y', min: -60, max: 60, step: 0.5, suffix: '%' },
-	{ key: 'scale', label: 'Scale', min: 0.05, max: 3, step: 0.01, suffix: '×' },
+	// Position is a percent of the frame from its center: 0 is centered,
+	// 100 puts the layer's center one whole frame away.
+	{ key: 'x', label: 'Position X', min: -100, max: 100, step: 1, suffix: '%' },
+	{ key: 'y', label: 'Position Y', min: -100, max: 100, step: 1, suffix: '%' },
+	{ key: 'scale', label: 'Scale', min: 0.05, max: 3, step: 0.1, suffix: '×' },
 	{ key: 'rotation', label: 'Rotation', min: -180, max: 180, step: 1, suffix: '°' },
 	{ key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, suffix: '' },
 	{ key: 'depth', label: 'Depth', min: 0, max: 100, step: 1, suffix: '%' },
 	{ key: 'tilt', label: 'Tilt', min: -80, max: 80, step: 1, suffix: '°' },
-	{ key: 'turn', label: 'Turn', min: -80, max: 80, step: 1, suffix: '°' }
+	{ key: 'turn', label: 'Turn', min: -80, max: 80, step: 1, suffix: '°' },
+	{ key: 'volume', label: 'Volume', min: 0, max: 1.5, step: 0.01, suffix: '' }
 ]
+
+// Audio layers are heard, not seen, so only volume applies. Every other
+// layer is seen, and has no volume.
+export const getLayerParams = (kind: LayerKindT): LayerParamSpecT[] => {
+	const isAudio = kind === 'audio'
+	if (isAudio) return LAYER_PARAMS.filter((spec) => spec.key === 'volume')
+	return LAYER_PARAMS.filter((spec) => spec.key !== 'volume')
+}
 
 export const FX_SPECS: FxSpecT[] = [
 	{ kind: 'glow', label: 'Glow', hint: 'A soft accent halo behind the layer.', min: 0, max: 1, step: 0.01, defaultAmount: 0.5 },
@@ -67,15 +81,6 @@ export const BLEND_OPTIONS: OptionT<BlendModeT>[] = [
 	{ value: 'add', label: 'Add' },
 	{ value: 'difference', label: 'Difference' }
 ]
-
-export const PALETTE_SLOT_OPTIONS: OptionT<PaletteSlotT>[] = [
-	{ value: 'foreground', label: 'Foreground' },
-	{ value: 'accent1', label: 'Accent 1' },
-	{ value: 'accent2', label: 'Accent 2' },
-	{ value: 'background', label: 'Background' }
-]
-
-export const SVG_COLOR_OPTIONS: OptionT<SvgColorT>[] = [{ value: 'original', label: 'Original colors' }, ...PALETTE_SLOT_OPTIONS]
 
 export const TEXT_WEIGHT_OPTIONS: OptionT<string>[] = [
 	{ value: '400', label: 'Regular' },
@@ -107,7 +112,7 @@ export const findLayerParam = (key: LayerParamKeyT): LayerParamSpecT => {
 	return spec
 }
 
-const createIdentityTransform = (): LayerTransformT => ({ x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, depth: 0, tilt: 0, turn: 0 })
+const createIdentityTransform = (): LayerTransformT => ({ x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, depth: 0, tilt: 0, turn: 0, volume: 1 })
 
 const createBaseLayer = (kind: LayerKindT, name: string): LayerT => ({
 	id: crypto.randomUUID(),
@@ -121,9 +126,10 @@ const createBaseLayer = (kind: LayerKindT, name: string): LayerT => ({
 	endTime: null,
 	fx: [],
 	text: null,
+	shape: null,
 	assetId: null,
 	svgColor: 'original',
-	volume: 1
+	audioOffset: 0
 })
 
 export const createLogoLayer = (): LayerT => {
@@ -142,9 +148,16 @@ export const createTextLayer = (text: string): LayerT => {
 		isItalic: false,
 		isUnderline: false,
 		isStrike: false,
-		color: 'foreground' as PaletteSlotT
+		color: WHITE_COLOR_ID
 	}
 	return { ...layer, transform, text: content }
+}
+
+// A shape starts as a white square.
+export const createShapeLayer = (): LayerT => {
+	const layer = createBaseLayer('shape', 'Shape')
+	const shape: ShapeT = { kind: 'square', fill: 'solid', color: WHITE_COLOR_ID, color2: ACCENT_ONE_COLOR_ID, angle: 90 }
+	return { ...layer, shape }
 }
 
 export const createAssetLayer = (kind: 'image' | 'svg', assetId: string | null, name: string): LayerT => {
@@ -162,7 +175,8 @@ export const createFx = (kind: FxKindT): LayerFxT => {
 	return { id: crypto.randomUUID(), kind, amount: spec.defaultAmount, modulation: null }
 }
 
-export const createDefaultLayers = (): LayerT[] => [createLogoLayer()]
+// A new project has no layers at all.
+export const createDefaultLayers = (): LayerT[] => []
 
 // A layer fades in and out over this long at its time edges.
 const EDGE_FADE_SECONDS = 0.25

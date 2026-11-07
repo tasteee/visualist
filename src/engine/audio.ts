@@ -56,15 +56,30 @@ export type ExtraTrackT = {
 	startTime: number
 	endTime: number | null
 	volume: number
+	// Where in the file the clip begins.
+	offset: number
 }
 
 let extraTracks: ExtraTrackT[] = []
 let extraSources: AudioBufferSourceNode[] = []
+// One gain node per extra track that is playing, by track index.
+let extraGains = new Map<number, GainNode>()
 let extraTap: MediaStreamAudioDestinationNode | null = null
 let extraClip: PlaybackClipT | null = null
 
 export const setExtraTracks = (tracks: ExtraTrackT[]): void => {
 	extraTracks = tracks
+}
+
+// Volumes that follow automation. One value per extra track, in the
+// order they were given to setExtraTracks.
+export const setExtraVolumes = (volumes: number[]): void => {
+	const context = getAudioContext()
+	for (const [trackIndex, gain] of extraGains.entries()) {
+		const volume = volumes[trackIndex]
+		if (volume === undefined) continue
+		gain.gain.setTargetAtTime(volume, context.currentTime, 0.02)
+	}
 }
 
 const stopExtras = (): void => {
@@ -79,8 +94,8 @@ const stopExtras = (): void => {
 	extraSources = []
 }
 
-const startExtraTrack = (context: AudioContext, track: ExtraTrackT, position: number): void => {
-	const naturalEnd = track.startTime + track.buffer.duration
+const startExtraTrack = (context: AudioContext, track: ExtraTrackT, trackIndex: number, position: number): void => {
+	const naturalEnd = track.startTime + (track.buffer.duration - track.offset)
 	const trackEnd = Math.min(track.endTime ?? Number.POSITIVE_INFINITY, naturalEnd)
 	const isOver = position >= trackEnd
 	if (isOver) return
@@ -88,11 +103,12 @@ const startExtraTrack = (context: AudioContext, track: ExtraTrackT, position: nu
 	source.buffer = track.buffer
 	const gain = context.createGain()
 	gain.gain.value = track.volume
+	extraGains.set(trackIndex, gain)
 	source.connect(gain)
 	gain.connect(context.destination)
 	if (extraTap !== null) connectTapWithFades(context, gain, extraTap, extraClip)
 	const delay = Math.max(0, track.startTime - position)
-	const bufferOffset = Math.max(0, position - track.startTime)
+	const bufferOffset = Math.max(0, position - track.startTime) + track.offset
 	const playLength = trackEnd - Math.max(track.startTime, position)
 	source.start(context.currentTime + delay, bufferOffset, playLength)
 	extraSources.push(source)
@@ -102,7 +118,8 @@ const startExtraTrack = (context: AudioContext, track: ExtraTrackT, position: nu
 export const startExtras = (position: number): void => {
 	stopExtras()
 	const context = getAudioContext()
-	for (const track of extraTracks) startExtraTrack(context, track, position)
+	extraGains = new Map()
+	for (const [trackIndex, track] of extraTracks.entries()) startExtraTrack(context, track, trackIndex, position)
 }
 
 const detachSource = (): void => {

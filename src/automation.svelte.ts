@@ -1,6 +1,5 @@
 import { clamp } from './engine/settings'
 import {
-	GLOBAL_GROUP_ID,
 	MIN_POINT_GAP,
 	checkIsSameTarget,
 	checkIsTargetLive,
@@ -15,6 +14,8 @@ import {
 } from './engine/automation'
 import type { AutomationLaneT, AutomationPointT, LaneTargetT, LayerT } from './engine/types'
 import { appearance } from './appearance.svelte'
+import { restorePaletteSnapshot, takePaletteSnapshot } from './palette.svelte'
+import type { PaletteColorT } from './palette.svelte'
 import { findLayer, layerStore } from './layers.svelte'
 import { restoreTrackSnapshot, sources, takeTrackSnapshot } from './sources.svelte'
 import type { TrackSnapshotT } from './sources.svelte'
@@ -38,7 +39,8 @@ type AutomationStateT = {
 }
 
 const HISTORY_LIMIT = 120
-const STORAGE_KEY = 'vink.automation.v1'
+const STORAGE_KEY = 'vink.automation.v2'
+const LEGACY_STORAGE_KEY = 'vink.automation.v1'
 
 const checkIsTargetShape = (target: unknown): target is LaneTargetT => {
 	const isObject = typeof target === 'object' && target !== null
@@ -55,10 +57,34 @@ const checkIsLaneShape = (lane: Partial<AutomationLaneT>): boolean => {
 
 // Lanes are saved with the layers, so layer lanes come back
 // with the layers they drive.
+// Position used to run from -60 to 60 and now runs from -100 to 100.
+// Saved lanes keep the same positions by rescaling their points.
+const OLD_POSITION_LIMIT = 60
+const NEW_POSITION_LIMIT = 100
+
+const migratePositionLane = (lane: AutomationLaneT): AutomationLaneT => {
+	const target = lane.target
+	const isPosition = target.kind === 'layer' && (target.param === 'x' || target.param === 'y')
+	if (!isPosition) return lane
+	const points = lane.points.map((point) => {
+		const oldValue = (point.value * 2 - 1) * OLD_POSITION_LIMIT
+		return { ...point, value: (oldValue / NEW_POSITION_LIMIT + 1) / 2 }
+	})
+	return { ...lane, points }
+}
+
+const readLegacyLanes = (): AutomationLaneT[] | null => {
+	const stored = window.localStorage.getItem(LEGACY_STORAGE_KEY)
+	if (stored === null) return null
+	const parsed = JSON.parse(stored) as Partial<AutomationLaneT>[]
+	if (!Array.isArray(parsed)) return null
+	return (parsed.filter(checkIsLaneShape) as AutomationLaneT[]).map(migratePositionLane)
+}
+
 const loadLanes = (): AutomationLaneT[] => {
 	try {
 		const stored = window.localStorage.getItem(STORAGE_KEY)
-		if (stored === null) return []
+		if (stored === null) return readLegacyLanes() ?? []
 		const parsed = JSON.parse(stored) as Partial<AutomationLaneT>[]
 		const isList = Array.isArray(parsed)
 		if (!isList) return []
@@ -112,6 +138,7 @@ type HistoryEntryT = {
 	impulseTracks: TrackSnapshotT
 	settings: SettingsT
 	appearance: AppearanceSnapshotT
+	paletteColors: PaletteColorT[]
 	loop: RegionT
 	isLoopEnabled: boolean
 	exportRange: RegionT
@@ -138,6 +165,7 @@ const takeSnapshot = (): HistoryEntryT => ({
 	impulseTracks: takeTrackSnapshot(),
 	settings: $state.snapshot(app.settings) as SettingsT,
 	appearance: takeAppearanceSnapshot(),
+	paletteColors: takePaletteSnapshot(),
 	loop: { start: app.loopStart, end: app.loopEnd },
 	isLoopEnabled: app.isLoopEnabled,
 	exportRange: { start: app.trimStart, end: app.trimEnd },
@@ -206,6 +234,7 @@ const restoreEntry = (entry: HistoryEntryT): void => {
 	restoreTrackSnapshot(entry.impulseTracks)
 	Object.assign(app.settings, entry.settings)
 	restoreAppearance(entry.appearance)
+	restorePaletteSnapshot(entry.paletteColors)
 	app.trimStart = entry.exportRange.start
 	app.trimEnd = entry.exportRange.end
 	app.isLoopEnabled = entry.isLoopEnabled
@@ -246,7 +275,7 @@ const findUnusedTarget = (targets: LaneTargetT[]): LaneTargetT | null => {
 	return unused ?? null
 }
 
-export const checkCanAddSettingLane = (): boolean => findUnusedTarget(listSettingTargets()) !== null
+export const checkCanAddSettingLane = (groupId: string): boolean => findUnusedTarget(listSettingTargets(groupId)) !== null
 
 export const checkCanAddLayerLane = (layerId: string): boolean => {
 	const layer = findLayer(layerId)
@@ -282,10 +311,10 @@ const pushLane = (target: LaneTargetT): string => {
 
 // New lanes start unmapped. The user picks the control from
 // the lane's own menu.
-export const addSettingLane = (): string | null => {
-	const canAdd = checkCanAddSettingLane()
+export const addSettingLane = (groupId: string): string | null => {
+	const canAdd = checkCanAddSettingLane(groupId)
 	if (!canAdd) return null
-	return pushLane({ kind: 'unset', groupId: GLOBAL_GROUP_ID })
+	return pushLane({ kind: 'unset', groupId })
 }
 
 export const addLayerLane = (layerId: string): string | null => {

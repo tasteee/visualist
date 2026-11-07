@@ -9,9 +9,10 @@
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import { recordHistory, recordHistoryCoalesced } from '../automation.svelte'
 	import { getAsset } from '../engine/assets'
-	import { BLEND_OPTIONS, FX_SPECS, LAYER_PARAMS, PALETTE_SLOT_OPTIONS, SVG_COLOR_OPTIONS, TEXT_WEIGHT_OPTIONS } from '../engine/layers'
+	import { BLEND_OPTIONS, FX_SPECS, TEXT_WEIGHT_OPTIONS, getLayerParams } from '../engine/layers'
 	import { DEMO_LOOP_SECONDS } from '../engine/settings'
-	import type { BlendModeT, FxKindT, LayerT, PaletteSlotT, SvgColorT, TextWeightT } from '../engine/types'
+	import type { BlendModeT, FxKindT, LayerT, ShapeFillT, ShapeKindT, TextWeightT } from '../engine/types'
+	import { palette } from '../palette.svelte'
 	import { addLayerFx, checkCanMove, layerStore, moveLayer, removeLayer, removeLayerFx, renameLayer, setLayerImageFile } from '../layers.svelte'
 	import { app } from '../store.svelte'
 	import { formatPreciseTime } from '../engine/timeline'
@@ -21,6 +22,7 @@
 	import RenameField from './RenameField.svelte'
 	import Section from './Section.svelte'
 	import Segmented from './Segmented.svelte'
+	import SettingSlider from './SettingSlider.svelte'
 	import './LayerEditor.css'
 
 	type LayerEditorPropsT = {
@@ -49,6 +51,53 @@
 	const isUppercase = $derived(textContent === null ? false : textContent.isUppercase)
 	const isPicture = $derived(props.layer.kind === 'image' || props.layer.kind === 'svg')
 	const hasPicture = $derived(props.layer.assetId !== null)
+
+	// Every color the user has, to choose from. Changing a color in the
+	// Palette changes it here and on the stage.
+	const colorOptions = $derived(palette.colors.map((color) => ({ value: color.id, label: color.name })))
+	const svgColorOptions = $derived([{ value: 'original', label: 'Original colors' }, ...colorOptions])
+
+	const SHAPE_KIND_OPTIONS = [
+		{ value: 'square', label: 'Square' },
+		{ value: 'circle', label: 'Circle' }
+	]
+
+	const SHAPE_FILL_OPTIONS = [
+		{ value: 'solid', label: 'Solid' },
+		{ value: 'gradient', label: 'Gradient' }
+	]
+
+	const shape = $derived(props.layer.shape)
+	const isGradient = $derived(shape !== null && shape.fill === 'gradient')
+
+	const handleShapeKind = (event: Event) => {
+		if (shape === null) return
+		recordHistory()
+		shape.kind = readText(event) as ShapeKindT
+	}
+
+	const handleShapeFill = (value: string) => {
+		if (shape === null) return
+		recordHistory()
+		shape.fill = value as ShapeFillT
+	}
+
+	const handleShapeColor = (event: Event) => {
+		if (shape === null) return
+		recordHistory()
+		shape.color = readText(event)
+	}
+
+	const handleShapeSecondColor = (event: Event) => {
+		if (shape === null) return
+		recordHistory()
+		shape.color2 = readText(event)
+	}
+
+	const handleShapeAngle = (value: number) => {
+		if (shape === null) return
+		shape.angle = value
+	}
 
 	const FONT_OPTIONS = [{ value: 'dm-sans', label: 'DM Sans' }]
 
@@ -106,12 +155,12 @@
 		const content = props.layer.text
 		if (content === null) return
 		recordHistory()
-		content.color = readText(event) as PaletteSlotT
+		content.color = readText(event)
 	}
 
 	const handleSvgColorChange = (event: Event) => {
 		recordHistory()
-		props.layer.svgColor = readText(event) as SvgColorT
+		props.layer.svgColor = readText(event)
 	}
 
 	const handleBlendChange = (event: Event) => {
@@ -161,7 +210,7 @@
 			<z-textarea value={textValue} rows={2} isAutoResize aria-label="Text" oninput={handleTextChange} onchange={handleTextChange}></z-textarea>
 			<Segmented label="Weight" options={TEXT_WEIGHT_OPTIONS} value={textWeightValue} onchange={handleWeightChange} />
 			<div class="layer-editor-pair">
-				<z-select value={textColorValue} options={PALETTE_SLOT_OPTIONS} aria-label="Text color" onchange={handleTextColorChange}></z-select>
+				<z-select value={textColorValue} options={colorOptions} aria-label="Text color" onchange={handleTextColorChange}></z-select>
 				<z-select value="dm-sans" options={FONT_OPTIONS} isDisabled aria-label="Font"></z-select>
 			</div>
 			<div class="layer-editor-styles" role="group" aria-label="Text style">
@@ -187,15 +236,31 @@
 			<p class="layer-editor-note">PNG, JPG, SVG, WebP or GIF. A new picture goes on top of every other layer.</p>
 		{/if}
 
+		{#if shape !== null}
+			<z-field label="Shape">
+				<z-select value={shape.kind} options={SHAPE_KIND_OPTIONS} aria-label="Shape" onchange={handleShapeKind}></z-select>
+			</z-field>
+			<Segmented label="Fill" options={SHAPE_FILL_OPTIONS} value={shape.fill} onchange={handleShapeFill} />
+			<z-field label={isGradient ? 'From' : 'Color'}>
+				<z-select value={shape.color} options={colorOptions} aria-label="Shape color" onchange={handleShapeColor}></z-select>
+			</z-field>
+			{#if isGradient}
+				<z-field label="To">
+					<z-select value={shape.color2} options={colorOptions} aria-label="Gradient end color" onchange={handleShapeSecondColor}></z-select>
+				</z-field>
+				<SettingSlider label="Angle" value={shape.angle} min={0} max={360} step={1} suffix="°" onchange={handleShapeAngle} />
+			{/if}
+		{/if}
+
 		{#if isSvg}
 			<z-field label="Color">
-				<z-select value={props.layer.svgColor} options={SVG_COLOR_OPTIONS} aria-label="Vector color" onchange={handleSvgColorChange}></z-select>
+				<z-select value={props.layer.svgColor} options={svgColorOptions} aria-label="Vector color" onchange={handleSvgColorChange}></z-select>
 			</z-field>
 		{/if}
 	</Section>
 
 	<Section title="Transform" description="Modulate any value to move it with the music.">
-		{#each LAYER_PARAMS as param (param.key)}
+		{#each getLayerParams(props.layer.kind) as param (param.key)}
 			<LayerParamSlider layer={props.layer} paramKey={param.key} />
 		{/each}
 	</Section>

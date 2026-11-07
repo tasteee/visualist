@@ -2,8 +2,8 @@ import { toaster } from '@tasteee/zest'
 import { recordHistory, removeLanesForFx, removeLanesForLayer } from './automation.svelte'
 import { importAssetFile, restoreAssets } from './engine/assets'
 import type { AssetRequestT } from './engine/assets'
-import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createTextLayer } from './engine/layers'
-import type { FxKindT, LayerFxT, LayerT } from './engine/types'
+import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createShapeLayer, createTextLayer } from './engine/layers'
+import type { FxKindT, LayerFxT, LayerT, ShapeT, TextContentT } from './engine/types'
 
 type LayerStoreT = {
 	layers: LayerT[]
@@ -26,25 +26,39 @@ const getFileBaseName = (fileName: string): string => {
 	return withoutExtension.slice(0, NAME_LIMIT)
 }
 
-// Stored layers come back merged over fresh defaults, so older
-// saves gain any field added since. The logo is always present.
-const normalizeLayer = (stored: Partial<LayerT>): LayerT | null => {
-	const kind = stored.kind
-	const isKnownKind = kind === 'logo' || kind === 'text' || kind === 'image' || kind === 'svg' || kind === 'audio'
-	if (!isKnownKind) return null
-	const base = kind === 'logo' ? createLogoLayer() : createTextLayer('')
-	const transform = { ...base.transform, ...stored.transform }
-	const modulations = { ...stored.modulations }
-	const fx = Array.isArray(stored.fx) ? stored.fx : []
-	const text = kind === 'text' ? { ...base.text, ...stored.text } : null
-	const normalized = { ...base, ...stored, kind, transform, modulations, fx, text } as LayerT
-	return normalized
+// Layers saved before colors lived in the palette named a slot.
+const LEGACY_COLOR_IDS: Record<string, string> = {
+	foreground: 'white',
+	background: 'black',
+	accent1: 'accent-1',
+	accent2: 'accent-2'
 }
 
-const ensureLogoLayer = (layers: LayerT[]): LayerT[] => {
-	const hasLogo = layers.some((layer) => layer.kind === 'logo')
-	if (hasLogo) return layers
-	return [...layers, createLogoLayer()]
+const migrateColorId = (value: unknown, fallback: string): string => {
+	if (typeof value !== 'string') return fallback
+	return LEGACY_COLOR_IDS[value] ?? value
+}
+
+// Stored layers come back merged over fresh defaults, so older
+// saves gain any field added since.
+const normalizeLayer = (stored: Partial<LayerT>): LayerT | null => {
+	const kind = stored.kind
+	const isKnownKind = kind === 'logo' || kind === 'text' || kind === 'image' || kind === 'svg' || kind === 'audio' || kind === 'shape'
+	if (!isKnownKind) return null
+	const base = kind === 'logo' ? createLogoLayer() : createTextLayer('')
+	const legacyVolume = (stored as { volume?: unknown }).volume
+	const volumeFallback = typeof legacyVolume === 'number' ? { volume: legacyVolume } : {}
+	const transform = { ...base.transform, ...volumeFallback, ...stored.transform }
+	const modulations = { ...stored.modulations }
+	const fx = Array.isArray(stored.fx) ? stored.fx : []
+	const mergedText = { ...base.text, ...stored.text } as TextContentT
+	const text = kind === 'text' ? { ...mergedText, color: migrateColorId(mergedText.color, 'white') } : null
+	const shapeBase = createShapeLayer().shape as ShapeT
+	const mergedShape = { ...shapeBase, ...stored.shape } as ShapeT
+	const shape = kind === 'shape' ? { ...mergedShape, color: migrateColorId(mergedShape.color, 'white'), color2: migrateColorId(mergedShape.color2, 'accent-1') } : null
+	const svgColor = migrateColorId(stored.svgColor, 'original')
+	const normalized = { ...base, ...stored, kind, transform, modulations, fx, text, shape, svgColor } as LayerT
+	return normalized
 }
 
 const loadLayers = (): LayerT[] => {
@@ -56,7 +70,7 @@ const loadLayers = (): LayerT[] => {
 		if (!isList) return createDefaultLayers()
 		const normalized = parsed.map(normalizeLayer)
 		const layers = normalized.filter((layer): layer is LayerT => layer !== null)
-		return ensureLogoLayer(layers)
+		return layers
 	} catch {
 		return createDefaultLayers()
 	}
@@ -147,6 +161,10 @@ export const addTextLayer = (): void => {
 	pushLayer(createTextLayer('Your text'))
 }
 
+export const addShapeLayer = (): void => {
+	pushLayer(createShapeLayer())
+}
+
 // An image layer starts empty. The picture is chosen in the
 // layer's settings.
 export const addImageLayer = (): void => {
@@ -194,8 +212,7 @@ export const addAssetLayer = async (file: File): Promise<void> => {
 export const removeLayers = (layerIds: string[]): void => {
 	const removableIds = layerIds.filter((layerId) => {
 		const layer = findLayer(layerId)
-		const isLogo = layerId === LOGO_LAYER_ID
-		return layer !== undefined && !isLogo
+		return layer !== undefined
 	})
 	const hasLayers = removableIds.length > 0
 	if (!hasLayers) return

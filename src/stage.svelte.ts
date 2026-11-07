@@ -73,7 +73,7 @@ export const getLayerAxes = (layerId: string): LayerAxesT => ({
 	canMoveY: !checkIsParamAutomated(layerId, 'y')
 })
 
-const MAX_OFFSET = 60
+const MAX_OFFSET = 100
 
 export const moveLayerBy = (layer: LayerT, deltaXPercent: number, deltaYPercent: number): void => {
 	const axes = getLayerAxes(layer.id)
@@ -81,9 +81,11 @@ export const moveLayerBy = (layer: LayerT, deltaXPercent: number, deltaYPercent:
 	if (axes.canMoveY) layer.transform.y = clamp(layer.transform.y + deltaYPercent, -MAX_OFFSET, MAX_OFFSET)
 }
 
+// Layers with a picture. Audio layers can be selected too, but they
+// are not on the stage.
 export const getSelectedLayers = (): LayerT[] => {
 	const selected = layerStore.selectedLayerIds.map((layerId) => findLayer(layerId))
-	return selected.filter((layer): layer is LayerT => layer !== undefined)
+	return selected.filter((layer): layer is LayerT => layer !== undefined && layer.kind !== 'audio')
 }
 
 // Arrow keys: true when a selected layer took the key, even if

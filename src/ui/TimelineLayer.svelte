@@ -9,7 +9,9 @@
 	import { checkIsTimeVisible, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
 	import type { LayerKindT } from '../engine/types'
-	import { app } from '../store.svelte'
+	import { clamp } from '../engine/settings'
+	import { ratioToTime, snapToGrid } from '../engine/timeline'
+	import { app, seekTo } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
 	import { openRowInspector } from '../rowInspector.svelte'
@@ -59,7 +61,8 @@
 	const defaultAddLabel = $derived(props.canAddLane ? `Automate a ${props.title} control` : `Every ${props.title} control is automated`)
 	const addLabel = $derived(props.addLabel ?? defaultAddLabel)
 	const visibilityLabel = $derived(props.isHidden ? `Show ${props.title}` : `Hide ${props.title}`)
-	const barLines = $derived(props.grid.lines.filter((line) => line.kind === 'label' || line.kind === 'bar'))
+	// Every line the ruler draws, so what a click snaps to is visible.
+	const gridLines = $derived(props.grid.lines)
 	const playheadPercent = $derived(timeToPercent(app.currentTime, view))
 	const isPlayheadVisible = $derived(checkIsTimeVisible(app.currentTime, view))
 	const row = $derived<RowRefT>({ kind: 'layer', id: props.rowId })
@@ -74,6 +77,21 @@
 	const canReorder = $derived(props.onreorderstart !== undefined)
 	const isDropBefore = $derived(props.dropEdge === 'before')
 	const isDropAfter = $derived(props.dropEdge === 'after')
+
+	// A click on empty space in a layer's row sets the playhead there.
+	// Clips and their handles keep their own clicks.
+	const handleTrackClick = (event: MouseEvent) => {
+		const isSong = props.kind === 'song'
+		const target = event.target as Element
+		const isOnClip = target.closest('.layer-clip, [data-clip-control]') !== null
+		if (isSong || isOnClip) return
+		const bounds = event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : null
+		if (bounds === null) return
+		const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
+		const rawTime = clamp(ratioToTime(ratio, view), 0, app.duration)
+		const shouldSnap = timeline.isSnapping && !event.shiftKey
+		seekTo(shouldSnap ? snapToGrid(rawTime, props.grid) : rawTime)
+	}
 
 	const handleInspect = (anchor: HTMLElement) => openRowInspector(inspectorKind, props.rowId, anchor)
 
@@ -139,11 +157,11 @@
 		</z-tooltip>
 	</div>
 
-	<div class="timeline-layer-track" data-track="layer">
+	<div class="timeline-layer-track" data-track="layer" role="presentation" onclick={handleTrackClick}>
 		{#if hasOverlay}
 			<svg class="timeline-layer-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
-				{#each barLines as line (line.time)}
-					<line class="timeline-layer-gridline" class:isLabel={line.kind === 'label'} x1={getGridX(line)} x2={getGridX(line)} y1="0" y2="100" />
+				{#each gridLines as line (line.time)}
+					<line class="timeline-layer-gridline" class:isLabel={line.kind === 'label'} class:isSub={line.kind === 'sub'} x1={getGridX(line)} x2={getGridX(line)} y1="0" y2="100" />
 				{/each}
 			</svg>
 		{/if}

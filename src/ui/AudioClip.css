@@ -1,0 +1,121 @@
+/* An audio clip: a header bar that moves it, edges that trim it, and
+   its waveform in between. */
+.audio-clip {
+	--audio-clip-tone: var(--tone, var(--accent));
+	position: absolute;
+	top: var(--spacing-1);
+	right: var(--clip-right);
+	bottom: var(--spacing-1);
+	left: var(--clip-left);
+	z-index: 1;
+	display: flex;
+	flex-direction: column;
+	min-width: var(--spacing-3);
+	overflow: hidden;
+	border: 1px solid color-mix(in oklab, var(--audio-clip-tone) 55%, transparent);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--audio-clip-tone) 12%, var(--bg));
+	color: var(--foreground);
+	touch-action: none;
+	user-select: none;
+	transition:
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease;
+}
+
+.audio-clip.isSelected {
+	border-color: var(--audio-clip-tone);
+	background: color-mix(in oklab, var(--audio-clip-tone) 20%, var(--bg));
+}
+
+.audio-clip.isMuted {
+	border-style: dashed;
+	background: transparent;
+	opacity: 0.55;
+}
+
+.audio-clip-bar {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--spacing-2);
+	height: var(--spacing-4);
+	padding: 0 var(--spacing-3);
+	background: color-mix(in oklab, var(--audio-clip-tone) 55%, var(--bg));
+	cursor: grab;
+}
+
+.audio-clip.isSelected .audio-clip-bar {
+	background: var(--audio-clip-tone);
+}
+
+.audio-clip.isDragging .audio-clip-bar {
+	cursor: grabbing;
+}
+
+.audio-clip-name,
+.audio-clip-range {
+	overflow: hidden;
+	font-size: var(--font-size-0);
+	font-weight: var(--font-weight-semibold);
+	line-height: 1;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.audio-clip-range {
+	flex: none;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.8;
+}
+
+.audio-clip-wave {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+}
+
+.audio-clip-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+	color: color-mix(in oklab, var(--audio-clip-tone) 80%, var(--foreground));
+	pointer-events: none;
+}
+
+.audio-clip-edge {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	z-index: 2;
+	width: var(--spacing-2);
+	cursor: ew-resize;
+}
+
+.audio-clip-edge.isStart {
+	left: 0;
+}
+
+.audio-clip-edge.isEnd {
+	right: 0;
+}
+
+.audio-clip-edge::after {
+	position: absolute;
+	top: 30%;
+	bottom: 30%;
+	left: 50%;
+	width: 2px;
+	border-radius: 999px;
+	background: var(--audio-clip-tone);
+	content: '';
+	opacity: 0;
+	transform: translateX(-50%);
+	transition: opacity var(--motion-fast) ease;
+}
+
+.audio-clip:hover .audio-clip-edge::after,
+.audio-clip.isDragging .audio-clip-edge::after {
+	opacity: 0.9;
+}

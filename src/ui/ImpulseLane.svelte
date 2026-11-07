@@ -20,11 +20,13 @@
 	import { checkIsRowFolded, getRowHeightCss, toggleRowFolded } from '../rowLayout.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
 	import { clearSelection as clearAllSelection, pickImpulse, pickImpulsesInBox, readModifiers, selectPlacedImpulse } from '../selection.svelte'
-	import { app, getLiveSignals } from '../store.svelte'
+	import type { PickModifiersT } from '../selection.svelte'
+	import { app, getLiveSignals, seekTo } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import RowResizer from './RowResizer.svelte'
 	import { rowHeader } from './rowHeader'
 	import './ImpulseLane.css'
+	import './ValuePill.css'
 
 	type ImpulseLanePropsT = {
 		track: ImpulseTrackT
@@ -33,6 +35,8 @@
 		// modifier gestures.
 		siblingTrackIds: string[]
 		onpattern: (trackId: string, anchor: HTMLElement) => void
+		// Right-click on an impulse opens its time and strength.
+		onedit: (trackId: string, impulseId: string, anchor: HTMLElement) => void
 	}
 
 	// Dragging moves every selected impulse together: time by the
@@ -45,6 +49,12 @@
 		plotHeight: number
 		starts: Map<string, TrackImpulseT>
 		hasMoved: boolean
+		// Shift, Cmd or Ctrl on the press picks on button-up, when the
+		// press turns out to be a click and not a drag.
+		pendingPick: PickModifiersT | null
+		// The strength change last applied, and the one Cmd or Ctrl holds.
+		lastStrengthDelta: number
+		heldStrengthDelta: number | null
 	}
 
 	// A press on empty space: a click adds an impulse, a drag draws a
@@ -106,7 +116,7 @@
 	const buildHint = (): string => {
 		if (isArmed) return 'Tapping · press T in time while the song plays'
 		if (hasSelection) return 'Drag to move · Arrows nudge · Delete to remove · Esc clears'
-		return 'Click to place an impulse · Drag across to select · Shift-click selects a range'
+		return 'Double-click to place an impulse · Click to set the playhead · Drag across to select'
 	}
 
 	const hintText = $derived(buildHint())
@@ -146,7 +156,8 @@
 
 	const pillImpulseId = $derived(drag === null ? hoveredImpulseId : drag.anchorImpulseId)
 	const pillImpulse = $derived(impulses.find((impulse) => impulse.id === pillImpulseId))
-	const pillLabel = $derived(pillImpulse === undefined ? '' : `${Math.round(pillImpulse.strength * 100)}% · ${formatPreciseTime(pillImpulse.time)}`)
+	const pillTimeLabel = $derived(pillImpulse === undefined ? '' : formatPreciseTime(pillImpulse.time))
+	const pillValueLabel = $derived(pillImpulse === undefined ? '' : pillImpulse.strength.toFixed(2))
 
 	const getGridX = (line: GridLineT): number => timeToRatio(line.time, view) * PATH_WIDTH
 
@@ -184,6 +195,14 @@
 
 	const readSnappedTime = (event: PointerEvent): number => snapTime(readRawTime(event.clientX), event)
 
+	// While an impulse is dragged, Shift locks its strength, so it
+	// does not also free the time from the grid.
+	const readDragTime = (event: PointerEvent): number => {
+		const rawTime = readRawTime(event.clientX)
+		if (!timeline.isSnapping) return rawTime
+		return clamp(snapToGrid(rawTime, props.grid), 0, duration)
+	}
+
 	const readImpulseId = (target: EventTarget | null): string | null => {
 		const isElement = target instanceof Element
 		if (!isElement) return null
@@ -209,21 +228,26 @@
 		return starts
 	}
 
-	const startGroupDrag = (event: PointerEvent, impulse: TrackImpulseT) => {
+	const startGroupDrag = (event: PointerEvent, impulse: TrackImpulseT, pendingPick: PickModifiersT | null) => {
 		if (plot === undefined) return
 		const isAlreadySelected = checkIsSelected(impulse)
-		if (!isAlreadySelected) pickImpulse(props.track.id, impulse.id, { isRange: false, isToggle: false })
+		const isPlainPress = pendingPick === null
+		if (isPlainPress && !isAlreadySelected) pickImpulse(props.track.id, impulse.id, { isRange: false, isToggle: false })
 		const track = event.currentTarget as HTMLElement
 		track.setPointerCapture(event.pointerId)
 		const bounds = plot.getBoundingClientRect()
+		const movingIds = isAlreadySelected || isPlainPress ? getSelectedIds() : [impulse.id]
 		drag = {
 			anchorImpulseId: impulse.id,
 			anchorStartTime: impulse.time,
 			startX: event.clientX,
 			startY: event.clientY,
 			plotHeight: bounds.height,
-			starts: captureStarts(getSelectedIds()),
-			hasMoved: false
+			starts: captureStarts(movingIds),
+			hasMoved: false,
+			pendingPick,
+			lastStrengthDelta: 0,
+			heldStrengthDelta: null
 		}
 	}
 
@@ -241,8 +265,7 @@
 		if (event.altKey) return deleteFromImpulse(impulseId)
 		const modifiers = readModifiers(event)
 		const isPicking = modifiers.isRange || modifiers.isToggle
-		if (isPicking) return pickImpulse(props.track.id, impulseId, modifiers)
-		startGroupDrag(event, impulse)
+		startGroupDrag(event, impulse, isPicking ? modifiers : null)
 	}
 
 	const startMarquee = (event: PointerEvent) => {
@@ -263,7 +286,8 @@
 		const isPrimaryButton = event.button === 0
 		const canEdit = duration > 0 && !isCollapsed
 		if (!isPrimaryButton || !canEdit) return
-		const impulseId = readImpulseId(event.target)
+		// The track captured the pointer, so look under the cursor.
+		const impulseId = readImpulseId(document.elementFromPoint(event.clientX, event.clientY))
 		const isOnImpulse = impulseId !== null
 		if (isOnImpulse) return handleImpulseDown(event, impulseId)
 		startMarquee(event)
@@ -281,6 +305,21 @@
 		}))
 	}
 
+	// Shift locks the strength to what it was when the drag began, so
+	// the impulse only moves in time. Cmd or Ctrl locks it to what it
+	// is when the key goes down.
+	const resolveStrengthDelta = (event: PointerEvent, activeDrag: GroupDragT, freeDelta: number): number => {
+		const isShift = event.shiftKey
+		const isControl = event.ctrlKey || event.metaKey
+		if (isShift) return 0
+		if (!isControl) {
+			activeDrag.heldStrengthDelta = null
+			return freeDelta
+		}
+		if (activeDrag.heldStrengthDelta === null) activeDrag.heldStrengthDelta = activeDrag.lastStrengthDelta
+		return activeDrag.heldStrengthDelta
+	}
+
 	// One undo step per drag, recorded when it really moves.
 	const moveGroup = (event: PointerEvent, activeDrag: GroupDragT) => {
 		const dx = event.clientX - activeDrag.startX
@@ -289,9 +328,10 @@
 		if (!hasStartedMoving) return
 		if (!activeDrag.hasMoved) recordHistory()
 		activeDrag.hasMoved = true
-		const snappedTime = readSnappedTime(event)
-		const timeDelta = snappedTime - activeDrag.anchorStartTime
-		const strengthDelta = -dy / activeDrag.plotHeight
+		const timeDelta = readDragTime(event) - activeDrag.anchorStartTime
+		const freeDelta = -dy / activeDrag.plotHeight
+		const strengthDelta = resolveStrengthDelta(event, activeDrag, freeDelta)
+		activeDrag.lastStrengthDelta = strengthDelta
 		moveImpulses(props.track.id, buildMoves(activeDrag, timeDelta, strengthDelta))
 	}
 
@@ -327,9 +367,15 @@
 		return hasPrevious ? previous.strength : FULL_STRENGTH
 	}
 
-	// A click on empty space places an impulse on button-up.
-	const placeImpulse = (activeMarquee: MarqueeT) => {
-		const time = activeMarquee.clickPosition.time
+	// A double-click on empty space places an impulse, at the strength of
+	// the one before it.
+	const placeImpulseAt = (event: MouseEvent) => {
+		if (plot === undefined) return
+		const bounds = plot.getBoundingClientRect()
+		const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
+		const rawTime = clamp(ratioToTime(ratio, view), 0, duration)
+		const shouldSnap = timeline.isSnapping && !event.shiftKey
+		const time = shouldSnap ? clamp(snapToGrid(rawTime, props.grid), 0, duration) : rawTime
 		const strength = getStrengthForNewImpulse(time)
 		const holdLength = isGate ? props.grid.snapStep : 0
 		const impulseId = addImpulse(props.track.id, time, strength, holdLength)
@@ -343,10 +389,11 @@
 		drag = null
 		marquee = null
 		const wasClickOnImpulse = activeDrag !== null && !activeDrag.hasMoved
-		if (wasClickOnImpulse) return pickImpulse(props.track.id, activeDrag.anchorImpulseId, { isRange: false, isToggle: false })
+		if (wasClickOnImpulse) return pickImpulse(props.track.id, activeDrag.anchorImpulseId, activeDrag.pendingPick ?? { isRange: false, isToggle: false })
 		if (activeMarquee === null) return
 		if (activeMarquee.isActive) return finishMarquee(activeMarquee)
-		placeImpulse(activeMarquee)
+		// A click on empty space sets the playhead.
+		seekTo(activeMarquee.clickPosition.time)
 	}
 
 	const handleTrackCancel = () => {
@@ -357,8 +404,16 @@
 	const handleTrackDoubleClick = (event: MouseEvent) => {
 		if (isCollapsed) return toggleRowFolded(row, [])
 		const impulseId = readImpulseId(event.target)
-		if (impulseId === null) return
-		deleteFromImpulse(impulseId)
+		const isOnImpulse = impulseId !== null
+		if (isOnImpulse) return deleteFromImpulse(impulseId)
+		if (duration > 0) placeImpulseAt(event)
+	}
+
+	const handleImpulseContextMenu = (event: MouseEvent, impulse: TrackImpulseT) => {
+		event.preventDefault()
+		event.stopPropagation()
+		pickImpulse(props.track.id, impulse.id, { isRange: false, isToggle: false })
+		props.onedit(props.track.id, impulse.id, event.currentTarget as HTMLElement)
 	}
 
 	let header: HTMLDivElement
@@ -485,6 +540,7 @@
 					aria-valuenow={impulse.strength}
 					onpointerenter={() => (hoveredImpulseId = impulse.id)}
 					onpointerleave={() => (hoveredImpulseId = null)}
+					oncontextmenu={(event) => handleImpulseContextMenu(event, impulse)}
 				></div>
 			{/each}
 
@@ -493,7 +549,10 @@
 			{/if}
 
 			{#if pillImpulse !== undefined && !isCollapsed}
-				<span class="impulse-lane-pill" style:--impulse-x="{getImpulseX(pillImpulse)}%">{pillLabel}</span>
+				<span class="value-pill impulse-lane-pill" style:--impulse-x="{getImpulseX(pillImpulse)}%">
+					<span class="value-pill-time">{pillTimeLabel}</span>
+					<span class="value-pill-value">{pillValueLabel}</span>
+				</span>
 			{/if}
 		</div>
 

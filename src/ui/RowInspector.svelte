@@ -11,7 +11,7 @@
 		setLaneTarget
 	} from '../automation.svelte'
 	import {
-		GLOBAL_GROUP_ID,
+		checkIsSettingGroup,
 		checkIsSameTarget,
 		getTargetControl,
 		getTargetGroupId,
@@ -94,15 +94,15 @@
 		return 'slate'
 	})
 
-	const rowColorId = $derived(open === null ? '' : open.kind === 'audio' ? AUDIO_ROW_ID : open.kind === 'global' ? GLOBAL_GROUP_ID : open.rowId)
+	const rowColorId = $derived(open === null ? '' : open.kind === 'audio' ? AUDIO_ROW_ID : open.kind === 'global' ? open.rowId : open.rowId)
 	const currentColor = $derived(getRowColor(rowColorId, defaultColor))
 
 	// A lane can switch to any free control in its own group.
 	const groupTargets = $derived.by((): LaneTargetT[] => {
 		if (lane === undefined) return []
 		const groupId = getTargetGroupId(lane.target)
-		const isGlobal = groupId === GLOBAL_GROUP_ID
-		if (isGlobal) return listSettingTargets()
+		const isSettingGroup = checkIsSettingGroup(groupId)
+		if (isSettingGroup) return listSettingTargets(groupId)
 		const groupLayer = findLayer(groupId)
 		if (groupLayer === undefined) return []
 		return listLayerTargets(groupLayer)

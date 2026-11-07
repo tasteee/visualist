@@ -11,6 +11,7 @@
 	import Toolbar from './ui/Toolbar.svelte'
 	import MidiImportDialog from './ui/MidiImportDialog.svelte'
 	import Stage from './ui/Stage.svelte'
+	import { layerStore } from './layers.svelte'
 	import { timeline } from './timeline.svelte'
 	import { toggleStageFocused, toggleUiHidden, uiState } from './uiState.svelte'
 	import { installFocusGuard } from './ui/focus'
@@ -109,7 +110,7 @@
 
 		{#if !uiState.isUiHidden}
 			<Toolbar />
-			{#if !app.hasAudio}
+			{#if !app.hasSong && layerStore.layers.length === 0}
 				<div class="app-dropzone">
 					<DropZone />
 				</div>
