@@ -1,15 +1,23 @@
-export type InspectorTabT = 'settings' | 'sources' | 'layers' | 'post' | 'export'
+// The toolbar menus in the top right corner. At most one is open.
+export type InspectorTabT = 'settings' | 'sources' | 'post' | 'export' | 'palette'
 
 type InspectorStateT = {
-	activeTab: InspectorTabT
+	activeTab: InspectorTabT | null
 }
 
-// Lives outside the Inspector so the timeline can open the
-// Layers tab when a layer is picked there.
 export const inspector = $state<InspectorStateT>({
-	activeTab: 'settings'
+	activeTab: null
 })
 
 export const showInspectorTab = (tab: InspectorTabT): void => {
 	inspector.activeTab = tab
+}
+
+export const closeInspectorTab = (): void => {
+	inspector.activeTab = null
+}
+
+export const toggleInspectorTab = (tab: InspectorTabT): void => {
+	const isOpen = inspector.activeTab === tab
+	inspector.activeTab = isOpen ? null : tab
 }

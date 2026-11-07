@@ -4,7 +4,6 @@ import { importAssetFile, restoreAssets } from './engine/assets'
 import type { AssetRequestT } from './engine/assets'
 import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createTextLayer } from './engine/layers'
 import type { FxKindT, LayerFxT, LayerT } from './engine/types'
-import { showInspectorTab } from './inspector.svelte'
 
 type LayerStoreT = {
 	layers: LayerT[]
@@ -99,10 +98,8 @@ export const selectLayer = (layerId: string | null): void => {
 
 export const checkIsLayerSelected = (layerId: string): boolean => layerStore.selectedLayerIds.includes(layerId)
 
-// Picking a layer in the timeline opens it in the panel.
 export const focusLayer = (layerId: string): void => {
 	selectLayer(layerId)
-	showInspectorTab('layers')
 }
 
 // A name commits once, as the whole name. The editing field
@@ -148,6 +145,34 @@ const pushLayer = (layer: LayerT): void => {
 // scene, so new text starts as a placeholder.
 export const addTextLayer = (): void => {
 	pushLayer(createTextLayer('Your text'))
+}
+
+// An image layer starts empty. The picture is chosen in the
+// layer's settings.
+export const addImageLayer = (): void => {
+	pushLayer(createAssetLayer('image', null, 'Image'))
+}
+
+// Puts a picture into an image layer, and the layer on top of
+// every other layer.
+export const setLayerImageFile = async (layerId: string, file: File): Promise<void> => {
+	layerStore.isImporting = true
+	try {
+		const asset = await importAssetFile(file)
+		const layer = findLayer(layerId)
+		if (layer === undefined) return
+		recordHistory()
+		layer.assetId = asset.id
+		layer.kind = asset.kind === 'svg' ? 'svg' : 'image'
+		layerStore.assetVersion += 1
+		const others = layerStore.layers.filter((candidate) => candidate.id !== layerId)
+		layerStore.layers = [...others, layer]
+	} catch {
+		const message = 'That file could not be read. Try a PNG, JPG, WebP, GIF or SVG.'
+		toaster.show({ title: 'Could not add the picture', description: message, tone: 'danger' })
+	} finally {
+		layerStore.isImporting = false
+	}
 }
 
 export const addAssetLayer = async (file: File): Promise<void> => {

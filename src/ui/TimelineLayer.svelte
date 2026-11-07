@@ -11,12 +11,10 @@
 	import type { LayerKindT } from '../engine/types'
 	import { app } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
-	import { getRowHeightCss } from '../rowLayout.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
 	import { openRowInspector } from '../rowInspector.svelte'
 	import type { InspectorRowKindT } from '../rowInspector.svelte'
 	import { rowHeader } from './rowHeader'
-	import RowResizer from './RowResizer.svelte'
 	import './TimelineLayer.css'
 
 	// One layer in the timeline: the audio, the scene settings,
@@ -64,7 +62,6 @@
 	const playheadPercent = $derived(timeToPercent(app.currentTime, view))
 	const isPlayheadVisible = $derived(checkIsTimeVisible(app.currentTime, view))
 	const row = $derived<RowRefT>({ kind: 'layer', id: props.rowId })
-	const customHeight = $derived(getRowHeightCss(row))
 	const siblingRows = $derived(props.siblings ?? [])
 	const inspectorKind = $derived<InspectorRowKindT>(isAudio ? 'audio' : isGlobal ? 'global' : 'layer')
 
@@ -95,6 +92,7 @@
 	const headerOptions = $derived({
 		row,
 		getSiblings: () => siblingRows,
+		canResize: false,
 		onselect: props.onselect,
 		onreorder: canReorder ? handleReorder : undefined,
 		oninspect: handleInspect
@@ -112,7 +110,6 @@
 	class:isDropAfter
 	data-layer-group={props.layerId}
 	data-tone={props.color}
-	style:--timeline-layer-custom-height={customHeight}
 >
 	<div class="timeline-layer-header" class:canReorder role="presentation" use:rowHeader={headerOptions} onkeydown={handleHeaderKey}>
 		<button class="timeline-layer-caret" type="button" aria-expanded={!props.isCollapsed} aria-label={collapseLabel} onclick={props.ontoggle}>
@@ -157,5 +154,4 @@
 		{/if}
 	</div>
 
-	<RowResizer rowId={props.rowId} kind="layer" label={props.title} siblings={siblingRows} />
 </div>

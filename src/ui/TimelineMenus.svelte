@@ -1,5 +1,14 @@
 <script lang="ts">
 	import CheckIcon from 'phosphor-svelte/lib/CheckIcon'
+	import CubeIcon from 'phosphor-svelte/lib/CubeIcon'
+	import ImageIcon from 'phosphor-svelte/lib/ImageIcon'
+	import PulseIcon from 'phosphor-svelte/lib/PulseIcon'
+	import TextTIcon from 'phosphor-svelte/lib/TextTIcon'
+	import VideoCameraIcon from 'phosphor-svelte/lib/VideoCameraIcon'
+	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
+	import { addImageLayer, addTextLayer } from '../layers.svelte'
+	import { addEmptyTrack } from '../sources.svelte'
+	import { openAudioPicker } from './filePicker'
 	import { GRID_DIVISIONS, formatGridDivision } from '../engine/timeline'
 	import type { GridDivisionT } from '../engine/timeline'
 	import { setGridDivision, timeline, toggleSnapping, toggleTriplet } from '../timeline.svelte'
@@ -12,8 +21,10 @@
 	const MENU_MARGIN = 8
 
 	let gridRoot = $state<HTMLDivElement | undefined>(undefined)
+	let addRoot = $state<HTMLDivElement | undefined>(undefined)
 
 	const gridMenu = $derived(timelineMenus.grid)
+	const addMenu = $derived(timelineMenus.addLayer)
 
 	// A closed menu hands focus back to the editor.
 	const closeTimelineMenus = () => {
@@ -56,12 +67,38 @@
 	})
 
 	$effect(() => {
-		const isOpen = gridMenu !== null
+		void addMenu
+		keepInWindow(addRoot)
+	})
+
+	const handleAddAudio = () => {
+		closeTimelineMenus()
+		openAudioPicker()
+	}
+
+	const handleAddText = () => {
+		addTextLayer()
+		closeTimelineMenus()
+	}
+
+	const handleAddImage = () => {
+		addImageLayer()
+		closeTimelineMenus()
+	}
+
+	const handleAddImpulse = () => {
+		addEmptyTrack()
+		closeTimelineMenus()
+	}
+
+	$effect(() => {
+		const isOpen = gridMenu !== null || addMenu !== null
 		if (!isOpen) return
 		const handlePointerDown = (event: PointerEvent) => {
 			const path = event.composedPath()
 			const isInGrid = gridRoot instanceof HTMLElement && path.includes(gridRoot)
-			if (isInGrid) return
+			const isInAdd = addRoot instanceof HTMLElement && path.includes(addRoot)
+			if (isInGrid || isInAdd) return
 			closeTimelineMenus()
 		}
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -106,6 +143,39 @@
 			</span>
 			Snap to grid
 			<span class="timeline-menu-shortcut">S</span>
+		</button>
+	</div>
+{/if}
+
+{#if addMenu !== null}
+	<div class="timeline-menu" bind:this={addRoot} role="menu" aria-label="Add a layer" style:--menu-x="{addMenu.x}px" style:--menu-y="{addMenu.y}px">
+		<span class="timeline-menu-eyebrow">Add a layer</span>
+		<button class="timeline-menu-item" type="button" role="menuitem" onclick={handleAddAudio}>
+			<span class="timeline-menu-check"><WaveformIcon weight="bold" /></span>
+			Audio
+		</button>
+		<button class="timeline-menu-item" type="button" role="menuitem" onclick={handleAddText}>
+			<span class="timeline-menu-check"><TextTIcon weight="bold" /></span>
+			Text
+		</button>
+		<button class="timeline-menu-item" type="button" role="menuitem" onclick={handleAddImage}>
+			<span class="timeline-menu-check"><ImageIcon weight="bold" /></span>
+			Image
+		</button>
+		<button class="timeline-menu-item" type="button" role="menuitem" disabled>
+			<span class="timeline-menu-check"><VideoCameraIcon weight="bold" /></span>
+			Video
+			<span class="timeline-menu-shortcut">Soon</span>
+		</button>
+		<button class="timeline-menu-item" type="button" role="menuitem" disabled>
+			<span class="timeline-menu-check"><CubeIcon weight="bold" /></span>
+			Model
+			<span class="timeline-menu-shortcut">Soon</span>
+		</button>
+		<span class="timeline-menu-separator"></span>
+		<button class="timeline-menu-item" type="button" role="menuitem" onclick={handleAddImpulse}>
+			<span class="timeline-menu-check"><PulseIcon weight="bold" /></span>
+			Impulse
 		</button>
 	</div>
 {/if}

@@ -17,17 +17,21 @@ type StageViewT = {
 export const MIN_STAGE_ZOOM = 0.25
 export const MAX_STAGE_ZOOM = 12
 
-export const stageView = $state<StageViewT>({ zoom: 1, panX: 0, panY: 0 })
+// The stage starts a little above center, clear of the editor
+// at its usual height. After that only the user moves it.
+const DEFAULT_PAN_Y = -110
+
+export const stageView = $state<StageViewT>({ zoom: 1, panX: 0, panY: DEFAULT_PAN_Y })
 
 export const resetStageView = (): void => {
 	stageView.zoom = 1
 	stageView.panX = 0
-	stageView.panY = 0
+	stageView.panY = DEFAULT_PAN_Y
 }
 
 export const checkIsStageReset = (): boolean => {
 	const isUnzoomed = stageView.zoom === 1
-	const isCentered = stageView.panX === 0 && stageView.panY === 0
+	const isCentered = stageView.panX === 0 && stageView.panY === DEFAULT_PAN_Y
 	return isUnzoomed && isCentered
 }
 

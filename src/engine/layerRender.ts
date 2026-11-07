@@ -81,14 +81,33 @@ const getLayerSeed = (layerId: string): number => {
 // ---- Sources -------------------------------------------------
 
 const setTextFont = (context: CanvasRenderingContext2D, content: TextContentT, size: number): void => {
-	context.font = `${content.weight} ${size}px "DM Sans", system-ui, sans-serif`
+	const slant = content.isItalic ? 'italic ' : ''
+	context.font = `${slant}${content.weight} ${size}px "DM Sans", system-ui, sans-serif`
 	const tracking = content.isUppercase ? 0.08 : 0
 	context.letterSpacing = `${size * tracking}px`
 }
 
 const getDisplayText = (content: TextContentT): string => {
 	if (content.isUppercase) return content.text.toUpperCase()
+	if (content.isLowercase) return content.text.toLowerCase()
 	return content.text
+}
+
+type TextLineSpanT = {
+	centerX: number
+	lineCenterY: number
+	lineWidth: number
+}
+
+// Underline and strike-through are drawn by hand, since a canvas
+// has no text decoration.
+const drawTextLines = (context: CanvasRenderingContext2D, content: TextContentT, span: TextLineSpanT): void => {
+	const hasDecoration = content.isUnderline || content.isStrike
+	if (!hasDecoration) return
+	const thickness = TEXT_FONT_SIZE * 0.06
+	const left = span.centerX - span.lineWidth / 2
+	if (content.isUnderline) context.fillRect(left, span.lineCenterY + TEXT_FONT_SIZE * 0.4, span.lineWidth, thickness)
+	if (content.isStrike) context.fillRect(left, span.lineCenterY - thickness / 2, span.lineWidth, thickness)
 }
 
 const paintText = (content: TextContentT, color: string): LayerSourceT => {
@@ -116,6 +135,8 @@ const paintText = (content: TextContentT, color: string): LayerSourceT => {
 	for (const [lineIndex, line] of lines.entries()) {
 		const lineCenterY = padding + lineHeight * (lineIndex + 0.5)
 		context.fillText(line, centerX, lineCenterY)
+		const lineWidth = context.measureText(line).width
+		drawTextLines(context, content, { centerX, lineCenterY, lineWidth })
 	}
 	return { canvas, width: unitWidth, height: unitHeight }
 }
@@ -124,7 +145,8 @@ const getTextSource = (content: TextContentT, palette: PaletteT): LayerSourceT |
 	const isEmpty = content.text.trim().length === 0
 	if (isEmpty) return null
 	const color = getPaletteColor(palette, content.color)
-	const cacheKey = `${content.text}|${content.weight}|${content.isUppercase}|${color}`
+	const flags = [content.isUppercase, content.isLowercase, content.isItalic, content.isUnderline, content.isStrike].join(',')
+	const cacheKey = `${content.text}|${content.weight}|${flags}|${color}`
 	const cached = textCache.get(cacheKey)
 	if (cached !== undefined) return cached
 	const isCacheFull = textCache.size >= MAX_TEXT_CACHE

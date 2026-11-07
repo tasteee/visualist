@@ -1,6 +1,10 @@
 <script lang="ts">
 	import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon'
 	import CaretUpIcon from 'phosphor-svelte/lib/CaretUpIcon'
+	import TextItalicIcon from 'phosphor-svelte/lib/TextItalicIcon'
+	import TextStrikethroughIcon from 'phosphor-svelte/lib/TextStrikethroughIcon'
+	import TextUnderlineIcon from 'phosphor-svelte/lib/TextUnderlineIcon'
+	import UploadSimpleIcon from 'phosphor-svelte/lib/UploadSimpleIcon'
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import { recordHistory, recordHistoryCoalesced } from '../automation.svelte'
@@ -8,11 +12,12 @@
 	import { BLEND_OPTIONS, FX_SPECS, LAYER_PARAMS, PALETTE_SLOT_OPTIONS, SVG_COLOR_OPTIONS, TEXT_WEIGHT_OPTIONS } from '../engine/layers'
 	import { DEMO_LOOP_SECONDS } from '../engine/settings'
 	import type { BlendModeT, FxKindT, LayerT, PaletteSlotT, SvgColorT, TextWeightT } from '../engine/types'
-	import { addLayerFx, checkCanMove, layerStore, moveLayer, removeLayer, removeLayerFx, renameLayer } from '../layers.svelte'
+	import { addLayerFx, checkCanMove, layerStore, moveLayer, removeLayer, removeLayerFx, renameLayer, setLayerImageFile } from '../layers.svelte'
 	import { app } from '../store.svelte'
 	import { formatPreciseTime } from '../engine/timeline'
 	import FxRow from './FxRow.svelte'
 	import LayerParamSlider from './LayerParamSlider.svelte'
+	import { openPicturePicker } from './filePicker'
 	import RenameField from './RenameField.svelte'
 	import Section from './Section.svelte'
 	import Segmented from './Segmented.svelte'
@@ -42,11 +47,15 @@
 	const textColorValue = $derived(textContent === null ? 'foreground' : textContent.color)
 	const textValue = $derived(textContent === null ? '' : textContent.text)
 	const isUppercase = $derived(textContent === null ? false : textContent.isUppercase)
+	const isPicture = $derived(props.layer.kind === 'image' || props.layer.kind === 'svg')
+	const hasPicture = $derived(props.layer.assetId !== null)
+
+	const FONT_OPTIONS = [{ value: 'dm-sans', label: 'DM Sans' }]
 
 	const getIsMissingFile = (): boolean => {
 		void layerStore.assetVersion
 		const isAssetLayer = props.layer.kind === 'image' || props.layer.kind === 'svg'
-		if (!isAssetLayer) return false
+		if (!isAssetLayer || props.layer.assetId === null) return false
 		return getAsset(props.layer.assetId) === null
 	}
 
@@ -72,13 +81,26 @@
 		content.weight = Number(value) as TextWeightT
 	}
 
-	const handleUppercaseChange = (event: Event) => {
+	type TextStyleKeyT = 'isStrike' | 'isUnderline' | 'isItalic' | 'isUppercase' | 'isLowercase'
+
+	const isStrike = $derived(textContent === null ? false : textContent.isStrike)
+	const isUnderline = $derived(textContent === null ? false : textContent.isUnderline)
+	const isItalic = $derived(textContent === null ? false : textContent.isItalic)
+	const isLowercase = $derived(textContent === null ? false : textContent.isLowercase)
+
+	// Caps and lower case are alternatives, so turning one on
+	// turns the other off.
+	const handleStyleToggle = (key: TextStyleKeyT) => {
 		const content = props.layer.text
 		if (content === null) return
-		const detail = (event as CustomEvent<{ checked: boolean }>).detail
 		recordHistory()
-		content.isUppercase = detail.checked
+		const nextValue = !content[key]
+		content[key] = nextValue
+		if (key === 'isUppercase' && nextValue) content.isLowercase = false
+		if (key === 'isLowercase' && nextValue) content.isUppercase = false
 	}
+
+	const handleUpload = () => openPicturePicker((file) => void setLayerImageFile(props.layer.id, file))
 
 	const handleTextColorChange = (event: Event) => {
 		const content = props.layer.text
@@ -132,7 +154,7 @@
 		</div>
 
 		{#if isMissingFile}
-			<p class="layer-editor-note isWarning">This layer's file could not be restored. Remove it and add the file again.</p>
+			<p class="layer-editor-note isWarning">This layer's file could not be restored. Upload it again.</p>
 		{/if}
 
 		{#if hasTextContent}
@@ -140,8 +162,29 @@
 			<Segmented label="Weight" options={TEXT_WEIGHT_OPTIONS} value={textWeightValue} onchange={handleWeightChange} />
 			<div class="layer-editor-pair">
 				<z-select value={textColorValue} options={PALETTE_SLOT_OPTIONS} aria-label="Text color" onchange={handleTextColorChange}></z-select>
-				<z-switch isChecked={isUppercase} size="sm" onchange={handleUppercaseChange}>Uppercase</z-switch>
+				<z-select value="dm-sans" options={FONT_OPTIONS} isDisabled aria-label="Font"></z-select>
 			</div>
+			<div class="layer-editor-styles" role="group" aria-label="Text style">
+				<z-button size="sm" kind={isStrike ? 'soft' : 'outline'} tone={isStrike ? 'primary' : 'neutral'} aria-label="Strike-through" aria-pressed={isStrike} onclick={() => handleStyleToggle('isStrike')}>
+					<TextStrikethroughIcon weight="bold" />
+				</z-button>
+				<z-button size="sm" kind={isUnderline ? 'soft' : 'outline'} tone={isUnderline ? 'primary' : 'neutral'} aria-label="Underline" aria-pressed={isUnderline} onclick={() => handleStyleToggle('isUnderline')}>
+					<TextUnderlineIcon weight="bold" />
+				</z-button>
+				<z-button size="sm" kind={isItalic ? 'soft' : 'outline'} tone={isItalic ? 'primary' : 'neutral'} aria-label="Italic" aria-pressed={isItalic} onclick={() => handleStyleToggle('isItalic')}>
+					<TextItalicIcon weight="bold" />
+				</z-button>
+				<z-button size="sm" kind={isUppercase ? 'soft' : 'outline'} tone={isUppercase ? 'primary' : 'neutral'} aria-label="All caps" aria-pressed={isUppercase} onclick={() => handleStyleToggle('isUppercase')}>AA</z-button>
+				<z-button size="sm" kind={isLowercase ? 'soft' : 'outline'} tone={isLowercase ? 'primary' : 'neutral'} aria-label="All lower case" aria-pressed={isLowercase} onclick={() => handleStyleToggle('isLowercase')}>aa</z-button>
+			</div>
+		{/if}
+
+		{#if isPicture}
+			<z-button size="md" kind="outline" tone="neutral" isFullWidth isDisabled={layerStore.isImporting} onclick={handleUpload}>
+				<UploadSimpleIcon weight="bold" />
+				{hasPicture ? 'Replace picture' : 'Upload a picture'}
+			</z-button>
+			<p class="layer-editor-note">PNG, JPG, SVG, WebP or GIF. A new picture goes on top of every other layer.</p>
 		{/if}
 
 		{#if isSvg}

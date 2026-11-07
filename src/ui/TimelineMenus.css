@@ -118,3 +118,12 @@
 	margin: var(--spacing-1) var(--spacing-1);
 	background: var(--border);
 }
+
+.timeline-menu-item:disabled {
+	cursor: default;
+	opacity: var(--control-disabled-opacity);
+}
+
+.timeline-menu-item:disabled:hover {
+	background: transparent;
+}

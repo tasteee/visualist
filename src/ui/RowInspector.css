@@ -7,12 +7,11 @@
 	display: flex;
 	flex-direction: column;
 	width: var(--inspector-width);
-	max-height: calc(100vh - var(--spacing-4));
+	max-height: calc(100vh - 16px);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: var(--popover);
 	color: var(--popover-foreground);
-	transform: translate(var(--inspector-shift-x, 0), var(--inspector-shift-y, 0));
 }
 
 .row-inspector-header {

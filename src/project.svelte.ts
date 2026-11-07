@@ -3,7 +3,6 @@ import { automation } from './automation.svelte'
 import { readSongFile } from './engine/assets'
 import { GRID_DIVISIONS } from './engine/timeline'
 import type { GridDivisionT, TimelineViewT } from './engine/timeline'
-import { inspector } from './inspector.svelte'
 import type { InspectorTabT } from './inspector.svelte'
 import { buildSongKey, sources } from './sources.svelte'
 import { app, loadAudioFile, seekTo, setLoopEnabled, setLoopRegion, setStatus } from './store.svelte'
@@ -40,11 +39,10 @@ type SavedProjectT = {
 	collapsedGroupIds: string[]
 	collapsedTrackIds: string[]
 	isTriggersCollapsed: boolean
-	inspectorTab: InspectorTabT
+	inspectorTab?: InspectorTabT
 }
 
 const STORAGE_KEY = 'vink.project.v1'
-const INSPECTOR_TABS: InspectorTabT[] = ['settings', 'sources', 'layers', 'post', 'export']
 
 const buildSnapshot = (): SavedProjectT => ({
 	songKey: sources.songKey,
@@ -71,7 +69,7 @@ const buildSnapshot = (): SavedProjectT => ({
 	collapsedGroupIds: [...automation.collapsedGroupIds],
 	collapsedTrackIds: [...sources.collapsedTrackIds],
 	isTriggersCollapsed: sources.isTriggersCollapsed,
-	inspectorTab: inspector.activeTab
+	inspectorTab: 'settings'
 })
 
 const checkIsSavedShape = (value: unknown): value is SavedProjectT => {
@@ -109,12 +107,6 @@ const pickGridDivision = (value: unknown): GridDivisionT => {
 	return 'auto'
 }
 
-const pickInspectorTab = (value: unknown): InspectorTabT => {
-	const isKnown = INSPECTOR_TABS.includes(value as InspectorTabT)
-	if (isKnown) return value as InspectorTabT
-	return 'settings'
-}
-
 const applySongState = (project: SavedProjectT): void => {
 	app.title = project.title
 	app.isTitleEdited = project.isTitleEdited
@@ -139,7 +131,6 @@ const applyEditorState = (project: SavedProjectT): void => {
 	automation.collapsedGroupIds = project.collapsedGroupIds ?? []
 	sources.collapsedTrackIds = project.collapsedTrackIds ?? []
 	sources.isTriggersCollapsed = project.isTriggersCollapsed === true
-	inspector.activeTab = pickInspectorTab(project.inspectorTab)
 }
 
 // The editor zooms to fit when a song arrives, so the saved

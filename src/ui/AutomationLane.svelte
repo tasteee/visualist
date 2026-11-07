@@ -127,7 +127,6 @@
 	const customHeight = $derived(getRowHeightCss(row))
 	const controlLabel = $derived(control === null ? 'No control' : control.label)
 	const laneName = $derived(props.lane.name ?? controlLabel)
-	const pointCountLabel = $derived(pointCount === 1 ? '1 point' : `${pointCount} points`)
 	const collapseLabel = $derived(isFolded ? `Expand ${laneName}` : `Fold ${laneName}`)
 	const bypassLabel = $derived(isBypassed ? `Use ${laneName}` : `Bypass ${laneName}`)
 	const selectedPointCount = $derived(getSelectedPointCount(props.lane.id))
@@ -545,9 +544,7 @@
 				</button>
 			</z-tooltip>
 			<span class="automation-lane-name">{laneName}</span>
-			{#if isFolded}
-				<span class="automation-lane-value isCompact">{liveLabel}</span>
-			{/if}
+			<span class="automation-lane-value">{liveLabel}</span>
 			{#if !isFolded}
 				<div class="automation-lane-actions">
 					<z-tooltip content="Lane settings" placement="top">
@@ -564,12 +561,6 @@
 			{/if}
 		</div>
 
-		{#if !isFolded}
-			<div class="automation-lane-meta">
-				<span class="automation-lane-value">{liveLabel}</span>
-				<span class="automation-lane-count">{pointCountLabel}</span>
-			</div>
-		{/if}
 	</div>
 
 	<div

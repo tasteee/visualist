@@ -6,9 +6,10 @@
 	import { app, loadAudioFile, startApp, togglePlay } from './store.svelte'
 	import DropZone from './ui/DropZone.svelte'
 	import EditorDock from './ui/EditorDock.svelte'
-	import Inspector from './ui/Inspector.svelte'
+	import Toolbar from './ui/Toolbar.svelte'
 	import MidiImportDialog from './ui/MidiImportDialog.svelte'
 	import Stage from './ui/Stage.svelte'
+	import { toggleStageFocused, toggleUiHidden, uiState } from './uiState.svelte'
 	import { installFocusGuard } from './ui/focus'
 	import { checkIsTyping } from './ui/keyboard'
 
@@ -18,10 +19,25 @@
 	// key, which is only possible after a Tab, since a click
 	// hands focus back to the shell.
 	const handleKeyDown = (event: KeyboardEvent) => {
-		const isSpace = event.code === 'Space'
-		if (!isSpace || checkIsTyping(event)) return
-		event.preventDefault()
-		togglePlay()
+		if (checkIsTyping(event)) return
+		const hasModifier = event.metaKey || event.ctrlKey || event.altKey
+		if (hasModifier) return
+		if (event.code === 'Space') {
+			event.preventDefault()
+			return togglePlay()
+		}
+		// Tilde shows the stage over everything, backslash hides
+		// every panel.
+		if (event.code === 'Backquote') {
+			event.preventDefault()
+			return toggleStageFocused()
+		}
+		if (event.code === 'Backslash') {
+			event.preventDefault()
+			return toggleUiHidden()
+		}
+		const isEscape = event.key === 'Escape'
+		if (isEscape && uiState.isStageFocused) uiState.isStageFocused = false
 	}
 
 	const checkHasFiles = (event: DragEvent): boolean => {
@@ -78,21 +94,24 @@
 
 <svelte:window onkeydown={handleKeyDown} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop} />
 
-<main class="app-shell" tabindex="-1" bind:this={shell}>
-	<section class="app-workspace">
-		<div class="app-stage-area">
-			<Stage />
+<main class="app-shell" class:isStageFocused={uiState.isStageFocused} tabindex="-1" bind:this={shell}>
+	<div class="app-canvas">
+		<Stage />
+	</div>
+
+	{#if !uiState.isUiHidden}
+		<div class="app-ui">
+			<Toolbar />
+			{#if app.hasAudio}
+				<EditorDock />
+			{/if}
+			{#if !app.hasAudio}
+				<div class="app-dropzone">
+					<DropZone />
+				</div>
+			{/if}
 		</div>
-		{#if app.hasAudio}
-			<EditorDock />
-		{/if}
-		{#if !app.hasAudio}
-			<DropZone />
-		{/if}
-	</section>
-	<aside class="app-inspector">
-		<Inspector />
-	</aside>
+	{/if}
 
 	{#if app.isDraggingFile}
 		<div class="app-drop-overlay">

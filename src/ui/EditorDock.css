@@ -1,8 +1,11 @@
 .editor-dock {
 	--editor-header-width: 15rem;
-	position: relative;
+	position: fixed;
+	right: var(--spacing-5);
+	bottom: var(--spacing-5);
+	left: var(--spacing-5);
+	z-index: 10;
 	display: flex;
-	flex: none;
 	flex-direction: column;
 	height: var(--editor-dock-height);
 	min-height: 0;

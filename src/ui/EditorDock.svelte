@@ -47,12 +47,11 @@
 	import { AUDIO_ROW_ID, getRowColor } from '../appearance.svelte'
 	import { pickColorForId } from '../engine/palette'
 	import type { ColorNameT } from '../engine/palette'
-	import { openGridMenu } from '../timelineMenus.svelte'
+	import { openAddLayerMenu, openGridMenu } from '../timelineMenus.svelte'
 	import { app, getAnalysis, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
 	import type { ImpulseMoveT } from '../sources.svelte'
 	import {
-		MAX_DOCK_SHARE,
-		fitView,
+			fitView,
 		followPlayhead,
 		panBy,
 		resetDockHeight,
@@ -111,6 +110,7 @@
 		startHeight: number
 	}
 
+	const DOCK_TOP_CLEARANCE_PX = 96
 	const WHEEL_LINE_PX = 16
 	const WHEEL_ZOOM_RATE = 0.0025
 	const PINCH_ZOOM_RATE = 0.01
@@ -147,7 +147,6 @@
 	const canAddSettingLane = $derived(checkCanAddSettingLane())
 	const areAllCollapsed = $derived(checkAreAllCollapsed())
 	const collapseAllLabel = $derived(areAllCollapsed ? 'Expand all lanes' : 'Collapse all lanes')
-	const addLaneLabel = $derived(canAddSettingLane ? 'Add a scene and post lane' : 'Every scene and post control already has a lane')
 	const globalLanes = $derived(getLanesInGroup(GLOBAL_GROUP_ID))
 	const isGlobalCollapsed = $derived(checkIsGroupCollapsed(GLOBAL_GROUP_ID))
 
@@ -187,11 +186,9 @@
 		untrack(() => followPlayhead(time))
 	})
 
-	const getMaxDockHeight = (): number => {
-		const workspace = dock.parentElement
-		if (workspace === null) return timeline.dockHeight
-		return workspace.clientHeight * MAX_DOCK_SHARE
-	}
+	// The dock floats over the workspace, so it can rise nearly to
+	// the top of the window. The stage does not move for it.
+	const getMaxDockHeight = (): number => window.innerHeight - DOCK_TOP_CLEARANCE_PX
 
 	const handleResizeDown = (event: PointerEvent) => {
 		const handle = event.currentTarget as HTMLElement
@@ -644,8 +641,8 @@
 							{/if}
 						</button>
 					</z-tooltip>
-					<z-tooltip content={addLaneLabel} placement="top">
-						<button class="editor-icon" type="button" aria-label={addLaneLabel} disabled={!canAddSettingLane} onclick={handleAddSettingLane}>
+					<z-tooltip content="Add a layer" placement="top">
+						<button class="editor-icon" type="button" aria-label="Add a layer" onclick={(event) => openAddLayerMenu(event.currentTarget)}>
 							<PlusIcon weight="bold" />
 						</button>
 					</z-tooltip>

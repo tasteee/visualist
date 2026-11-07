@@ -294,7 +294,12 @@ export type LayerFxT = {
 export type TextContentT = {
 	text: string
 	weight: TextWeightT
+	// Caps and lower case never both apply.
 	isUppercase: boolean
+	isLowercase: boolean
+	isItalic: boolean
+	isUnderline: boolean
+	isStrike: boolean
 	color: PaletteSlotT
 }
 

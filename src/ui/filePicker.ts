@@ -46,3 +46,18 @@ export const openMidiPicker = (onfile: (file: File) => void): void => {
 	}
 	input.click()
 }
+
+const PICTURE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.png,.jpg,.jpeg,.webp,.gif,.svg'
+
+// Opens the system file chooser for any picture a layer can show.
+export const openPicturePicker = (onfile: (file: File) => void): void => {
+	const input = document.createElement('input')
+	input.type = 'file'
+	input.accept = PICTURE_ACCEPT
+	input.onchange = () => {
+		const file = input.files?.[0]
+		if (file === undefined) return
+		onfile(file)
+	}
+	input.click()
+}
