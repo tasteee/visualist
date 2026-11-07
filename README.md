@@ -43,7 +43,8 @@ src/
     layerRender.ts draws the layer stack, with transforms, blends and FX
     assets.ts      image and SVG files: decoded for drawing, kept in IndexedDB
     modulation.ts  mod sources (bass, kick, beat...) and how they push values
-    post.ts        WebGL finishing pass: bloom, aberration, warp, film
+    post.ts        Lens and Film shaders and amounts (no three.js)
+    postPasses.ts  runs them as three.js passes at the end of the 3D stage
     logoLayers.ts  splits the logo raster into masks, tints and distresses them
     echoes.ts      which echoes exist at time t, and how they look
     render.ts      one frame, back to front
@@ -94,7 +95,8 @@ Frame flow:
 ```
 time -> signals -> settings (lanes, then mods)
      -> background -> each layer: resolve params -> FX -> blend
-     -> WebGL post (only when a post slider is above 0)
+     -> 3D stage, only when depth, the camera, Lens or Film is in use:
+        depth slices -> sheets -> camera -> bloom -> Lens and Film
      -> video fade -> canvas -> recorder
 ```
 
@@ -121,11 +123,13 @@ at reduced size, then scaled up, which keeps them cheap.
 
 ## Post
 
-A WebGL pass over the finished frame: bloom, chromatic aberration,
-warp, scanlines, film noise and vignette. Bloom comes from saturated
-accents in light mode, and from anything bright in dark mode. Post
-sliders can be automated and modulated like any other control. If
-WebGL is unavailable, post turns off and everything else still works.
+Camera, then Lens and Film, all on the 3D stage. Camera is orbit, tilt
+and distance. Lens and Film (bloom, chromatic aberration, warp,
+scanlines, film noise and vignette) run as the last three.js passes,
+over the camera's view of every layer. Bloom comes from saturated
+accents in light mode, and from anything bright in dark mode. Every
+slider can be automated and modulated like any other control. If
+WebGL 2 is unavailable, the stage turns off and frames are drawn flat.
 
 ## The logo
 
