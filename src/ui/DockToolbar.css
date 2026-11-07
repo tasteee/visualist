@@ -1,17 +1,30 @@
 .dock-toolbar {
-	position: fixed;
-	bottom: var(--spacing-5);
-	left: var(--spacing-5);
-	z-index: 10;
+	position: relative;
+	z-index: 1;
 	display: flex;
+	flex: none;
 	flex-direction: column;
 	align-items: center;
 	gap: 2px;
 	width: var(--dock-toolbar-width);
+	height: 100%;
 	padding: var(--spacing-1);
+	overflow-y: auto;
+	border-right: 1px solid var(--border);
+	background: var(--paper);
+	scrollbar-width: none;
+}
+
+/* Folded, the toolbar leaves the pane and floats at the bottom
+   left of the workspace. */
+.app-bottom.isFolded .dock-toolbar {
+	position: absolute;
+	bottom: var(--spacing-5);
+	left: var(--spacing-5);
+	height: auto;
+	overflow: visible;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-xl);
-	background: var(--paper);
 }
 
 .dock-toolbar-button {

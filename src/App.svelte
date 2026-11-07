@@ -11,6 +11,7 @@
 	import Toolbar from './ui/Toolbar.svelte'
 	import MidiImportDialog from './ui/MidiImportDialog.svelte'
 	import Stage from './ui/Stage.svelte'
+	import { timeline } from './timeline.svelte'
 	import { toggleStageFocused, toggleUiHidden, uiState } from './uiState.svelte'
 	import { installFocusGuard } from './ui/focus'
 	import { checkIsTyping } from './ui/keyboard'
@@ -96,23 +97,30 @@
 
 <svelte:window onkeydown={handleKeyDown} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop} />
 
-<main class="app-shell" class:isStageFocused={uiState.isStageFocused} tabindex="-1" bind:this={shell}>
-	<div class="app-canvas">
-		<Stage />
-	</div>
+<main class="app-shell" class:isStageFocused={uiState.isStageFocused} style:--editor-dock-height="{timeline.dockHeight}px" tabindex="-1" bind:this={shell}>
+	<!-- A strict vertical split: the workspace on top, the editor below.
+	     The editor never covers the workspace. Dragging the divider
+	     between them gives one pane the height the other loses, and the
+	     stage fits itself into whatever the top pane has left. -->
+	<div class="app-top">
+		<div class="app-canvas">
+			<Stage />
+		</div>
 
-	{#if !uiState.isUiHidden}
-		<div class="app-ui">
+		{#if !uiState.isUiHidden}
 			<Toolbar />
-			{#if app.hasAudio}
-				<DockToolbar />
-				<EditorDock />
-			{/if}
 			{#if !app.hasAudio}
 				<div class="app-dropzone">
 					<DropZone />
 				</div>
 			{/if}
+		{/if}
+	</div>
+
+	{#if !uiState.isUiHidden && app.hasAudio}
+		<div class="app-bottom" class:isFolded={uiState.isDockFolded}>
+			<DockToolbar />
+			<EditorDock />
 		</div>
 	{/if}
 

@@ -36,13 +36,22 @@ body {
 .app-shell {
 	position: fixed;
 	inset: 0;
+	display: flex;
+	flex-direction: column;
 	overflow: hidden;
 	background: var(--bg);
 }
 
-/* The workspace: a canvas that fills the window, with the stage
-   floating on it. The editor and the toolbar float above it and
-   never take space from it, so nothing they do moves the stage. */
+/* The top pane takes whatever height the editor leaves. */
+.app-top {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	background: var(--bg);
+}
+
+/* The workspace: the stage fits into this pane and can be zoomed
+   and panned inside it. */
 .app-canvas {
 	position: absolute;
 	inset: 0;
@@ -52,24 +61,37 @@ body {
 
 /* Tilde: the stage rises over every panel, big and centered. */
 .app-shell.isStageFocused .app-canvas {
+	position: fixed;
 	z-index: 60;
 	background: color-mix(in oklab, var(--bg) 94%, transparent);
 }
 
-.app-ui {
+/* The bottom pane: the editor's toolbar and the editor, flush
+   against the left, bottom and right edges of the window. */
+.app-bottom {
 	--dock-toolbar-width: calc(var(--spacing-8) + var(--spacing-2) + 2px);
-	position: absolute;
-	inset: 0;
-	z-index: 1;
-	pointer-events: none;
+	position: relative;
+	z-index: 5;
+	display: flex;
+	flex: none;
+	height: var(--editor-dock-height);
+	border-top: 1px solid var(--border);
+	background: var(--paper);
 }
 
-.app-ui > * {
-	pointer-events: auto;
+/* Folded: the editor goes away, its toolbar floats over the
+   workspace, and the top pane takes the whole window. */
+.app-bottom.isFolded {
+	height: 0;
+	border-top: 0;
+}
+
+.app-bottom.isFolded .editor-dock {
+	display: none;
 }
 
 .app-dropzone {
-	position: fixed;
+	position: absolute;
 	right: var(--spacing-5);
 	bottom: var(--spacing-5);
 	left: var(--spacing-5);

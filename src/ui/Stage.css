@@ -20,9 +20,10 @@
 	position: relative;
 	flex: none;
 	aspect-ratio: var(--frame-ratio);
-	/* Sized from the window, never from the editor, so the dock
-	   can grow or shrink without touching the stage. */
-	width: min(58cqw, 52cqh * var(--frame-ratio));
+	/* Fit: the largest the frame can be inside the top pane, with a
+	   little air. When the editor rises, the pane shrinks and the
+	   frame shrinks with it, keeping its shape. */
+	width: min(94cqw, 94cqh * var(--frame-ratio));
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: var(--bg);
@@ -108,13 +109,13 @@
 	left: 0;
 }
 
-.stage-reset {
+.stage-zoom {
 	position: absolute;
-	right: var(--spacing-3);
 	bottom: var(--spacing-3);
+	left: var(--spacing-3);
 	z-index: 4;
 	height: var(--spacing-7);
-	padding: 0 var(--spacing-3);
+	padding: 0 var(--spacing-2);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-md);
 	background: var(--paper);
@@ -129,7 +130,12 @@
 		color var(--motion-fast) ease;
 }
 
-.stage-reset:hover {
+.stage-zoom:hover {
 	background: var(--paper-soft);
 	color: var(--foreground);
+}
+
+.stage-zoom:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
 }

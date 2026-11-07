@@ -7,12 +7,11 @@
 	import { checkIsLayerSelected } from '../layers.svelte'
 	import { clearSelection, pickLayer, readModifiers } from '../selection.svelte'
 	import type { PickModifiersT } from '../selection.svelte'
-	import { checkIsStageReset, getSelectedLayers, moveLayerBy, panStageBy, resetStageView, stageView, zoomStageAt } from '../stage.svelte'
+	import { checkIsStageReset, getSelectedLayers, moveLayerBy, resetStageView, setStageZoom, stageView, zoomStageAt } from '../stage.svelte'
 	import { findLayerAtPoint, readFrame } from '../stageGeometry'
 	import type { FramePointT } from '../stageGeometry'
 	import { uiState } from '../uiState.svelte'
-	import { app, attachCanvas } from '../store.svelte'
-	import { press } from './press'
+	import { app, attachCanvas, getOutputSize } from '../store.svelte'
 	import StageSelection from './StageSelection.svelte'
 	import './Stage.css'
 
@@ -42,6 +41,8 @@
 	let frameElement: HTMLDivElement
 	let drag: StageDragT | null = null
 	let isPanning = $state(false)
+	// The frame's width when fitted, in px. It follows the top pane.
+	let fitWidth = $state(0)
 
 	const analysisPercent = $derived(Math.round(app.analysisProgress * 100))
 	const recordPercent = $derived(Math.round(app.recordProgress * 100))
@@ -50,7 +51,13 @@
 	const isPortrait = $derived(app.settings.aspectRatio === '4:5')
 	const frame = $derived(readFrame(app.settings.aspectRatio))
 	const isViewReset = $derived(checkIsStageReset())
-	const zoomLabel = $derived(`${Math.round(stageView.zoom * 100)}%`)
+	const ZOOM_PERCENTS = [25, 50, 100, 200, 400]
+	const outputWidth = $derived(getOutputSize().width)
+	// 100% is one picture pixel to one screen pixel.
+	const zoomPercent = $derived(fitWidth > 0 ? (stageView.zoom * fitWidth * 100) / outputWidth : 100)
+	const matchingPercent = $derived(ZOOM_PERCENTS.find((percent) => Math.abs(percent - zoomPercent) < 1))
+	const zoomValue = $derived(isViewReset ? 'fit' : matchingPercent === undefined ? 'custom' : String(matchingPercent))
+	const customLabel = $derived(`${Math.round(zoomPercent)}%`)
 	const canEditLayers = $derived(app.isLayersReady && !app.isRecording)
 	const isFocused = $derived(uiState.isStageFocused)
 	const shouldShowHandles = $derived(canEditLayers && !uiState.isUiHidden && !isFocused)
@@ -186,6 +193,25 @@
 	}
 
 	$effect(() => {
+		const observer = new ResizeObserver(() => (fitWidth = frameElement.offsetWidth))
+		observer.observe(frameElement)
+		return () => observer.disconnect()
+	})
+
+	// Fit shows the whole frame. A percent shows the picture at that
+	// share of its real size, from the view's center.
+	const handleZoomChange = (event: Event) => {
+		const select = event.currentTarget as HTMLSelectElement
+		const choice = select.value
+		select.blur()
+		if (choice === 'fit') return resetStageView()
+		const percent = Number(choice)
+		const isNumber = Number.isFinite(percent)
+		if (!isNumber || fitWidth <= 0) return
+		setStageZoom((percent / 100) * (outputWidth / fitWidth))
+	}
+
+	$effect(() => {
 		viewport.addEventListener('wheel', handleWheel, { passive: false })
 		return () => viewport.removeEventListener('wheel', handleWheel)
 	})
@@ -236,7 +262,15 @@
 		{/if}
 	</div>
 
-	{#if !isViewReset && !uiState.isUiHidden && !isFocused}
-		<button class="stage-reset" type="button" aria-label="Reset stage view" title="Reset stage view" {...press(resetStageView)}>{zoomLabel}</button>
+	{#if !isFocused && !uiState.isUiHidden}
+		<select class="stage-zoom" aria-label="Stage zoom" value={zoomValue} onchange={handleZoomChange}>
+			<option value="fit">Fit</option>
+			{#each ZOOM_PERCENTS as percent (percent)}
+				<option value={percent}>{percent}%</option>
+			{/each}
+			{#if zoomValue === 'custom'}
+				<option value="custom" disabled>{customLabel}</option>
+			{/if}
+		</select>
 	{/if}
 </div>
