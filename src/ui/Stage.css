@@ -16,14 +16,24 @@
 }
 
 .stage-frame {
+	--frame-ratio: 16 / 9;
 	position: relative;
 	flex: none;
-	aspect-ratio: 16 / 9;
-	width: min(100cqw, 100cqh * 16 / 9);
+	aspect-ratio: var(--frame-ratio);
+	/* Sized from the window, never from the editor, so the dock
+	   can grow or shrink without touching the stage. */
+	width: min(58cqw, 52cqh * var(--frame-ratio));
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: var(--bg);
 	transform-origin: center;
+}
+
+/* Tilde: 75vw wide, with the height following the shape. Tall
+   frames stop at the window's height. */
+.app-shell.isStageFocused .stage-frame {
+	width: min(75vw, 92vh * var(--frame-ratio));
+	transform: none !important;
 }
 
 /* Clips the picture and its covers to the frame's rounded
@@ -36,18 +46,15 @@
 }
 
 .stage-frame.isVertical {
-	aspect-ratio: 9 / 16;
-	width: min(100cqw, 100cqh * 9 / 16);
+	--frame-ratio: 9 / 16;
 }
 
 .stage-frame.isSquare {
-	aspect-ratio: 1 / 1;
-	width: min(100cqw, 100cqh);
+	--frame-ratio: 1 / 1;
 }
 
 .stage-frame.isPortrait {
-	aspect-ratio: 4 / 5;
-	width: min(100cqw, 100cqh * 4 / 5);
+	--frame-ratio: 4 / 5;
 }
 
 .stage-frame.isRecording {

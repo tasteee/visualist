@@ -5,7 +5,6 @@
 	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
 	import { app, checkIsTempoEdited, detectBpm, nudgeDownbeat, setBpm, setDownbeatAt, setTheme, setTitle } from '../store.svelte'
 	import type { EchoStyleNameT, ModeT } from '../engine/types'
-	import ColorRow from './ColorRow.svelte'
 	import ControlSlider from './ControlSlider.svelte'
 	import Segmented from './Segmented.svelte'
 	import './SettingsPanel.css'
@@ -129,11 +128,6 @@
 	<Segmented label="Theme" options={THEME_OPTIONS} value={app.settings.mode} onchange={(value) => setTheme(value as ModeT)} />
 	<ControlSlider controlKey="logoBorder" label="Logo border" />
 	<ControlSlider controlKey="reactivity" label="Reactivity" />
-
-	<ColorRow label="Accent 1" value={app.settings.accent1} onchange={(value) => (app.settings.accent1 = value)} />
-	<ColorRow label="Accent 2" value={app.settings.accent2} onchange={(value) => (app.settings.accent2 = value)} />
-	<ColorRow label="Background" value={app.settings.background} onchange={(value) => (app.settings.background = value)} />
-	<ColorRow label="Foreground" value={app.settings.foreground} onchange={(value) => (app.settings.foreground = value)} />
 
 	<ControlSlider controlKey="echoAmount" label="Echoes Amount" />
 	<ControlSlider controlKey="echoSize" label="Echoes Size" />

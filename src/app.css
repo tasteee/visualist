@@ -34,42 +34,52 @@ body {
 }
 
 .app-shell {
-	--inspector-width: 23.5rem;
 	position: fixed;
 	inset: 0;
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) var(--inspector-width);
-	grid-template-rows: minmax(0, 1fr);
-	grid-template-areas: 'workspace inspector';
+	overflow: hidden;
 	background: var(--bg);
 }
 
-.app-workspace {
-	grid-area: workspace;
-	display: flex;
-	flex-direction: column;
-	gap: var(--spacing-4);
-	min-width: 0;
-	min-height: 0;
-	padding: var(--spacing-5);
-}
-
-/* The stage takes whatever the editor dock leaves, and keeps
-   the video's shape inside it, so lanes never squeeze it. */
-.app-stage-area {
-	display: flex;
-	flex: 1;
-	align-items: center;
-	justify-content: center;
-	min-height: 0;
+/* The workspace: a canvas that fills the window, with the stage
+   floating on it. The editor and the toolbar float above it and
+   never take space from it, so nothing they do moves the stage. */
+.app-canvas {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
 	container-type: size;
 }
 
-.app-inspector {
-	grid-area: inspector;
-	min-height: 0;
-	border-left: 1px solid var(--border);
-	background: var(--paper);
+/* Tilde: the stage rises over every panel, big and centered. */
+.app-shell.isStageFocused .app-canvas {
+	z-index: 60;
+	background: color-mix(in oklab, var(--bg) 94%, transparent);
+}
+
+.app-ui {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	pointer-events: none;
+}
+
+.app-ui > * {
+	pointer-events: auto;
+}
+
+.app-dropzone {
+	position: fixed;
+	right: var(--spacing-5);
+	bottom: var(--spacing-5);
+	left: var(--spacing-5);
+	z-index: 10;
+	display: flex;
+	justify-content: center;
+	pointer-events: none;
+}
+
+.app-dropzone > * {
+	pointer-events: auto;
 }
 
 .app-drop-overlay {
@@ -97,50 +107,4 @@ body {
 .app-drop-hint {
 	color: var(--muted);
 	font-size: var(--font-size-3);
-}
-
-@media (max-width: 62rem) {
-	.app-shell {
-		position: static;
-		display: flex;
-		flex-direction: column;
-		height: auto;
-		min-height: 100%;
-		overflow: auto;
-	}
-
-	html,
-	body,
-	#root {
-		overflow: auto;
-	}
-
-	.app-stage-area {
-		flex: none;
-		container-type: inline-size;
-	}
-
-	.app-stage-area .stage-frame {
-		width: 100cqw;
-	}
-
-	/* Tall frames cap at most of the screen height, so the
-	   inspector stays in reach below them. */
-	.app-stage-area .stage-frame.isVertical {
-		width: min(100cqw, 75svh * 9 / 16);
-	}
-
-	.app-stage-area .stage-frame.isSquare {
-		width: min(100cqw, 75svh);
-	}
-
-	.app-stage-area .stage-frame.isPortrait {
-		width: min(100cqw, 75svh * 4 / 5);
-	}
-
-	.app-inspector {
-		border-left: 0;
-		border-top: 1px solid var(--border);
-		min-height: 40rem;
-	}
 }

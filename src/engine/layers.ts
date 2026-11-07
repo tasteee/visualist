@@ -133,11 +133,20 @@ export const createLogoLayer = (): LayerT => {
 export const createTextLayer = (text: string): LayerT => {
 	const layer = createBaseLayer('text', 'Text')
 	const transform = { ...layer.transform, y: 30 }
-	const content = { text, weight: 900 as TextWeightT, isUppercase: true, color: 'foreground' as PaletteSlotT }
+	const content = {
+		text,
+		weight: 900 as TextWeightT,
+		isUppercase: true,
+		isLowercase: false,
+		isItalic: false,
+		isUnderline: false,
+		isStrike: false,
+		color: 'foreground' as PaletteSlotT
+	}
 	return { ...layer, transform, text: content }
 }
 
-export const createAssetLayer = (kind: 'image' | 'svg', assetId: string, name: string): LayerT => {
+export const createAssetLayer = (kind: 'image' | 'svg', assetId: string | null, name: string): LayerT => {
 	const layer = createBaseLayer(kind, name)
 	return { ...layer, assetId }
 }

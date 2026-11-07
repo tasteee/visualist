@@ -120,25 +120,40 @@
 	const targetValue = $derived(lane === undefined ? '' : getTargetId(lane.target))
 	const pointCount = $derived(lane === undefined ? 0 : lane.points.length)
 
-	const placeStyle = $derived.by(() => {
-		if (open === null) return ''
-		const left = open.anchor.right + GAP
-		return `--inspector-left: ${left}px; --inspector-top: ${open.anchor.top}px;`
-	})
+	// Opens beside its header, on the right when there is room
+	// and on the left when there is not. It is measured again
+	// whenever its content changes size, so it always stays inside
+	// the window and scrolls if it is taller than the window.
+	const placeInWindow = () => {
+		const element = root
+		const anchor = open === null ? null : open.anchor
+		const isMounted = element instanceof HTMLElement
+		if (!isMounted || anchor === null) return
+		const width = element.offsetWidth
+		const height = element.offsetHeight
+		const roomRight = window.innerWidth - anchor.right - GAP - MARGIN
+		const fitsRight = roomRight >= width
+		const rawLeft = fitsRight ? anchor.right + GAP : anchor.left - GAP - width
+		const left = Math.max(MARGIN, Math.min(rawLeft, window.innerWidth - width - MARGIN))
+		const latestTop = window.innerHeight - height - MARGIN
+		const top = Math.max(MARGIN, Math.min(anchor.top, latestTop))
+		element.style.setProperty('--inspector-left', `${left}px`)
+		element.style.setProperty('--inspector-top', `${top}px`)
+	}
 
-	// Keeps the popover inside the window once it has a size.
 	$effect(() => {
 		void open
 		const element = root
 		const isMounted = element instanceof HTMLElement
 		if (!isMounted) return
-		const bounds = element.getBoundingClientRect()
-		const overflowBottom = bounds.bottom - (window.innerHeight - MARGIN)
-		const overflowRight = bounds.right - (window.innerWidth - MARGIN)
-		const shiftY = Math.max(0, overflowBottom)
-		const shiftX = Math.max(0, overflowRight)
-		element.style.setProperty('--inspector-shift-y', `${-shiftY}px`)
-		element.style.setProperty('--inspector-shift-x', `${-shiftX}px`)
+		placeInWindow()
+		const observer = new ResizeObserver(placeInWindow)
+		observer.observe(element)
+		window.addEventListener('resize', placeInWindow)
+		return () => {
+			observer.disconnect()
+			window.removeEventListener('resize', placeInWindow)
+		}
 	})
 
 	$effect(() => {
@@ -226,7 +241,6 @@
 		bind:this={root}
 		role="dialog"
 		aria-label="{eyebrow} settings"
-		style={placeStyle}
 		data-tone={currentColor}
 	>
 		<header class="row-inspector-header">

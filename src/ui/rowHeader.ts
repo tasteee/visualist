@@ -8,6 +8,8 @@ import type { RowRefT } from '../rowLayout.svelte'
 export type RowHeaderOptionsT = {
 	row: RowRefT
 	getSiblings: () => RowRefT[]
+	// Layers keep one height. Lanes can be resized.
+	canResize?: boolean
 	onselect?: (event: PointerEvent) => void
 	onreorder?: (event: PointerEvent) => void
 	oninspect: (anchor: HTMLElement) => void
@@ -49,6 +51,8 @@ export const rowHeader = (node: HTMLElement, initialOptions: RowHeaderOptionsT) 
 		if (!isPinch) return
 		event.preventDefault()
 		event.stopPropagation()
+		const canResize = options.canResize !== false
+		if (!canResize) return
 		const deltaHeight = -event.deltaY * PINCH_HEIGHT_PER_WHEEL
 		const siblings = checkIsPrimaryModifierHeld() ? options.getSiblings() : []
 		nudgeRowHeight(options.row, deltaHeight, siblings)

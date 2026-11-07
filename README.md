@@ -56,6 +56,9 @@ browsers keep those cached.
   Two bars sit on the ruler: export on top, loop under it. Click the
   loop bar to switch it. Double-click the ruler and drag on the second
   press to draw a loop (hold Alt to draw the export range).
+- **Tilde (`~`)** shows the stage over everything at 75vw. **Backslash
+  (`\`)** hides every panel. The editor dock floats over the
+  workspace, so resizing it never moves the stage.
 - **Right-click a row header**, or press its gear, for that row's
   inspector: name, color and its controls.
 - **Pinch a header** to change the row's height. Drag a row border past

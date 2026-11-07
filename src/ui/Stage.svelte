@@ -10,6 +10,7 @@
 	import { checkIsStageReset, getSelectedLayers, moveLayerBy, panStageBy, resetStageView, stageView, zoomStageAt } from '../stage.svelte'
 	import { findLayerAtPoint, readFrame } from '../stageGeometry'
 	import type { FramePointT } from '../stageGeometry'
+	import { uiState } from '../uiState.svelte'
 	import { app, attachCanvas } from '../store.svelte'
 	import { press } from './press'
 	import StageSelection from './StageSelection.svelte'
@@ -51,6 +52,8 @@
 	const isViewReset = $derived(checkIsStageReset())
 	const zoomLabel = $derived(`${Math.round(stageView.zoom * 100)}%`)
 	const canEditLayers = $derived(app.isLayersReady && !app.isRecording)
+	const isFocused = $derived(uiState.isStageFocused)
+	const shouldShowHandles = $derived(canEditLayers && !uiState.isUiHidden && !isFocused)
 
 	const frameStyle = $derived(`--stage-zoom: ${stageView.zoom}; transform: translate(${stageView.panX}px, ${stageView.panY}px) scale(${stageView.zoom});`)
 
@@ -87,7 +90,7 @@
 
 	const handlePointerDown = (event: PointerEvent) => {
 		const isPanButton = event.button === 0 || event.button === 1
-		if (!isPanButton || checkIsControl(event.target)) return
+		if (!isPanButton || checkIsControl(event.target) || isFocused) return
 		const modifiers = readModifiers(event)
 		const isPicking = modifiers.isRange || modifiers.isToggle
 		const layer = canEditLayers ? findLayerUnderPointer(event) : null
@@ -172,6 +175,7 @@
 	// Wheel and pinch both zoom, anchored on the cursor.
 	const handleWheel = (event: WheelEvent) => {
 		event.preventDefault()
+		if (isFocused) return
 		const bounds = viewport.getBoundingClientRect()
 		const anchorX = event.clientX - (bounds.left + bounds.width / 2)
 		const anchorY = event.clientY - (bounds.top + bounds.height / 2)
@@ -227,12 +231,12 @@
 			{/if}
 		</div>
 
-		{#if canEditLayers}
+		{#if shouldShowHandles}
 			<StageSelection {frame} {getFrameRect} />
 		{/if}
 	</div>
 
-	{#if !isViewReset}
+	{#if !isViewReset && !uiState.isUiHidden && !isFocused}
 		<button class="stage-reset" type="button" aria-label="Reset stage view" title="Reset stage view" {...press(resetStageView)}>{zoomLabel}</button>
 	{/if}
 </div>
