@@ -133,20 +133,17 @@ export const cutSelectedLayers = (): boolean => {
 	return true
 }
 
-// Slicing cuts every selected layer under the playhead into two. For
-// audio and video the second piece plays on from the cut, so each
+// Slicing cuts the one clip you clicked, at the playhead, into two.
+// For audio and video the second piece plays on from the cut, so each
 // piece keeps its own part of the file. Text, images and shapes just
 // show for a shorter span each.
 export const sliceSelectedLayers = (time: number): boolean => {
-	const selected = getSelectedLayers()
-	const sliceable = selected.filter((layer) => checkCanSlice(layer, time))
-	const hasLayers = sliceable.length > 0
-	if (!hasLayers) return false
+	const clicked = layerStore.layers.find((layer) => layer.id === layerStore.selectedLayerId)
+	const isSliceable = clicked !== undefined && clicked.id !== LOGO_LAYER_ID && checkCanSlice(clicked, time)
+	if (!isSliceable) return false
 	recordHistory()
-	const rights: LayerT[] = []
-	for (const layer of sliceable) rights.push(sliceLayer(layer, time))
-	const ids = rights.map((right) => right.id)
-	selectLayers(ids, ids[ids.length - 1] ?? null)
+	const right = sliceLayer(clicked, time)
+	selectLayers([right.id], right.id)
 	return true
 }
 
