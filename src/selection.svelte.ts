@@ -8,6 +8,7 @@ import {
 	togglePointSelected
 } from './automation.svelte'
 import { layerStore, removeLayers, selectLayers } from './layers.svelte'
+import { removeSong } from './store.svelte'
 import {
 	addImpulsesToSelection,
 	clearImpulseSelection,
@@ -30,9 +31,11 @@ export type PickModifiersT = {
 type SelectionStateT = {
 	laneIds: string[]
 	anchorLaneId: string | null
+	// The song's own row. Deleting it removes the song.
+	isSongSelected: boolean
 }
 
-export const selection = $state<SelectionStateT>({ laneIds: [], anchorLaneId: null })
+export const selection = $state<SelectionStateT>({ laneIds: [], anchorLaneId: null, isSongSelected: false })
 
 let layerAnchorId: string | null = null
 let impulseAnchorId: string | null = null
@@ -57,7 +60,7 @@ const resetImpulseSelection = (): void => {
 	impulseAnchorId = null
 }
 
-type SelectionKindT = 'none' | 'layer' | 'lane' | 'point' | 'impulse'
+type SelectionKindT = 'none' | 'layer' | 'lane' | 'point' | 'impulse' | 'song'
 
 // Starting a selection of one kind drops the other kinds.
 const clearOtherKinds = (keep: SelectionKindT): void => {
@@ -65,6 +68,7 @@ const clearOtherKinds = (keep: SelectionKindT): void => {
 	if (keep !== 'lane') clearLaneSelection()
 	if (keep !== 'point') clearPointSelection()
 	if (keep !== 'impulse') resetImpulseSelection()
+	if (keep !== 'song') selection.isSongSelected = false
 }
 
 export const clearSelection = (): void => {
@@ -76,7 +80,7 @@ export const checkHasSelection = (): boolean => {
 	const hasLanes = selection.laneIds.length > 0
 	const hasPoints = automation.selectedPointIds.length > 0
 	const hasImpulses = sources.impulseSelection.impulseIds.length > 0
-	return hasLayers || hasLanes || hasPoints || hasImpulses
+	return hasLayers || hasLanes || hasPoints || hasImpulses || selection.isSongSelected
 }
 
 const pickFromList = (currentIds: string[], anchorId: string | null, targetId: string, orderedIds: string[], modifiers: PickModifiersT): string[] => {
@@ -93,6 +97,13 @@ const pickFromList = (currentIds: string[], anchorId: string | null, targetId: s
 		return orderedIds.slice(first, last + 1)
 	}
 	return [targetId]
+}
+
+// ---- Song ---------------------------------------------------
+
+export const selectSong = (): void => {
+	clearOtherKinds('song')
+	selection.isSongSelected = true
 }
 
 // ---- Layers -------------------------------------------------
@@ -202,6 +213,11 @@ export const deleteSelection = (): boolean => {
 	if (hasLayers) {
 		removeLayers(layerStore.selectedLayerIds)
 		clearLayerSelection()
+		return true
+	}
+	if (selection.isSongSelected) {
+		selection.isSongSelected = false
+		void removeSong()
 		return true
 	}
 	return false

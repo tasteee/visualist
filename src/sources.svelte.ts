@@ -1,7 +1,7 @@
 import { recordHistory, recordHistoryCoalesced } from './automation.svelte'
 import { BAND_PRESETS, buildBand, clampBandRange } from './engine/bands'
 import type { BandRangeT } from './engine/bands'
-import { DEFAULT_IMPULSE_STRENGTH, buildImpulseTrack, convertDetectedImpulses, createImpulse, insertImpulse, replaceImpulsesInRange } from './engine/impulses'
+import { DEFAULT_IMPULSE_STRENGTH, MIN_IMPULSE_GAP, buildImpulseTrack, convertDetectedImpulses, createImpulse, insertImpulse, replaceImpulsesInRange } from './engine/impulses'
 import type { TempoT, TimeRangeT } from './engine/impulses'
 import { placeMidiNote } from './engine/midi'
 import type { MidiGroupT, MidiPlacementT } from './engine/midi'
@@ -405,6 +405,38 @@ export const deleteImpulses = (trackId: string, impulseIds: string[]): void => {
 	track.impulses = track.impulses.filter((impulse) => !doomedIds.has(impulse.id))
 	const remainingSelection = sources.impulseSelection.impulseIds.filter((impulseId) => !doomedIds.has(impulseId))
 	sources.impulseSelection.impulseIds = remainingSelection
+}
+
+// Merges notes into a track, one undo step. Notes closer together than
+// the smallest gap collapse into one impulse at the strongest strength.
+// Returns how many impulses the track now has from this import.
+export type PlacedImpulseT = {
+	time: number
+	length: number
+	strength: number
+}
+
+export const addImpulsesToTrack = (trackId: string, notes: PlacedImpulseT[]): number => {
+	const track = findTrack(trackId)
+	const hasNotes = notes.length > 0
+	if (track === undefined || !hasNotes) return 0
+	recordHistory()
+	const sorted = [...notes].sort((first, second) => first.time - second.time)
+	const condensed: PlacedImpulseT[] = []
+	for (const note of sorted) {
+		const previous = condensed[condensed.length - 1]
+		const isTogether = previous !== undefined && note.time - previous.time < MIN_IMPULSE_GAP
+		if (!isTogether) {
+			condensed.push({ ...note })
+			continue
+		}
+		previous.strength = Math.max(previous.strength, note.strength)
+		previous.length = Math.max(previous.length, note.length)
+	}
+	let merged = track.impulses
+	for (const note of condensed) merged = insertImpulse(merged, createImpulse(note.time, note.strength, note.length))
+	track.impulses = merged
+	return condensed.length
 }
 
 export const deleteImpulse = (trackId: string, impulseId: string): void => deleteImpulses(trackId, [impulseId])

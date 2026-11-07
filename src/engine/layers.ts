@@ -165,7 +165,8 @@ export const createFx = (kind: FxKindT): LayerFxT => {
 	return { id: crypto.randomUUID(), kind, amount: spec.defaultAmount, modulation: null }
 }
 
-export const createDefaultLayers = (): LayerT[] => [createLogoLayer()]
+// A new project has no layers at all.
+export const createDefaultLayers = (): LayerT[] => []
 
 // A layer fades in and out over this long at its time edges.
 const EDGE_FADE_SECONDS = 0.25

@@ -2,8 +2,7 @@ import { toaster } from '@tasteee/zest'
 import { groupMidiNotes, parseMidi, placeMidiNote } from './engine/midi'
 import type { MidiFileT, MidiGroupT, MidiGroupingT, MidiPlacementT, MidiTimingT } from './engine/midi'
 import type { ImpulseRoleT } from './engine/types'
-import { showInspectorTab } from './inspector.svelte'
-import { addTracksFromMidi } from './sources.svelte'
+import { addImpulsesToTrack, addTracksFromMidi } from './sources.svelte'
 import { app, getAnalysis, setStatus } from './store.svelte'
 
 // One row per note group in the import dialog. The user can
@@ -151,5 +150,32 @@ export const confirmMidiImport = (): void => {
 	if (!hasImported) return
 	const trackLabel = importedCount === 1 ? '1 impulse track' : `${importedCount} impulse tracks`
 	setStatus(`Imported ${trackLabel} from ${midiImport.fileName}`, 'success')
-	showInspectorTab('sources')
+}
+
+// Reads every note in a MIDI file into one impulse layer. Notes that
+// sound together become one impulse, as strong as the loudest of them.
+export const importMidiIntoTrack = async (trackId: string, file: File): Promise<void> => {
+	try {
+		const bytes = await file.arrayBuffer()
+		const parsed = parseMidi(bytes)
+		const hasNotes = parsed.notes.length > 0
+		if (!hasNotes) throw new Error('No notes')
+		const analysis = getAnalysis()
+		const placement: MidiPlacementT = {
+			timing: parsed.hasTempoMap ? 'file' : 'song',
+			offsetSeconds: 0,
+			bpm: analysis.bpm,
+			beatOffset: analysis.beatOffset
+		}
+		const placed = parsed.notes.map((note) => placeMidiNote(note, placement))
+		const inProject = placed.filter((note) => note.time >= 0 && note.time <= app.duration)
+		const addedCount = addImpulsesToTrack(trackId, inProject)
+		const message = `Added ${addedCount} impulses from ${file.name}`
+		setStatus(message, 'success')
+		toaster.show({ title: 'MIDI imported', description: message, tone: 'success' })
+	} catch {
+		const message = 'That MIDI file could not be read, or it has no notes.'
+		setStatus(message, 'danger')
+		toaster.show({ title: 'Could not import MIDI', description: message, tone: 'danger' })
+	}
 }

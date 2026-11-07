@@ -3,6 +3,7 @@ import { untrack } from 'svelte'
 import { analyzeAudio, computeBeatOffset } from './engine/analysis'
 import {
 	createRecordingTap,
+	getAudioContext,
 	decodeAudioFile,
 	getPlaybackTime,
 	pausePlayback,
@@ -49,8 +50,10 @@ export type StatusToneT = 'neutral' | 'success' | 'warning' | 'danger'
 
 type AppStateT = {
 	settings: SettingsT
-	title: string
-	isTitleEdited: boolean
+	// What the project is called. Used for saving and for the file name
+	// of an export. It never appears in the picture.
+	projectName: string
+	isProjectNameEdited: boolean
 	// The tempo everything follows. Starts as detected, and the
 	// user can correct both.
 	bpm: number
@@ -58,10 +61,11 @@ type AppStateT = {
 	// Set when the user picks the downbeat by hand, so a later
 	// tempo change keeps that bar line where they put it.
 	downbeatAnchor: number | null
-	musicalKey: string
-	musicalScale: string
 	fileName: string
+	// hasAudio: there is a timeline to play. hasSong: that timeline is a
+	// real piece of audio. A new project has a silent timeline.
 	hasAudio: boolean
+	hasSong: boolean
 	duration: number
 	trimStart: number
 	trimEnd: number
@@ -90,6 +94,8 @@ type AppStateT = {
 	recorderLabel: string
 }
 
+const DEFAULT_PROJECT_SECONDS = 60
+const SILENT_SAMPLE_RATE = 22050
 const PALETTE_DELAY = 120
 // The live preview draws smaller than the export, so heavy
 // effects stay smooth. Recording always uses the export size.
@@ -98,15 +104,14 @@ const DEMO_STATUS = 'Previewing the built-in demo beat. Drop a song to begin.'
 
 export const app = $state<AppStateT>({
 	settings: loadSettings(),
-	title: '',
-	isTitleEdited: false,
+	projectName: 'Untitled project',
+	isProjectNameEdited: false,
 	bpm: 120,
 	beatOffset: 0,
 	downbeatAnchor: null,
-	musicalKey: '',
-	musicalScale: '',
 	fileName: '',
 	hasAudio: false,
+	hasSong: false,
 	duration: 0,
 	trimStart: 0,
 	trimEnd: 0,
@@ -219,7 +224,6 @@ const buildFrameInput = (time: number): FrameInputT => {
 		palette: appliedPalette,
 		bpm: analysis.bpm,
 		beatOffset: analysis.beatOffset,
-		title: app.title,
 		isIntroActive: app.isPlaying || app.isRecording,
 		layers: applyLayerAutomation(getVisualLayers(), app.settings, automation.lanes, time),
 		signals
@@ -275,6 +279,12 @@ const titleFromFileName = (fileName: string): string => {
 }
 
 const getBaseName = (fileName: string): string => fileName.replace(/\.[^.]+$/, '')
+
+const getExportBaseName = (): string => {
+	const name = app.projectName.trim()
+	const isNamed = name.length > 0
+	return isNamed ? name : 'project'
+}
 
 const downloadBlob = (blob: Blob, fileName: string): void => {
 	const url = URL.createObjectURL(blob)
@@ -336,7 +346,7 @@ const finishRecording = async (): Promise<void> => {
 	pausePlayback()
 	const blob = await recording.finish()
 	const extension = format === null ? 'webm' : format.extension
-	const fileName = `${getBaseName(app.fileName)}-visualizer.${extension}`
+	const fileName = `${getExportBaseName()}-visualizer.${extension}`
 	downloadBlob(blob, fileName)
 
 	app.isRecording = false
@@ -597,6 +607,31 @@ export const seekTo = (seconds: number): void => {
 
 export const goToBeginning = (): void => seekTo(0)
 
+// A project with no song plays a silent timeline, so layers, lanes and
+// impulses can be made before any audio is chosen.
+const useSilentBase = (): void => {
+	pausePlayback()
+	setActiveLoop(null)
+	const sampleCount = Math.round(SILENT_SAMPLE_RATE * DEFAULT_PROJECT_SECONDS)
+	audioBuffer = getAudioContext().createBuffer(1, sampleCount, SILENT_SAMPLE_RATE)
+	detectedAnalysis = buildDemoAnalysis()
+	app.hasAudio = true
+	app.hasSong = false
+	app.isPlaying = false
+	app.duration = DEFAULT_PROJECT_SECONDS
+	app.trimStart = 0
+	app.trimEnd = DEFAULT_PROJECT_SECONDS
+	app.currentTime = 0
+	app.playMarker = 0
+	app.fileName = ''
+	app.isLoopEnabled = false
+	app.pendingBpm = null
+	setPausedPosition(0)
+	resetLoopRegion()
+	setStatus(DEMO_STATUS)
+	markDirty()
+}
+
 export const startRecording = async (): Promise<void> => {
 	const canvas = canvasElement
 	const buffer = audioBuffer
@@ -696,6 +731,7 @@ export const loadAudioFile = async (file: File, options: LoadOptionsT = { isRest
 		audioBuffer = decoded
 		app.isPlaying = false
 		app.hasAudio = true
+		app.hasSong = true
 		app.duration = decoded.duration
 		app.trimStart = 0
 		app.trimEnd = decoded.duration
@@ -703,7 +739,6 @@ export const loadAudioFile = async (file: File, options: LoadOptionsT = { isRest
 		setActiveLoop(null)
 		clampLanesToDuration(decoded.duration)
 		app.fileName = file.name
-		switchSong(buildSongKey(file.name, decoded.duration))
 		app.kickCount = result.kicks.length
 		app.currentTime = 0
 		app.playMarker = 0
@@ -711,7 +746,7 @@ export const loadAudioFile = async (file: File, options: LoadOptionsT = { isRest
 		if (options.isRestore) applyAnalysis(result)
 		if (!options.isRestore) keepTempoForNewSong(result)
 		resetLoopRegion()
-		if (!app.isTitleEdited) app.title = titleFromFileName(file.name)
+		if (!app.isProjectNameEdited) app.projectName = titleFromFileName(file.name)
 		markDirty()
 
 		const length = formatTime(decoded.duration)
@@ -728,9 +763,9 @@ export const loadAudioFile = async (file: File, options: LoadOptionsT = { isRest
 	}
 }
 
-export const setTitle = (text: string): void => {
-	app.title = text.slice(0, 80)
-	app.isTitleEdited = true
+export const setProjectName = (text: string): void => {
+	app.projectName = text.slice(0, 80)
+	app.isProjectNameEdited = true
 }
 
 const BEATS_PER_BAR = 4
@@ -811,7 +846,7 @@ const startWatchers = (): void => {
 			JSON.stringify(automation.lanes)
 			JSON.stringify(layerStore.layers)
 			void layerStore.assetVersion
-			void app.title
+			void app.projectName
 			void app.bpm
 			void app.beatOffset
 			void getCompiledSources()
@@ -850,6 +885,7 @@ export const startApp = async (): Promise<void> => {
 	startAutomationWatchers()
 	startSourceWatchers()
 	startAppearanceWatchers()
+	useSilentBase()
 	const format = pickRecorderFormat()
 	app.recorderLabel = format === null ? 'No video recording' : format.label
 
@@ -879,7 +915,7 @@ const getLayerName = (fileName: string): string => titleFromFileName(fileName).s
 // layer of its own, mixed in.
 export const addAudioFile = async (file: File): Promise<void> => {
 	if (app.isRecording || app.isAnalyzing) return
-	if (!app.hasAudio) {
+	if (!app.hasSong) {
 		await loadAudioFile(file)
 		return
 	}
@@ -930,7 +966,7 @@ export const detectLayerBpm = async (layerId: string, onProgress: (fraction: num
 // Removes the song. Another audio layer, if there is one, becomes
 // the song. Otherwise the project goes back to waiting for audio.
 export const removeSong = async (): Promise<void> => {
-	if (app.isRecording || !app.hasAudio) return
+	if (app.isRecording || !app.hasSong) return
 	recordHistory()
 	const nextLayer = layerStore.layers.find((layer) => layer.kind === 'audio' && layer.assetId !== null)
 	const nextFile = nextLayer === undefined || nextLayer.assetId === null ? null : await readLayerFile(nextLayer.assetId, nextLayer.name)
@@ -942,20 +978,6 @@ export const removeSong = async (): Promise<void> => {
 		await loadAudioFile(nextFile)
 		return
 	}
-	audioBuffer = null
-	detectedAnalysis = buildDemoAnalysis()
-	app.hasAudio = false
-	app.duration = 0
-	app.trimStart = 0
-	app.trimEnd = 0
-	app.currentTime = 0
-	app.playMarker = 0
-	app.fileName = ''
-	app.isLoopEnabled = false
-	app.pendingBpm = null
-	setPausedPosition(0)
-	switchSong('demo')
+	useSilentBase()
 	clearSavedProject()
-	setStatus(DEMO_STATUS)
-	markDirty()
 }

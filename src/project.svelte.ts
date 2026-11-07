@@ -17,10 +17,9 @@ import { timeline } from './timeline.svelte'
 type SavedProjectT = {
 	songKey: string
 	fileName: string
-	title: string
-	isTitleEdited: boolean
-	musicalKey: string
-	musicalScale: string
+	title?: string
+	projectName?: string
+	isProjectNameEdited?: boolean
 	bpm: number
 	beatOffset: number
 	downbeatAnchor: number | null
@@ -45,12 +44,10 @@ type SavedProjectT = {
 const STORAGE_KEY = 'vink.project.v1'
 
 const buildSnapshot = (): SavedProjectT => ({
-	songKey: sources.songKey,
+	songKey: buildSongKey(app.fileName, app.duration),
 	fileName: app.fileName,
-	title: app.title,
-	isTitleEdited: app.isTitleEdited,
-	musicalKey: app.musicalKey,
-	musicalScale: app.musicalScale,
+	projectName: app.projectName,
+	isProjectNameEdited: app.isProjectNameEdited,
 	bpm: app.bpm,
 	beatOffset: app.beatOffset,
 	downbeatAnchor: app.downbeatAnchor,
@@ -108,10 +105,8 @@ const pickGridDivision = (value: unknown): GridDivisionT => {
 }
 
 const applySongState = (project: SavedProjectT): void => {
-	app.title = project.title
-	app.isTitleEdited = project.isTitleEdited
-	app.musicalKey = project.musicalKey
-	app.musicalScale = project.musicalScale
+	app.projectName = project.projectName ?? app.projectName
+	app.isProjectNameEdited = project.isProjectNameEdited === true
 	app.bpm = project.bpm
 	app.beatOffset = project.beatOffset
 	app.downbeatAnchor = project.downbeatAnchor
@@ -166,7 +161,7 @@ export const startProjectWatchers = (): void => {
 	$effect.root(() => {
 		$effect(() => {
 			const snapshot = buildSnapshot()
-			if (!app.hasAudio || app.isAnalyzing) return
+			if (!app.hasSong || app.isAnalyzing) return
 			writeSavedProject(snapshot)
 		})
 	})

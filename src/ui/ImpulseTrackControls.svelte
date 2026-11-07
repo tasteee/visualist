@@ -2,7 +2,9 @@
 	import { IMPULSE_ROLE_OPTIONS } from '../engine/impulses'
 	import { MAX_TRACK_DECAY, MIN_TRACK_DECAY } from '../engine/sources'
 	import type { ImpulseRoleT, ImpulseShapeT, ImpulseTrackT } from '../engine/types'
-	import { recordHistory } from '../automation.svelte'
+	import FileArrowUpIcon from 'phosphor-svelte/lib/FileArrowUpIcon'
+	import { importMidiIntoTrack } from '../midiImport.svelte'
+	import { openMidiPicker } from './filePicker'
 	import { setTrackDecay, setTrackRole, setTrackShape } from '../sources.svelte'
 	import Segmented from './Segmented.svelte'
 	import SettingSlider from './SettingSlider.svelte'
@@ -30,6 +32,8 @@
 
 	const handleShapeChange = (value: string) => setTrackShape(props.track.id, value as ImpulseShapeT)
 
+	const handleImportMidi = () => openMidiPicker((file) => void importMidiIntoTrack(props.track.id, file))
+
 	const handleDecayChange = (value: number) => setTrackDecay(props.track.id, value)
 </script>
 
@@ -38,3 +42,9 @@
 </z-field>
 <Segmented label="Shape" options={SHAPE_OPTIONS} value={props.track.shape} onchange={handleShapeChange} />
 <SettingSlider label="Fade" hint={shapeHint} value={props.track.decay} min={MIN_TRACK_DECAY} max={MAX_TRACK_DECAY} step={0.01} suffix=" s" onchange={handleDecayChange} />
+
+<z-button size="sm" kind="outline" tone="neutral" isFullWidth onclick={handleImportMidi}>
+	<FileArrowUpIcon weight="bold" />
+	Upload a MIDI file
+</z-button>
+<p class="impulse-controls-note">Every note becomes an impulse, as strong as its velocity. Notes that sound together become one.</p>

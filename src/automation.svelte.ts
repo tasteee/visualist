@@ -1,6 +1,5 @@
 import { clamp } from './engine/settings'
 import {
-	GLOBAL_GROUP_ID,
 	MIN_POINT_GAP,
 	checkIsSameTarget,
 	checkIsTargetLive,
@@ -271,7 +270,7 @@ const findUnusedTarget = (targets: LaneTargetT[]): LaneTargetT | null => {
 	return unused ?? null
 }
 
-export const checkCanAddSettingLane = (): boolean => findUnusedTarget(listSettingTargets()) !== null
+export const checkCanAddSettingLane = (groupId: string): boolean => findUnusedTarget(listSettingTargets(groupId)) !== null
 
 export const checkCanAddLayerLane = (layerId: string): boolean => {
 	const layer = findLayer(layerId)
@@ -307,10 +306,10 @@ const pushLane = (target: LaneTargetT): string => {
 
 // New lanes start unmapped. The user picks the control from
 // the lane's own menu.
-export const addSettingLane = (): string | null => {
-	const canAdd = checkCanAddSettingLane()
+export const addSettingLane = (groupId: string): string | null => {
+	const canAdd = checkCanAddSettingLane(groupId)
 	if (!canAdd) return null
-	return pushLane({ kind: 'unset', groupId: GLOBAL_GROUP_ID })
+	return pushLane({ kind: 'unset', groupId })
 }
 
 export const addLayerLane = (layerId: string): string | null => {

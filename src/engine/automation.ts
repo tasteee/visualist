@@ -21,24 +21,23 @@ export const MIN_POINT_GAP = 0.02
 const BOW_AMOUNT = 0.5
 const BENT_SAMPLES = 32
 
+// The scene and post layers own these. Controls that were made for one
+// particular built-in picture are gone: this tool does not assume any
+// layer is present.
+export const SCENE_GROUP_ID = 'scene'
+export const POST_GROUP_ID = 'post'
+
 export const AUTOMATION_CONTROLS: AutomationControlT[] = [
-	{ key: 'logoBorder', label: 'Logo border', min: 0, max: 1, step: 0.05 },
-	{ key: 'reactivity', label: 'Reactivity', min: 0, max: 2, step: 0.05 },
-	{ key: 'echoAmount', label: 'Echoes amount', min: 0, max: 2, step: 0.05 },
-	{ key: 'echoSize', label: 'Echoes size', min: 0, max: 2, step: 0.05 },
-	{ key: 'echoSpeed', label: 'Echoes speed', min: 0.4, max: 3, step: 0.05 },
-	{ key: 'glitchAmount', label: 'Glitch amount', min: 0, max: 2, step: 0.05 },
-	{ key: 'textureAmount', label: 'Texture amount', min: 0, max: 2, step: 0.05 },
-	{ key: 'solidAmount', label: 'Solids amount', min: 0, max: 2, step: 0.05 },
-	{ key: 'bloomAmount', label: 'Bloom', min: 0, max: 2, step: 0.05 },
-	{ key: 'aberrationAmount', label: 'Chromatic aberration', min: 0, max: 2, step: 0.05 },
-	{ key: 'warpAmount', label: 'Warp', min: 0, max: 2, step: 0.05 },
-	{ key: 'scanlineAmount', label: 'Scanlines', min: 0, max: 1, step: 0.05 },
-	{ key: 'noiseAmount', label: 'Film noise', min: 0, max: 1, step: 0.05 },
-	{ key: 'vignetteAmount', label: 'Vignette', min: 0, max: 1, step: 0.05 },
-	{ key: 'cameraOrbit', label: 'Camera orbit', min: -60, max: 60, step: 1 },
-	{ key: 'cameraTilt', label: 'Camera tilt', min: -45, max: 45, step: 1 },
-	{ key: 'cameraDistance', label: 'Camera distance', min: 0.5, max: 2, step: 0.01 }
+	{ key: 'reactivity', label: 'Reactivity', min: 0, max: 2, step: 0.05, group: SCENE_GROUP_ID },
+	{ key: 'cameraOrbit', label: 'Camera orbit', min: -60, max: 60, step: 1, group: SCENE_GROUP_ID },
+	{ key: 'cameraTilt', label: 'Camera tilt', min: -45, max: 45, step: 1, group: SCENE_GROUP_ID },
+	{ key: 'cameraDistance', label: 'Camera distance', min: 0.5, max: 2, step: 0.01, group: SCENE_GROUP_ID },
+	{ key: 'bloomAmount', label: 'Bloom', min: 0, max: 2, step: 0.05, group: POST_GROUP_ID },
+	{ key: 'aberrationAmount', label: 'Chromatic aberration', min: 0, max: 2, step: 0.05, group: POST_GROUP_ID },
+	{ key: 'warpAmount', label: 'Warp', min: 0, max: 2, step: 0.05, group: POST_GROUP_ID },
+	{ key: 'scanlineAmount', label: 'Scanlines', min: 0, max: 1, step: 0.05, group: POST_GROUP_ID },
+	{ key: 'noiseAmount', label: 'Film noise', min: 0, max: 1, step: 0.05, group: POST_GROUP_ID },
+	{ key: 'vignetteAmount', label: 'Vignette', min: 0, max: 1, step: 0.05, group: POST_GROUP_ID }
 ]
 
 export const findControl = (key: AutomatableKeyT | null): AutomationControlT | null => {
@@ -97,11 +96,14 @@ export const evaluatePoints = (points: AutomationPointT[], time: number, fallbac
 
 // Lanes group in the timeline: global settings together, and
 // each layer's lanes under that layer.
-export const GLOBAL_GROUP_ID = 'global'
+// Older projects called the settings group global. It is the scene now.
+const LEGACY_GLOBAL_GROUP_ID = 'global'
+
+export const checkIsSettingGroup = (groupId: string): boolean => groupId === SCENE_GROUP_ID || groupId === POST_GROUP_ID
 
 export const getTargetGroupId = (target: LaneTargetT): string => {
-	if (target.kind === 'unset') return target.groupId
-	if (target.kind === 'setting') return GLOBAL_GROUP_ID
+	if (target.kind === 'unset') return target.groupId === LEGACY_GLOBAL_GROUP_ID ? SCENE_GROUP_ID : target.groupId
+	if (target.kind === 'setting') return findControl(target.key)?.group ?? SCENE_GROUP_ID
 	return target.layerId
 }
 
@@ -168,8 +170,8 @@ export const getTargetBase = (target: LaneTargetT, settings: SettingsT, layers: 
 
 // An unset lane lives as long as its group does.
 const checkIsGroupLive = (groupId: string, layers: LayerT[]): boolean => {
-	const isGlobal = groupId === GLOBAL_GROUP_ID
-	if (isGlobal) return true
+	const isSettingGroup = checkIsSettingGroup(groupId) || groupId === LEGACY_GLOBAL_GROUP_ID
+	if (isSettingGroup) return true
 	return findLayer(layers, groupId) !== undefined
 }
 
@@ -261,8 +263,9 @@ export const listLayerTargets = (layer: LayerT): LaneTargetT[] => {
 	return [...paramTargets, ...fxTargets]
 }
 
-export const listSettingTargets = (): LaneTargetT[] => {
-	return AUTOMATION_CONTROLS.map((control) => ({ kind: 'setting', key: control.key }))
+export const listSettingTargets = (groupId: string): LaneTargetT[] => {
+	const controls = AUTOMATION_CONTROLS.filter((control) => control.group === groupId)
+	return controls.map((control) => ({ kind: 'setting', key: control.key }))
 }
 
 // Path space: x runs 0-1000 across the visible view, so the

@@ -41,12 +41,6 @@ const normalizeLayer = (stored: Partial<LayerT>): LayerT | null => {
 	return normalized
 }
 
-const ensureLogoLayer = (layers: LayerT[]): LayerT[] => {
-	const hasLogo = layers.some((layer) => layer.kind === 'logo')
-	if (hasLogo) return layers
-	return [...layers, createLogoLayer()]
-}
-
 const loadLayers = (): LayerT[] => {
 	try {
 		const stored = window.localStorage.getItem(STORAGE_KEY)
@@ -56,7 +50,7 @@ const loadLayers = (): LayerT[] => {
 		if (!isList) return createDefaultLayers()
 		const normalized = parsed.map(normalizeLayer)
 		const layers = normalized.filter((layer): layer is LayerT => layer !== null)
-		return ensureLogoLayer(layers)
+		return layers
 	} catch {
 		return createDefaultLayers()
 	}
@@ -194,8 +188,7 @@ export const addAssetLayer = async (file: File): Promise<void> => {
 export const removeLayers = (layerIds: string[]): void => {
 	const removableIds = layerIds.filter((layerId) => {
 		const layer = findLayer(layerId)
-		const isLogo = layerId === LOGO_LAYER_ID
-		return layer !== undefined && !isLogo
+		return layer !== undefined
 	})
 	const hasLayers = removableIds.length > 0
 	if (!hasLayers) return

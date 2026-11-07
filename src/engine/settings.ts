@@ -38,12 +38,14 @@ export const createDefaultSettings = (): SettingsT => ({
 	audioFadeOut: 0,
 	videoFadeIn: 0,
 	videoFadeOut: 0,
-	bloomAmount: 0,
-	aberrationAmount: 0,
+	// Subtle by default: a little glow, edge color and grain, and a
+	// soft vignette. Warp and scanlines are a choice.
+	bloomAmount: 0.25,
+	aberrationAmount: 0.15,
 	warpAmount: 0,
 	scanlineAmount: 0,
-	noiseAmount: 0,
-	vignetteAmount: 0,
+	noiseAmount: 0.12,
+	vignetteAmount: 0.25,
 	cameraOrbit: 0,
 	cameraTilt: 0,
 	cameraDistance: 1,

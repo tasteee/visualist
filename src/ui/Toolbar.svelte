@@ -4,14 +4,14 @@
 	import FadersIcon from 'phosphor-svelte/lib/FadersIcon'
 	import MagicWandIcon from 'phosphor-svelte/lib/MagicWandIcon'
 	import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon'
-	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
+	import GearSixIcon from 'phosphor-svelte/lib/GearSixIcon'
 	import { closeInspectorTab, inspector, toggleInspectorTab } from '../inspector.svelte'
 	import type { InspectorTabT } from '../inspector.svelte'
 	import ExportPanel from './ExportPanel.svelte'
 	import PalettePanel from './PalettePanel.svelte'
 	import PostPanel from './PostPanel.svelte'
 	import SettingsPanel from './SettingsPanel.svelte'
-	import SourcesPanel from './SourcesPanel.svelte'
+	import OptionsPanel from './OptionsPanel.svelte'
 	import { focusShell } from './focus'
 	import { press } from './press'
 	import './Toolbar.css'
@@ -25,10 +25,10 @@
 
 	const ITEMS: ToolbarItemT[] = [
 		{ tab: 'settings', label: 'Settings' },
-		{ tab: 'sources', label: 'Audio' },
-		{ tab: 'post', label: 'Post' },
 		{ tab: 'palette', label: 'Palette' },
-		{ tab: 'export', label: 'Export' }
+		{ tab: 'post', label: 'Post' },
+		{ tab: 'export', label: 'Export' },
+		{ tab: 'options', label: 'Options' }
 	]
 
 	let root: HTMLDivElement
@@ -75,8 +75,8 @@
 				{#if item.tab === 'settings'}
 					<FadersIcon weight="bold" />
 				{/if}
-				{#if item.tab === 'sources'}
-					<WaveformIcon weight="bold" />
+				{#if item.tab === 'options'}
+					<GearSixIcon weight="bold" />
 				{/if}
 				{#if item.tab === 'post'}
 					<MagicWandIcon weight="bold" />
@@ -97,8 +97,8 @@
 			{#if activeTab === 'settings'}
 				<SettingsPanel />
 			{/if}
-			{#if activeTab === 'sources'}
-				<SourcesPanel />
+			{#if activeTab === 'options'}
+				<OptionsPanel />
 			{/if}
 			{#if activeTab === 'post'}
 				<PostPanel />

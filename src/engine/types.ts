@@ -180,7 +180,6 @@ export type FrameInputT = {
 	palette: PaletteT
 	bpm: number
 	beatOffset: number
-	title: string
 	isIntroActive: boolean
 	layers: LayerT[]
 	signals: SignalsT
@@ -211,6 +210,8 @@ export type AutomationControlT = {
 	min: number
 	max: number
 	step: number
+	// Which row the control is automated from: scene or post.
+	group?: string
 }
 
 // value is normalized 0-1 across the control's range. bend
