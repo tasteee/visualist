@@ -57,6 +57,7 @@ body {
 }
 
 .app-ui {
+	--dock-toolbar-width: calc(var(--spacing-8) + var(--spacing-2) + 2px);
 	position: absolute;
 	inset: 0;
 	z-index: 1;

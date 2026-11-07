@@ -5,6 +5,7 @@
 	import { restoreProject, startProjectWatchers } from './project.svelte'
 	import { addAudioFile, app, startApp, togglePlay } from './store.svelte'
 	import BpmDialog from './ui/BpmDialog.svelte'
+	import DockToolbar from './ui/DockToolbar.svelte'
 	import DropZone from './ui/DropZone.svelte'
 	import EditorDock from './ui/EditorDock.svelte'
 	import Toolbar from './ui/Toolbar.svelte'
@@ -104,6 +105,7 @@
 		<div class="app-ui">
 			<Toolbar />
 			{#if app.hasAudio}
+				<DockToolbar />
 				<EditorDock />
 			{/if}
 			{#if !app.hasAudio}
