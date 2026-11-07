@@ -49,7 +49,64 @@ export const getPlaybackTime = (): number => {
 
 export const getIsClockRunning = (): boolean => isClockRunning
 
+// Extra audio layers play alongside the song. Each starts when its
+// layer does, and stops when it ends.
+export type ExtraTrackT = {
+	buffer: AudioBuffer
+	startTime: number
+	endTime: number | null
+	volume: number
+}
+
+let extraTracks: ExtraTrackT[] = []
+let extraSources: AudioBufferSourceNode[] = []
+let extraTap: MediaStreamAudioDestinationNode | null = null
+let extraClip: PlaybackClipT | null = null
+
+export const setExtraTracks = (tracks: ExtraTrackT[]): void => {
+	extraTracks = tracks
+}
+
+const stopExtras = (): void => {
+	for (const source of extraSources) {
+		source.onended = null
+		try {
+			source.stop()
+		} catch {
+			continue
+		}
+	}
+	extraSources = []
+}
+
+const startExtraTrack = (context: AudioContext, track: ExtraTrackT, position: number): void => {
+	const naturalEnd = track.startTime + track.buffer.duration
+	const trackEnd = Math.min(track.endTime ?? Number.POSITIVE_INFINITY, naturalEnd)
+	const isOver = position >= trackEnd
+	if (isOver) return
+	const source = context.createBufferSource()
+	source.buffer = track.buffer
+	const gain = context.createGain()
+	gain.gain.value = track.volume
+	source.connect(gain)
+	gain.connect(context.destination)
+	if (extraTap !== null) connectTapWithFades(context, gain, extraTap, extraClip)
+	const delay = Math.max(0, track.startTime - position)
+	const bufferOffset = Math.max(0, position - track.startTime)
+	const playLength = trackEnd - Math.max(track.startTime, position)
+	source.start(context.currentTime + delay, bufferOffset, playLength)
+	extraSources.push(source)
+}
+
+// Starts every extra track as if the song were at this time.
+export const startExtras = (position: number): void => {
+	stopExtras()
+	const context = getAudioContext()
+	for (const track of extraTracks) startExtraTrack(context, track, position)
+}
+
 const detachSource = (): void => {
+	stopExtras()
 	const source = currentSource
 	currentSource = null
 	if (source === null) return
@@ -70,7 +127,7 @@ export type PlaybackClipT = {
 // Fades only shape the recorded tap. The speakers stay untouched.
 const connectTapWithFades = (
 	context: AudioContext,
-	source: AudioBufferSourceNode,
+	source: AudioNode,
 	tap: MediaStreamAudioDestinationNode,
 	clip: PlaybackClipT | null
 ): void => {
@@ -124,6 +181,9 @@ export const startPlayback = (
 	offsetAtStart = offset
 	startedAtContextTime = context.currentTime
 	isClockRunning = true
+	extraTap = tap
+	extraClip = clip
+	startExtras(offset)
 	const hasClip = clip !== null
 	if (hasClip) activeLoop = null
 	if (hasClip) source.start(0, offset, clip.duration)

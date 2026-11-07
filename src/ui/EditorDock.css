@@ -1,10 +1,11 @@
 .editor-dock {
-	--editor-header-width: 15rem;
+	--editor-dock-left: calc(var(--spacing-5) + var(--dock-toolbar-width) + var(--spacing-2));
 	position: fixed;
-	right: var(--spacing-5);
 	bottom: var(--spacing-5);
-	left: var(--spacing-5);
+	left: var(--editor-dock-left);
 	z-index: 10;
+	width: var(--editor-dock-width, calc(100vw - var(--editor-dock-left) - var(--spacing-5)));
+	max-width: calc(100vw - var(--editor-dock-left) - var(--spacing-5));
 	display: flex;
 	flex-direction: column;
 	height: var(--editor-dock-height);
@@ -56,6 +57,7 @@
 /* Frame */
 
 .editor-frame {
+	position: relative;
 	display: flex;
 	flex: 1;
 	flex-direction: column;
@@ -222,13 +224,6 @@
 	text-align: center;
 }
 
-@container (max-width: 44rem) {
-	.editor-frame {
-		--editor-header-width: 11rem;
-	}
-
-}
-
 /* A layer's lanes stack as one block under its header. */
 .editor-layer-lanes {
 	display: flex;
@@ -237,4 +232,80 @@
 
 .editor-layer-lanes > * {
 	flex-shrink: 0;
+}
+
+/* The border between the headers and the plots. Drag it to widen
+   every header at once, click it to open or close them. */
+.editor-header-resize {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--editor-header-width) - 4px);
+	z-index: 5;
+	width: 8px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: ew-resize;
+	outline: none;
+	touch-action: none;
+}
+
+.editor-header-resize::after {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 3px;
+	width: 2px;
+	background: transparent;
+	content: '';
+	transition: background-color var(--motion-fast) ease;
+}
+
+.editor-header-resize:hover::after,
+.editor-header-resize:active::after,
+.editor-header-resize:focus-visible::after {
+	background: var(--focus-ring);
+}
+
+/* Folded: the editor goes away and only its toolbar stays. */
+.editor-dock.isFolded {
+	display: none;
+}
+
+/* The handle on the right edge, for the dock's width. */
+.editor-resize-side {
+	position: absolute;
+	top: var(--spacing-10);
+	right: -4px;
+	bottom: var(--spacing-10);
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-4);
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: ew-resize;
+	outline: none;
+	touch-action: none;
+}
+
+.editor-resize-side::after {
+	content: '';
+	width: var(--spacing-1);
+	height: var(--spacing-10);
+	border-radius: var(--radius-sm);
+	background: var(--color-neutral-3);
+	transition:
+		background-color var(--motion-fast) ease,
+		height var(--motion-base) var(--ease-move);
+}
+
+.editor-resize-side:hover::after,
+.editor-resize-side:active::after,
+.editor-resize-side:focus-visible::after {
+	height: var(--spacing-16);
+	background: var(--foreground);
 }

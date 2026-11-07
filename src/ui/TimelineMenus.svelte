@@ -8,7 +8,7 @@
 	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
 	import { addImageLayer, addTextLayer } from '../layers.svelte'
 	import { addEmptyTrack } from '../sources.svelte'
-	import { openAudioPicker } from './filePicker'
+	import { openAddAudioPicker } from './filePicker'
 	import { GRID_DIVISIONS, formatGridDivision } from '../engine/timeline'
 	import type { GridDivisionT } from '../engine/timeline'
 	import { setGridDivision, timeline, toggleSnapping, toggleTriplet } from '../timeline.svelte'
@@ -73,7 +73,7 @@
 
 	const handleAddAudio = () => {
 		closeTimelineMenus()
-		openAudioPicker()
+		openAddAudioPicker()
 	}
 
 	const handleAddText = () => {

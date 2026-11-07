@@ -79,6 +79,13 @@
 	const row = $derived<RowRefT>({ kind: 'impulse', id: props.track.id })
 	const siblingRows = $derived(props.siblingTrackIds.filter((trackId) => trackId !== props.track.id).map((trackId): RowRefT => ({ kind: 'impulse', id: trackId })))
 	const isCollapsed = $derived(checkIsRowFolded(row))
+	// The header reads the strength of the latest impulse at or
+	// before the playhead.
+	const latestImpulse = $derived.by(() => {
+		const earlier = impulses.filter((impulse) => impulse.time <= app.currentTime)
+		return earlier[earlier.length - 1]
+	})
+	const latestLabel = $derived(latestImpulse === undefined ? '—' : latestImpulse.strength.toFixed(2))
 	const isArmed = $derived(sources.armedTrackId === props.track.id)
 	const isGate = $derived(props.track.shape === 'gate')
 	const trackColor = $derived(getRowColor(props.track.id, getRoleColor(props.track.role)))
@@ -399,9 +406,7 @@
 				<CaretRightIcon weight="bold" />
 			</button>
 			<span class="impulse-lane-name">{props.track.name}</span>
-			{#if isCollapsed}
-				<span class="impulse-lane-count isCompact">{impulses.length}</span>
-			{/if}
+			<span class="impulse-lane-value">{latestLabel}</span>
 			{#if !isCollapsed}
 				<div class="impulse-lane-actions">
 					<z-tooltip content={armLabel} placement="top">
@@ -428,14 +433,6 @@
 			{/if}
 		</div>
 
-		{#if !isCollapsed}
-			<div class="impulse-lane-meta">
-				<span class="impulse-lane-meter" aria-hidden="true">
-					<span class="impulse-lane-meter-fill" style:--impulse-lane-level={liveStyle}></span>
-				</span>
-				<span class="impulse-lane-count" class:isSelection={hasSelection} title={metaTitle}>{countLabel}</span>
-			</div>
-		{/if}
 	</div>
 
 	<div

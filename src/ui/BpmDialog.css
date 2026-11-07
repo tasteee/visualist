@@ -1,0 +1,83 @@
+.bpm-dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 80;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in oklab, var(--bg) 70%, transparent);
+}
+
+.bpm-dialog {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-3);
+	width: min(26rem, calc(100vw - var(--spacing-8)));
+	padding: var(--spacing-5);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--popover);
+	color: var(--popover-foreground);
+}
+
+.bpm-dialog-eyebrow {
+	color: var(--muted);
+	font-size: var(--font-size-0);
+	font-weight: var(--font-weight-semibold);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.bpm-dialog-title {
+	margin: 0;
+	font-size: var(--font-size-5);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+.bpm-dialog-text {
+	margin: 0;
+	color: var(--secondary);
+	font-size: var(--font-size-2);
+	line-height: 1.5;
+}
+
+.bpm-dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--spacing-2);
+	margin-top: var(--spacing-2);
+}
+
+.bpm-dialog-button {
+	height: var(--spacing-8);
+	padding: 0 var(--spacing-4);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--foreground);
+	font: inherit;
+	font-size: var(--font-size-small);
+	font-weight: var(--font-weight-semibold);
+	cursor: pointer;
+	transition: background-color var(--motion-fast) ease;
+}
+
+.bpm-dialog-button:hover {
+	background: var(--paper-soft);
+}
+
+.bpm-dialog-button.isPrimary {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--on-accent);
+}
+
+.bpm-dialog-button.isPrimary:hover {
+	background: color-mix(in oklab, var(--accent) 85%, var(--foreground));
+}
+
+.bpm-dialog-button:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+}

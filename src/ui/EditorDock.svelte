@@ -47,15 +47,22 @@
 	import { AUDIO_ROW_ID, getRowColor } from '../appearance.svelte'
 	import { pickColorForId } from '../engine/palette'
 	import type { ColorNameT } from '../engine/palette'
-	import { openAddLayerMenu, openGridMenu } from '../timelineMenus.svelte'
+	import { openGridMenu } from '../timelineMenus.svelte'
+	import { uiState } from '../uiState.svelte'
 	import { app, getAnalysis, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
 	import type { ImpulseMoveT } from '../sources.svelte'
 	import {
-			fitView,
+			DEFAULT_HEADER_WIDTH,
+		MAX_HEADER_WIDTH,
+		fitView,
 		followPlayhead,
 		panBy,
 		resetDockHeight,
+		resetDockWidth,
+		resetHeaderWidth,
 		setDockHeight,
+		setDockWidth,
+		setHeaderWidth,
 		setHoverTime,
 		timeline,
 		toggleFollowing,
@@ -111,6 +118,7 @@
 	}
 
 	const DOCK_TOP_CLEARANCE_PX = 96
+	const DOCK_SIDE_MARGIN_PX = 20
 	const WHEEL_LINE_PX = 16
 	const WHEEL_ZOOM_RATE = 0.0025
 	const PINCH_ZOOM_RATE = 0.01
@@ -188,6 +196,47 @@
 
 	// The dock floats over the workspace, so it can rise nearly to
 	// the top of the window. The stage does not move for it.
+	const dockWidthStyle = $derived(timeline.dockWidth === null ? undefined : `${timeline.dockWidth}px`)
+
+	// The widest the dock can be: from its left edge to the window's.
+	const getMaxDockWidth = (): number => {
+		const left = dock.getBoundingClientRect().left
+		return window.innerWidth - left - DOCK_SIDE_MARGIN_PX
+	}
+
+	type WidthDragT = {
+		startX: number
+		startWidth: number
+	}
+
+	let widthDrag: WidthDragT | null = null
+
+	const handleWidthDown = (event: PointerEvent) => {
+		const handle = event.currentTarget as HTMLElement
+		handle.setPointerCapture(event.pointerId)
+		widthDrag = { startX: event.clientX, startWidth: dock.getBoundingClientRect().width }
+	}
+
+	const handleWidthMove = (event: PointerEvent) => {
+		if (widthDrag === null) return
+		const travel = event.clientX - widthDrag.startX
+		setDockWidth(widthDrag.startWidth + travel, getMaxDockWidth())
+	}
+
+	const handleWidthUp = () => {
+		widthDrag = null
+	}
+
+	const handleWidthKey = (event: KeyboardEvent) => {
+		const isRight = event.key === 'ArrowRight'
+		const isLeft = event.key === 'ArrowLeft'
+		if (!isRight && !isLeft) return
+		event.preventDefault()
+		event.stopPropagation()
+		const direction = isRight ? 1 : -1
+		setDockWidth(dock.getBoundingClientRect().width + direction * RESIZE_KEY_PX, getMaxDockWidth())
+	}
+
 	const getMaxDockHeight = (): number => window.innerHeight - DOCK_TOP_CLEARANCE_PX
 
 	const handleResizeDown = (event: PointerEvent) => {
@@ -204,6 +253,40 @@
 
 	const handleResizeUp = () => {
 		resizeDrag = null
+	}
+
+	// One drag widens every header. A click with no drag opens
+	// them to the widest, or closes them back to the default.
+	type HeaderResizeDragT = {
+		startX: number
+		startWidth: number
+		hasMoved: boolean
+	}
+
+	let headerResizeDrag: HeaderResizeDragT | null = null
+
+	const handleHeaderResizeDown = (event: PointerEvent) => {
+		const handle = event.currentTarget as HTMLElement
+		handle.setPointerCapture(event.pointerId)
+		headerResizeDrag = { startX: event.clientX, startWidth: timeline.headerWidth, hasMoved: false }
+	}
+
+	const handleHeaderResizeMove = (event: PointerEvent) => {
+		const drag = headerResizeDrag
+		if (drag === null) return
+		const travel = event.clientX - drag.startX
+		const hasStarted = drag.hasMoved || Math.abs(travel) > 3
+		if (!hasStarted) return
+		drag.hasMoved = true
+		setHeaderWidth(drag.startWidth + travel)
+	}
+
+	const handleHeaderResizeUp = () => {
+		const drag = headerResizeDrag
+		headerResizeDrag = null
+		if (drag === null || drag.hasMoved) return
+		const isWide = timeline.headerWidth > DEFAULT_HEADER_WIDTH
+		setHeaderWidth(isWide ? DEFAULT_HEADER_WIDTH : MAX_HEADER_WIDTH)
 	}
 
 	const handleResizeReset = () => resetDockHeight(getMaxDockHeight())
@@ -610,7 +693,7 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div class="editor-dock" bind:this={dock} style:--editor-dock-height="{timeline.dockHeight}px">
+<div class="editor-dock" class:isFolded={uiState.isDockFolded} bind:this={dock} style:--editor-dock-height="{timeline.dockHeight}px" style:--editor-dock-width={dockWidthStyle} style:--editor-header-width="{timeline.headerWidth}px">
 	<button
 		class="editor-resize"
 		type="button"
@@ -624,9 +707,34 @@
 		onkeydown={handleResizeKey}
 	></button>
 
+	<button
+		class="editor-resize-side"
+		type="button"
+		aria-label="Resize editor width. Use arrow keys, or double-click to fill the window."
+		title="Drag to resize · double-click to fill the window"
+		onpointerdown={handleWidthDown}
+		onpointermove={handleWidthMove}
+		onpointerup={handleWidthUp}
+		onpointercancel={handleWidthUp}
+		ondblclick={resetDockWidth}
+		onkeydown={handleWidthKey}
+	></button>
+
 	<TransportBar />
 
 	<div class="editor-frame" id="editor-timeline" bind:this={frame} role="presentation" onpointermove={handleFramePointerMove} onpointerleave={handleFramePointerLeave}>
+		<button
+			class="editor-header-resize"
+			type="button"
+			tabindex="-1"
+			aria-label="Resize headers. Drag, click to open or close, double-click to reset."
+			title="Drag to resize every header · click to open or close"
+			onpointerdown={handleHeaderResizeDown}
+			onpointermove={handleHeaderResizeMove}
+			onpointerup={handleHeaderResizeUp}
+			onpointercancel={handleHeaderResizeUp}
+			ondblclick={resetHeaderWidth}
+		></button>
 		<div class="editor-row isRuler">
 			<div class="editor-corner">
 				<span class="editor-eyebrow">Automation</span>
@@ -641,11 +749,6 @@
 							{/if}
 						</button>
 					</z-tooltip>
-					<z-tooltip content="Add a layer" placement="top">
-						<button class="editor-icon" type="button" aria-label="Add a layer" onclick={(event) => openAddLayerMenu(event.currentTarget)}>
-							<PlusIcon weight="bold" />
-						</button>
-					</z-tooltip>
 				</div>
 			</div>
 			<TimeRuler {grid} />
@@ -653,7 +756,7 @@
 
 		<div class="editor-lanes" role="presentation" oncontextmenu={handleLanesContextMenu}>
 			<TimelineLayer
-				kind="audio"
+				kind="song"
 				rowId={AUDIO_ROW_ID}
 				color={audioColor}
 				title={songName}
@@ -707,7 +810,7 @@
 					{isSelected}
 					siblings={layerSiblings.filter((sibling) => sibling.id !== layer.id)}
 					isHidden={!layer.isVisible}
-					canAddLane={checkCanAddLayerLane(layer.id)}
+					canAddLane={layer.kind !== 'audio' && checkCanAddLayerLane(layer.id)}
 					ontoggle={(event) => handleLayerToggle(layer.id, event)}
 					onadd={() => handleAddLayerLane(layer.id)}
 					onselect={(event) => handleGroupSelect(layer.id, event)}

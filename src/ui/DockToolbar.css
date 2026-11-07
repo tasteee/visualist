@@ -1,0 +1,71 @@
+.dock-toolbar {
+	position: fixed;
+	bottom: var(--spacing-5);
+	left: var(--spacing-5);
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	width: var(--dock-toolbar-width);
+	padding: var(--spacing-1);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--paper);
+}
+
+.dock-toolbar-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-8);
+	height: var(--spacing-8);
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--secondary);
+	font-size: var(--font-size-3);
+	cursor: pointer;
+	transition:
+		background-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
+}
+
+.dock-toolbar-button:hover:not(:disabled) {
+	background: var(--paper-soft);
+	color: var(--foreground);
+}
+
+.dock-toolbar-button.isPressed {
+	background: var(--paper-soft);
+	color: var(--accent);
+}
+
+.dock-toolbar-button.isPlay {
+	background: var(--foreground);
+	color: var(--bg);
+}
+
+.dock-toolbar-button.isPlay:hover:not(:disabled) {
+	background: var(--foreground);
+	color: var(--bg);
+	opacity: 0.85;
+}
+
+.dock-toolbar-button:disabled {
+	cursor: default;
+	opacity: var(--control-disabled-opacity);
+}
+
+.dock-toolbar-button:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.dock-toolbar-divider {
+	width: var(--spacing-5);
+	height: 1px;
+	margin: var(--spacing-1) 0;
+	background: var(--border);
+}

@@ -252,7 +252,7 @@ export type AutomationLaneT = {
 	isBypassed?: boolean
 }
 
-export type LayerKindT = 'logo' | 'text' | 'image' | 'svg'
+export type LayerKindT = 'logo' | 'text' | 'image' | 'svg' | 'audio'
 
 export type BlendModeT = 'normal' | 'screen' | 'multiply' | 'overlay' | 'softLight' | 'add' | 'difference'
 
@@ -318,4 +318,6 @@ export type LayerT = {
 	text: TextContentT | null
 	assetId: string | null
 	svgColor: SvgColorT
+	// Audio layers only: how loud the layer is in the mix.
+	volume: number
 }

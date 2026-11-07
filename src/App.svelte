@@ -3,7 +3,9 @@
 	import { toaster } from '@tasteee/zest'
 	import { checkIsMidiFile, openMidiFile } from './midiImport.svelte'
 	import { restoreProject, startProjectWatchers } from './project.svelte'
-	import { app, loadAudioFile, startApp, togglePlay } from './store.svelte'
+	import { addAudioFile, app, startApp, togglePlay } from './store.svelte'
+	import BpmDialog from './ui/BpmDialog.svelte'
+	import DockToolbar from './ui/DockToolbar.svelte'
 	import DropZone from './ui/DropZone.svelte'
 	import EditorDock from './ui/EditorDock.svelte'
 	import Toolbar from './ui/Toolbar.svelte'
@@ -64,7 +66,7 @@
 		if (file === undefined) return
 		const isMidi = checkIsMidiFile(file)
 		if (isMidi) return handleMidiDrop(file)
-		void loadAudioFile(file)
+		void addAudioFile(file)
 	}
 
 	// MIDI lands on the song's timeline, so it needs a song.
@@ -103,6 +105,7 @@
 		<div class="app-ui">
 			<Toolbar />
 			{#if app.hasAudio}
+				<DockToolbar />
 				<EditorDock />
 			{/if}
 			{#if !app.hasAudio}
@@ -122,5 +125,6 @@
 </main>
 
 <MidiImportDialog />
+<BpmDialog />
 
 <z-toaster position="bottom-center"></z-toaster>

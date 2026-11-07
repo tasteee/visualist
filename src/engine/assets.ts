@@ -183,3 +183,16 @@ export const readSongFile = async (fallbackName: string): Promise<File | null> =
 	if (isFile) return stored
 	return new File([stored], fallbackName, { type: stored.type })
 }
+
+// Extra audio layers keep their file here too, under their own id.
+export const storeLayerFile = async (assetId: string, file: File): Promise<void> => {
+	await saveFile(assetId, file)
+}
+
+export const readLayerFile = async (assetId: string, fallbackName: string): Promise<File | null> => {
+	const stored = await readFile(assetId)
+	if (stored === null) return null
+	const isFile = stored instanceof File
+	if (isFile) return stored
+	return new File([stored], fallbackName, { type: stored.type })
+}

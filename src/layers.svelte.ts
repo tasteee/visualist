@@ -30,7 +30,7 @@ const getFileBaseName = (fileName: string): string => {
 // saves gain any field added since. The logo is always present.
 const normalizeLayer = (stored: Partial<LayerT>): LayerT | null => {
 	const kind = stored.kind
-	const isKnownKind = kind === 'logo' || kind === 'text' || kind === 'image' || kind === 'svg'
+	const isKnownKind = kind === 'logo' || kind === 'text' || kind === 'image' || kind === 'svg' || kind === 'audio'
 	if (!isKnownKind) return null
 	const base = kind === 'logo' ? createLogoLayer() : createTextLayer('')
 	const transform = { ...base.transform, ...stored.transform }
