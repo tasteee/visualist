@@ -71,14 +71,14 @@
 }
 
 .editor-row.isRuler {
-	height: 58px;
+	height: 54px;
 	background: var(--paper);
 }
 
 
 
 .editor-row.isOverview {
-	height: var(--spacing-8);
+	height: var(--spacing-10);
 	border-top: 1px solid var(--border);
 	border-bottom: 0;
 	background: var(--paper);
@@ -113,6 +113,9 @@
 }
 
 .editor-corner {
+	justify-content: flex-start;
+	gap: var(--spacing-1);
+	height: 54px;
 	padding: 0 var(--spacing-2) 0 var(--spacing-3);
 }
 
@@ -121,33 +124,15 @@
 	padding: 0 var(--spacing-3);
 }
 
-.editor-eyebrow {
+/* Help text for what the pointer is over, in place of tooltips. */
+.editor-help {
+	display: -webkit-box;
+	overflow: hidden;
 	color: var(--muted);
-	font-size: var(--font-size-0);
-	font-weight: 600;
-	letter-spacing: 0.12em;
-	text-transform: uppercase;
-	white-space: nowrap;
-}
-
-.editor-count {
-	min-width: var(--spacing-4);
-	padding: 0 var(--spacing-1);
-	border-radius: var(--radius-sm);
-	background: var(--paper-soft);
-	color: var(--muted);
-	font-size: var(--font-size-0);
-	font-variant-numeric: tabular-nums;
-	font-weight: 600;
-	line-height: 1.6;
-	text-align: center;
-}
-
-.editor-corner-actions {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	margin-left: auto;
+	font-size: var(--font-size-2);
+	line-height: 1.25;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
 }
 
 .editor-icon {
@@ -171,6 +156,11 @@
 .editor-icon:hover:not(:disabled) {
 	background: var(--paper-soft);
 	color: var(--foreground);
+}
+
+.editor-icon.isPressed {
+	background: var(--paper-soft);
+	color: var(--accent);
 }
 
 .editor-icon:disabled {
@@ -261,4 +251,41 @@
 .editor-header-resize:active::after,
 .editor-header-resize:focus-visible::after {
 	background: var(--focus-ring);
+}
+
+/* Modulation: a slim heading above each group of lanes. */
+.editor-mod-row {
+	display: grid;
+	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
+	height: var(--spacing-8);
+	border-bottom: 1px solid var(--border);
+	background: var(--paper);
+}
+
+.editor-mod-header {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	min-width: 0;
+	padding: 0 var(--spacing-2) 0 var(--spacing-3);
+	border-right: 1px solid var(--border);
+}
+
+.editor-mod-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--secondary);
+	font-size: var(--font-size-small);
+	font-weight: var(--font-weight-semibold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.editor-mod-swatch {
+	flex: none;
+	width: var(--spacing-2);
+	height: var(--spacing-2);
+	border-radius: 50%;
+	background: var(--tone, var(--muted));
 }

@@ -2,7 +2,8 @@
    whole span, its edges trim the start and the end. */
 .layer-clip {
 	/* The layer's own color, from the row it sits in. */
-	--layer-clip-tone: var(--tone, var(--accent));
+	--layer-clip-tone: var(--tone-5);
+	--layer-clip-ink: oklch(0.22 0.012 146);
 	position: absolute;
 	top: var(--spacing-2);
 	right: var(--clip-right);
@@ -10,13 +11,16 @@
 	left: var(--clip-left);
 	z-index: 1;
 	display: flex;
-	align-items: stretch;
+	flex-direction: column;
 	min-width: var(--spacing-3);
-	border: 1px solid color-mix(in oklab, var(--layer-clip-tone) 45%, transparent);
-	border-radius: var(--radius-md);
-	background: color-mix(in oklab, var(--layer-clip-tone) 14%, var(--bg));
+	overflow: hidden;
+	border: 1px solid var(--layer-clip-tone);
+	border-radius: 3px;
+	background: color-mix(in oklab, var(--layer-clip-tone) 16%, var(--bg));
 	color: var(--foreground);
-	cursor: grab;
+	/* Only the bar and the edges take the pointer. A click in the body
+	   falls through to the row and sets the playhead. */
+	pointer-events: none;
 	touch-action: none;
 	user-select: none;
 	transition:
@@ -24,16 +28,28 @@
 		border-color var(--motion-fast) ease;
 }
 
-.layer-clip:hover {
-	border-color: color-mix(in oklab, var(--layer-clip-tone) 70%, transparent);
-}
-
+/* Selected clips turn neutral, whatever their color. */
 .layer-clip.isSelected {
-	border-color: var(--layer-clip-tone);
-	background: color-mix(in oklab, var(--layer-clip-tone) 22%, var(--bg));
+	--layer-clip-tone: var(--color-neutral-7);
+	background: color-mix(in srgb, var(--tone-5) 40%, transparent);
 }
 
-.layer-clip.isDragging {
+.layer-clip.isSelected .layer-clip-bar {
+	background: var(--tone-6);
+}
+
+.layer-clip-bar {
+	display: flex;
+	flex: none;
+	align-items: center;
+	height: var(--spacing-4);
+	background: var(--tone-4);
+	color: var(--layer-clip-ink);
+	cursor: grab;
+	pointer-events: auto;
+}
+
+.layer-clip.isDragging .layer-clip-bar {
 	cursor: grabbing;
 }
 
@@ -43,9 +59,9 @@
 	color: var(--secondary);
 }
 
-.layer-clip:focus-visible {
+.layer-clip-bar:focus-visible {
 	outline: 2px solid var(--focus-ring);
-	outline-offset: 1px;
+	outline-offset: -2px;
 }
 
 .layer-clip-label {
@@ -54,33 +70,44 @@
 	align-items: center;
 	gap: var(--spacing-2);
 	min-width: 0;
-	padding: 0 var(--spacing-2);
+	padding: 0 var(--spacing-3);
 	overflow: hidden;
 	pointer-events: none;
 }
 
 .layer-clip-name {
 	overflow: hidden;
-	font-size: var(--font-size-caption);
+	font-size: var(--font-size-0);
 	font-weight: var(--font-weight-semibold);
+	line-height: 1;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
 .layer-clip-range {
 	flex: none;
-	color: var(--layer-clip-tone);
-	font-size: var(--font-size-caption);
+	font-size: var(--font-size-0);
 	font-variant-numeric: tabular-nums;
 	font-weight: var(--font-weight-medium);
 	white-space: nowrap;
 }
 
 .layer-clip-edge {
-	position: relative;
-	flex: none;
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	z-index: 2;
 	width: var(--spacing-2);
 	cursor: ew-resize;
+	pointer-events: auto;
+}
+
+.layer-clip-edge.isStart {
+	left: 0;
+}
+
+.layer-clip-edge.isEnd {
+	right: 0;
 }
 
 /* A short grip line shows on hover so the edges read as

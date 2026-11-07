@@ -71,7 +71,7 @@
 <div class="toolbar" bind:this={root}>
 	<div class="toolbar-bar" role="toolbar" aria-label="Project menus">
 		{#each ITEMS as item (item.tab)}
-			<button class="toolbar-item" class:isActive={activeTab === item.tab} type="button" aria-pressed={activeTab === item.tab} {...press(() => toggleInspectorTab(item.tab))}>
+			<z-button size="sm" kind={activeTab === item.tab ? 'soft' : 'ghost'} tone="neutral" aria-pressed={activeTab === item.tab} {...press(() => toggleInspectorTab(item.tab))}>
 				{#if item.tab === 'settings'}
 					<FadersIcon weight="bold" />
 				{/if}
@@ -88,7 +88,7 @@
 					<ExportIcon weight="bold" />
 				{/if}
 				{item.label}
-			</button>
+			</z-button>
 		{/each}
 	</div>
 

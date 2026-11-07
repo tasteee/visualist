@@ -78,8 +78,8 @@
 		/>
 	</div>
 	<z-tooltip content={removeLabel} placement="left" openDelay={300}>
-		<button class="fx-row-remove" type="button" aria-label={removeLabel} onclick={props.onremove}>
+		<z-button isIcon size="sm" kind="ghost" tone="neutral" aria-label={removeLabel} onclick={props.onremove}>
 			<XIcon weight="bold" />
-		</button>
+		</z-button>
 	</z-tooltip>
 </div>

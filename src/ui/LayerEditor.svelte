@@ -1,16 +1,13 @@
 <script lang="ts">
 	import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon'
 	import CaretUpIcon from 'phosphor-svelte/lib/CaretUpIcon'
-	import TextItalicIcon from 'phosphor-svelte/lib/TextItalicIcon'
-	import TextStrikethroughIcon from 'phosphor-svelte/lib/TextStrikethroughIcon'
-	import TextUnderlineIcon from 'phosphor-svelte/lib/TextUnderlineIcon'
 	import UploadSimpleIcon from 'phosphor-svelte/lib/UploadSimpleIcon'
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import { recordHistory, recordHistoryCoalesced } from '../automation.svelte'
 	import { getAsset } from '../engine/assets'
 	import { getVideo } from '../engine/video'
-	import { BLEND_OPTIONS, FX_SPECS, TEXT_WEIGHT_OPTIONS, getLayerParams } from '../engine/layers'
+	import { BLEND_OPTIONS, FX_SPECS, TEXT_WEIGHT_OPTIONS, findClipAt, getLayerParams } from '../engine/layers'
 	import { DEMO_LOOP_SECONDS } from '../engine/settings'
 	import type { BlendModeT, FxKindT, LayerT, ShapeFillT, ShapeKindT, TextWeightT } from '../engine/types'
 	import { palette } from '../palette.svelte'
@@ -40,17 +37,12 @@
 	const isText = $derived(props.layer.kind === 'text')
 	const isSvg = $derived(props.layer.kind === 'svg')
 	const isVideo = $derived(props.layer.kind === 'video')
-	const textContent = $derived(props.layer.text)
-	const hasTextContent = $derived(isText && textContent !== null)
 	const hasFx = $derived(props.layer.fx.length > 0)
 	const canMoveForward = $derived(checkCanMove(props.layer.id, 'forward'))
 	const canMoveBackward = $derived(checkCanMove(props.layer.id, 'backward'))
 	const songLength = $derived(app.hasAudio ? app.duration : DEMO_LOOP_SECONDS)
-	const endTimeValue = $derived(props.layer.endTime ?? songLength)
-	const textWeightValue = $derived(textContent === null ? '900' : String(textContent.weight))
-	const textColorValue = $derived(textContent === null ? 'foreground' : textContent.color)
-	const textValue = $derived(textContent === null ? '' : textContent.text)
-	const isUppercase = $derived(textContent === null ? false : textContent.isUppercase)
+	const firstClip = $derived(props.layer.clips[0])
+	const endTimeValue = $derived(props.layer.clips.reduce((latest, clip) => Math.max(latest, clip.endTime ?? songLength), 0))
 	const isPicture = $derived(props.layer.kind === 'image' || props.layer.kind === 'svg')
 	const hasPicture = $derived(props.layer.assetId !== null)
 
@@ -101,8 +93,6 @@
 		shape.angle = value
 	}
 
-	const FONT_OPTIONS = [{ value: 'dm-sans', label: 'DM Sans' }]
-
 	const getIsMissingFile = (): boolean => {
 		void layerStore.assetVersion
 		if (props.layer.assetId === null) return false
@@ -120,47 +110,7 @@
 
 	const handleNameCommit = (name: string) => renameLayer(props.layer.id, name)
 
-	const handleTextChange = (event: Event) => {
-		const content = props.layer.text
-		if (content === null) return
-		recordHistoryCoalesced(`layer-text:${props.layer.id}`)
-		content.text = readText(event)
-	}
-
-	const handleWeightChange = (value: string) => {
-		const content = props.layer.text
-		if (content === null) return
-		recordHistory()
-		content.weight = Number(value) as TextWeightT
-	}
-
-	type TextStyleKeyT = 'isStrike' | 'isUnderline' | 'isItalic' | 'isUppercase' | 'isLowercase'
-
-	const isStrike = $derived(textContent === null ? false : textContent.isStrike)
-	const isUnderline = $derived(textContent === null ? false : textContent.isUnderline)
-	const isItalic = $derived(textContent === null ? false : textContent.isItalic)
-	const isLowercase = $derived(textContent === null ? false : textContent.isLowercase)
-
-	// Caps and lower case are alternatives, so turning one on
-	// turns the other off.
-	const handleStyleToggle = (key: TextStyleKeyT) => {
-		const content = props.layer.text
-		if (content === null) return
-		recordHistory()
-		const nextValue = !content[key]
-		content[key] = nextValue
-		if (key === 'isUppercase' && nextValue) content.isLowercase = false
-		if (key === 'isLowercase' && nextValue) content.isUppercase = false
-	}
-
 	const handleUpload = () => openPicturePicker((file) => void setLayerImageFile(props.layer.id, file))
-
-	const handleTextColorChange = (event: Event) => {
-		const content = props.layer.text
-		if (content === null) return
-		recordHistory()
-		content.color = readText(event)
-	}
 
 	const handleSvgColorChange = (event: Event) => {
 		recordHistory()
@@ -172,7 +122,7 @@
 		props.layer.blend = readText(event) as BlendModeT
 	}
 
-	const timingLabel = $derived(`${formatPreciseTime(props.layer.startTime)} – ${formatPreciseTime(endTimeValue)}`)
+	const timingLabel = $derived(`${formatPreciseTime(firstClip?.startTime ?? 0)} – ${formatPreciseTime(endTimeValue)}`)
 	const timingDescription = $derived(app.hasAudio ? `Shows ${timingLabel}. Drag its bar in the timeline to change when.` : 'Load a song to set when this layer shows.')
 
 	const handleAddFx = (kind: FxKindT) => addLayerFx(props.layer.id, kind)
@@ -212,28 +162,6 @@
 
 		{#if isVideo}
 			<p class="layer-editor-note">Drag the clip in the timeline to move it. Drag its edges to trim. Video plays without sound.</p>
-		{/if}
-
-		{#if hasTextContent}
-			<z-textarea value={textValue} rows={2} isAutoResize aria-label="Text" oninput={handleTextChange} onchange={handleTextChange}></z-textarea>
-			<Segmented label="Weight" options={TEXT_WEIGHT_OPTIONS} value={textWeightValue} onchange={handleWeightChange} />
-			<div class="layer-editor-pair">
-				<z-select value={textColorValue} options={colorOptions} aria-label="Text color" onchange={handleTextColorChange}></z-select>
-				<z-select value="dm-sans" options={FONT_OPTIONS} isDisabled aria-label="Font"></z-select>
-			</div>
-			<div class="layer-editor-styles" role="group" aria-label="Text style">
-				<z-button size="sm" kind={isStrike ? 'soft' : 'outline'} tone={isStrike ? 'primary' : 'neutral'} aria-label="Strike-through" aria-pressed={isStrike} onclick={() => handleStyleToggle('isStrike')}>
-					<TextStrikethroughIcon weight="bold" />
-				</z-button>
-				<z-button size="sm" kind={isUnderline ? 'soft' : 'outline'} tone={isUnderline ? 'primary' : 'neutral'} aria-label="Underline" aria-pressed={isUnderline} onclick={() => handleStyleToggle('isUnderline')}>
-					<TextUnderlineIcon weight="bold" />
-				</z-button>
-				<z-button size="sm" kind={isItalic ? 'soft' : 'outline'} tone={isItalic ? 'primary' : 'neutral'} aria-label="Italic" aria-pressed={isItalic} onclick={() => handleStyleToggle('isItalic')}>
-					<TextItalicIcon weight="bold" />
-				</z-button>
-				<z-button size="sm" kind={isUppercase ? 'soft' : 'outline'} tone={isUppercase ? 'primary' : 'neutral'} aria-label="All caps" aria-pressed={isUppercase} onclick={() => handleStyleToggle('isUppercase')}>AA</z-button>
-				<z-button size="sm" kind={isLowercase ? 'soft' : 'outline'} tone={isLowercase ? 'primary' : 'neutral'} aria-label="All lower case" aria-pressed={isLowercase} onclick={() => handleStyleToggle('isLowercase')}>aa</z-button>
-			</div>
 		{/if}
 
 		{#if isPicture}
@@ -289,10 +217,10 @@
 		{/if}
 		<div class="layer-editor-fx-add" role="group" aria-label="Add an effect">
 			{#each FX_SPECS as spec (spec.kind)}
-				<button class="layer-editor-fx-chip" type="button" onclick={() => handleAddFx(spec.kind)}>
+				<z-button size="sm" kind="outline" tone="neutral" onclick={() => handleAddFx(spec.kind)}>
 					<PlusIcon weight="bold" />
 					{spec.label}
-				</button>
+				</z-button>
 			{/each}
 		</div>
 	</Section>

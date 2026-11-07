@@ -57,14 +57,14 @@
 				</div>
 				<div class="settings-downbeat-actions">
 					<z-tooltip content="5 ms earlier" placement="top" openDelay={300}>
-						<button class="settings-downbeat-nudge" type="button" aria-label="Move downbeat 5 ms earlier" disabled={!canSetDownbeat} onclick={handleNudgeEarlier}>
+						<z-button isIcon size="sm" kind="outline" tone="neutral" aria-label="Move downbeat 5 ms earlier" isDisabled={!canSetDownbeat} onclick={handleNudgeEarlier}>
 							<CaretLeftIcon weight="bold" />
-						</button>
+						</z-button>
 					</z-tooltip>
 					<z-tooltip content="5 ms later" placement="top" openDelay={300}>
-						<button class="settings-downbeat-nudge" type="button" aria-label="Move downbeat 5 ms later" disabled={!canSetDownbeat} onclick={handleNudgeLater}>
+						<z-button isIcon size="sm" kind="outline" tone="neutral" aria-label="Move downbeat 5 ms later" isDisabled={!canSetDownbeat} onclick={handleNudgeLater}>
 							<CaretRightIcon weight="bold" />
-						</button>
+						</z-button>
 					</z-tooltip>
 					<z-tooltip content="Park the playhead on a clear bar 1, then click" placement="top" openDelay={300}>
 						<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canSetDownbeat} onclick={handleSetDownbeat}>

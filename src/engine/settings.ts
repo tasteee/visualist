@@ -5,7 +5,7 @@ export const GRID_STEP = 0.01
 export const FLICKER_RATE = 14
 export const DEMO_LOOP_SECONDS = 90
 export const TAIL_SECONDS = 0.6
-export const MIN_CLIP_SECONDS = 1
+export const MIN_CLIP_SECONDS = 0.1
 export const MAX_FADE_SECONDS = 10
 
 const allEchoStyles = (): EchoStylesT => ({
@@ -21,7 +21,7 @@ export const createDefaultSettings = (): SettingsT => ({
 	logoBorder: 0.85,
 	accent1: '#f546cd',
 	accent2: '#0af5b4',
-	background: '#0b0b0d',
+	background: '#0A0F0A',
 	foreground: '#ffffff',
 	reactivity: 1,
 	echoAmount: 0.9,

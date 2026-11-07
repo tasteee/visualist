@@ -2,7 +2,7 @@
 // design system's tokens. tones.css maps each name to its
 // token, so rows only ever carry the name.
 
-export type ColorNameT = 'purple' | 'lavender' | 'pink' | 'blush' | 'red' | 'amber' | 'green' | 'silver' | 'slate'
+export type ColorNameT = 'blue' | 'cyan' | 'mint' | 'green' | 'amber' | 'lime' | 'peach' | 'coral' | 'rose' | 'pink' | 'lavender'
 
 export type ColorOptionT = {
 	name: ColorNameT
@@ -10,15 +10,17 @@ export type ColorOptionT = {
 }
 
 export const PALETTE: ColorOptionT[] = [
-	{ name: 'purple', label: 'Purple' },
-	{ name: 'lavender', label: 'Lavender' },
-	{ name: 'pink', label: 'Pink' },
-	{ name: 'blush', label: 'Blush' },
-	{ name: 'red', label: 'Red' },
-	{ name: 'amber', label: 'Amber' },
+	{ name: 'blue', label: 'Blue' },
+	{ name: 'cyan', label: 'Cyan' },
+	{ name: 'mint', label: 'Mint' },
 	{ name: 'green', label: 'Green' },
-	{ name: 'silver', label: 'Silver' },
-	{ name: 'slate', label: 'Slate' }
+	{ name: 'amber', label: 'Amber' },
+	{ name: 'lime', label: 'Lime' },
+	// { name: 'peach', label: 'Peach' },
+	{ name: 'coral', label: 'Coral' },
+	{ name: 'rose', label: 'Rose' },
+	{ name: 'pink', label: 'Pink' },
+	{ name: 'lavender', label: 'Lavender' }
 ]
 
 const COLOR_NAMES = PALETTE.map((option) => option.name)
@@ -30,7 +32,7 @@ export const checkIsColorName = (value: unknown): value is ColorNameT => {
 }
 
 // Automation tones 1-5, as the engine numbers them.
-const TONE_COLORS: ColorNameT[] = ['purple', 'pink', 'green', 'amber', 'silver']
+const TONE_COLORS: ColorNameT[] = ['lavender', 'pink', 'green', 'amber', 'cyan']
 
 export const getToneColor = (tone: number): ColorNameT => {
 	const index = Math.max(0, tone - 1) % TONE_COLORS.length
@@ -47,7 +49,7 @@ export const pickColorForId = (id: string): ColorNameT => {
 
 // An impulse track's default color follows what it drives.
 export const getRoleColor = (role: 'none' | 'kick' | 'snare'): ColorNameT => {
-	if (role === 'kick') return 'purple'
+	if (role === 'kick') return 'lavender'
 	if (role === 'snare') return 'pink'
 	return 'green'
 }

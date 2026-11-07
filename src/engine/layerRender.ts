@@ -1,7 +1,7 @@
 import { getAsset } from './assets'
 import { getVideoFrame, getVideoSize } from './video'
 import type { FrameLayoutT } from './formats'
-import { LAYER_PARAMS, getBlendOperation, getTimeRangeLevel } from './layers'
+import { LAYER_PARAMS, findClipAt, getClipTextAt, getBlendOperation, getTimeRangeLevel } from './layers'
 import { getTinted } from './logoLayers'
 import { applyModulation } from './modulation'
 import { createRandom } from './rng'
@@ -67,7 +67,10 @@ const getContext = (canvas: HTMLCanvasElement): CanvasRenderingContext2D => {
 
 // A color the user has, by id. One that was deleted draws as the
 // stage's contrast color, so a layer never vanishes.
-const getPaletteColor = (palette: PaletteT, slot: PaletteSlotT): string => palette.colors[slot] ?? palette.foreground
+// A slot is a palette color's id, or a color of its own as #rrggbb.
+const checkIsHexColor = (slot: string): boolean => /^#[0-9a-f]{3,8}$/i.test(slot)
+
+const getPaletteColor = (palette: PaletteT, slot: PaletteSlotT): string => palette.colors[slot] ?? (checkIsHexColor(slot) ? slot : palette.foreground)
 
 const getShortSide = (frame: FrameLayoutT): number => Math.min(frame.width, frame.height)
 
@@ -90,10 +93,10 @@ const setTextFont = (context: CanvasRenderingContext2D, content: TextContentT, s
 	context.letterSpacing = `${size * tracking}px`
 }
 
-const getDisplayText = (content: TextContentT): string => {
-	if (content.isUppercase) return content.text.toUpperCase()
-	if (content.isLowercase) return content.text.toLowerCase()
-	return content.text
+const getDisplayText = (content: TextContentT, text: string): string => {
+	if (content.isUppercase) return text.toUpperCase()
+	if (content.isLowercase) return text.toLowerCase()
+	return text
 }
 
 type TextLineSpanT = {
@@ -113,8 +116,8 @@ const drawTextLines = (context: CanvasRenderingContext2D, content: TextContentT,
 	if (content.isStrike) context.fillRect(left, span.lineCenterY - thickness / 2, span.lineWidth, thickness)
 }
 
-const paintText = (content: TextContentT, color: string): LayerSourceT => {
-	const lines = getDisplayText(content).split('\n')
+const paintText = (content: TextContentT, text: string, color: string): LayerSourceT => {
+	const lines = getDisplayText(content, text).split('\n')
 	const measureContext = getContext(createCanvas(1, 1))
 	setTextFont(measureContext, content, TEXT_FONT_SIZE)
 	const lineWidths = lines.map((line) => measureContext.measureText(line).width)
@@ -144,17 +147,17 @@ const paintText = (content: TextContentT, color: string): LayerSourceT => {
 	return { canvas, width: unitWidth, height: unitHeight }
 }
 
-const getTextSource = (content: TextContentT, palette: PaletteT): LayerSourceT | null => {
-	const isEmpty = content.text.trim().length === 0
+const getTextSource = (content: TextContentT, text: string, palette: PaletteT): LayerSourceT | null => {
+	const isEmpty = text.trim().length === 0
 	if (isEmpty) return null
 	const color = getPaletteColor(palette, content.color)
 	const flags = [content.isUppercase, content.isLowercase, content.isItalic, content.isUnderline, content.isStrike].join(',')
-	const cacheKey = `${content.text}|${content.weight}|${flags}|${color}`
+	const cacheKey = `${text}|${content.weight}|${flags}|${color}`
 	const cached = textCache.get(cacheKey)
 	if (cached !== undefined) return cached
 	const isCacheFull = textCache.size >= MAX_TEXT_CACHE
 	if (isCacheFull) textCache.clear()
-	const painted = paintText(content, color)
+	const painted = paintText(content, text, color)
 	textCache.set(cacheKey, painted)
 	return painted
 }
@@ -240,7 +243,9 @@ const fitCanvasToFrame = (canvas: HTMLCanvasElement, frame: FrameLayoutT): Layer
 
 // A video draws the frame for this moment of the timeline.
 const getVideoSource = (layer: LayerT, input: LayerStackInputT): LayerSourceT | null => {
-	const canvas = getVideoFrame(layer.assetId, input.time, layer.startTime, layer.sourceOffset)
+	const clip = findClipAt(layer, input.time)
+	if (clip === undefined) return null
+	const canvas = getVideoFrame(layer.assetId, input.time, clip.startTime, clip.sourceOffset)
 	if (canvas === null) return null
 	return fitCanvasToFrame(canvas, input.frame)
 }
@@ -287,7 +292,7 @@ const measureVideo = (layer: LayerT, frame: FrameLayoutT): LayerSizeT | null => 
 	return { width: size.width * unitsPerPixel, height: size.height * unitsPerPixel }
 }
 
-export const measureLayerSize = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT): LayerSizeT | null => {
+export const measureLayerSize = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT, time = 0): LayerSizeT | null => {
 	const isLogo = layer.kind === 'logo'
 	if (isLogo) return { width: LOGO_ART_WIDTH * frame.sceneScale, height: LOGO_ART_HEIGHT * frame.sceneScale }
 	const isShape = layer.kind === 'shape'
@@ -299,7 +304,7 @@ export const measureLayerSize = (layer: LayerT, palette: PaletteT, frame: FrameL
 	if (isText) {
 		const content = layer.text
 		if (content === null) return null
-		const source = getTextSource(content, palette)
+		const source = getTextSource(content, getClipTextAt(layer, time), palette)
 		return source === null ? null : { width: source.width, height: source.height }
 	}
 	const isVideo = layer.kind === 'video'
@@ -328,7 +333,7 @@ const getStaticSource = (layer: LayerT, input: LayerStackInputT): LayerSourceT |
 	if (!isText) return getAssetSource(layer, input.palette, input.frame)
 	const content = layer.text
 	if (content === null) return null
-	return getTextSource(content, input.palette)
+	return getTextSource(content, getClipTextAt(layer, input.time), input.palette)
 }
 
 // Logo layers change every frame, so their tints are painted

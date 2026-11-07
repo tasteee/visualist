@@ -1,0 +1,130 @@
+/* Docked on the left of the workspace, above the editor. */
+.inspector-panel {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	width: var(--inspector-width);
+	border-right: 1px solid var(--border);
+	background: var(--paper);
+	box-shadow: 8px 0 24px -16px rgb(0 0 0 / 0.35);
+	color: var(--foreground);
+}
+
+/* Identity: what kind of thing this is and what it is called. */
+.inspector-panel-header {
+	--inspector-title-color: var(--color-neutral-0);
+}
+
+.inspector-panel-header {
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	gap: var(--spacing-1);
+	padding: var(--spacing-4) var(--spacing-4) var(--spacing-3);
+	border-bottom: 1px solid var(--border);
+	/*background: linear-gradient(to bottom, color-mix(in oklch, var(--accent-alt) 7%, var(--paper)), var(--paper));*/
+	background: linear-gradient(170deg, color-mix(in oklch, var(--color-neutral-9) 100%, transparent), 55%, color-mix(in oklch, var(--tone-4) 8%, transparent)),
+  linear-gradient(to top left, color-mix(in oklch, var(--tone-5) 85%, var(--color-neutral-8)), var(--background-light));
+}
+
+.inspector-panel-meta {
+	display: flex;
+	align-items: center;
+	/*justify-content: space-between;*/
+	gap: var(--spacing-2);
+}
+
+.inspector-panel-title,
+.inspector-panel-subtitle {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.inspector-panel-body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+	padding: 0 var(--spacing-4) var(--spacing-5);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+}
+
+/* Sections inside the panel: tighter rhythm, a small accent tick on
+   each heading so the groups scan quickly. */
+.inspector-panel .panel-section {
+	gap: var(--spacing-3);
+	padding: var(--spacing-4) 0;
+}
+
+.inspector-panel .panel-section-title {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	color: var(--secondary);
+}
+
+.inspector-panel .panel-section-title::before {
+	width: 3px;
+	height: 0.8em;
+	border-radius: 2px;
+	background: var(--accent-alt);
+	content: '';
+}
+
+.inspector-panel .panel-section-body {
+	gap: var(--spacing-3);
+}
+
+.inspector-panel .panel-section-description {
+	margin-top: var(--spacing-1);
+	color: var(--muted);
+}
+
+.inspector-panel-swatches {
+	margin-top: var(--spacing-2);
+}
+
+/* The clip's color; a click moves to the next one. */
+.inspector-panel-cycle {
+	flex: none;
+	margin-right: 2px;
+    margin-top: 0.5px;
+	width: var(--spacing-2);
+	height: var(--spacing-2);
+	padding: 0;
+	box-shadow: -0.5px 0px 12px 1px var(--tone-8);
+	border: 2px solid var(--color-neutral-1);
+	border-radius: 50%;
+	background: var(--tone, transparent);
+	cursor: pointer;
+	transition:
+		background-color 350 ease,
+		border-color 350 ease,
+		transform var(--motion-fast) ease;
+}
+
+.inspector-panel-cycle.isUnset {
+	border-style: dashed;
+}
+
+.inspector-panel-cycle:hover {
+	transform: scale(1.12);
+}
+
+.inspector-panel-cycle:active {
+	transform: scale(0.94);
+}
+
+.inspector-panel-cycle:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+}
+

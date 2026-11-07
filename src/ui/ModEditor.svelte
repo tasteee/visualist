@@ -49,9 +49,9 @@
 		<z-select class="mod-editor-source" value={sourceValue} options={sourceOptions} size="sm" aria-label="Modulation source" onchange={handleSourceChange}></z-select>
 		{#if hasModulation}
 			<z-tooltip content="Remove modulation" placement="left" openDelay={300}>
-				<button class="mod-editor-remove" type="button" aria-label="Remove modulation" onclick={handleRemove}>
+				<z-button isIcon size="sm" kind="ghost" tone="neutral" aria-label="Remove modulation" onclick={handleRemove}>
 					<TrashIcon weight="bold" />
-				</button>
+				</z-button>
 			</z-tooltip>
 		{/if}
 	</div>

@@ -1,7 +1,6 @@
-/* An audio clip: a header bar that moves it, edges that trim it, and
-   its waveform in between. */
 .audio-clip {
-	--audio-clip-tone: var(--tone, var(--accent));
+	--audio-clip-tone: var(--tone, var(--color-neutral-7));
+	--audio-clip-ink: oklch(0.22 0.012 146);
 	position: absolute;
 	top: var(--spacing-1);
 	right: var(--clip-right);
@@ -12,10 +11,13 @@
 	flex-direction: column;
 	min-width: var(--spacing-3);
 	overflow: hidden;
-	border: 1px solid color-mix(in oklab, var(--audio-clip-tone) 55%, transparent);
+	border: 1px solid var(--audio-clip-tone);
 	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--audio-clip-tone) 12%, var(--bg));
 	color: var(--foreground);
+	/* Only the bar and edges take the pointer, so a click in the body
+	   sets the playhead. */
+	pointer-events: none;
 	touch-action: none;
 	user-select: none;
 	transition:
@@ -23,8 +25,9 @@
 		border-color var(--motion-fast) ease;
 }
 
+/* Selected clips turn neutral, whatever their color. */
 .audio-clip.isSelected {
-	border-color: var(--audio-clip-tone);
+	--audio-clip-tone: var(--color-neutral-7);
 	background: color-mix(in oklab, var(--audio-clip-tone) 20%, var(--bg));
 }
 
@@ -41,12 +44,10 @@
 	gap: var(--spacing-2);
 	height: var(--spacing-4);
 	padding: 0 var(--spacing-3);
-	background: color-mix(in oklab, var(--audio-clip-tone) 55%, var(--bg));
-	cursor: grab;
-}
-
-.audio-clip.isSelected .audio-clip-bar {
 	background: var(--audio-clip-tone);
+	color: var(--audio-clip-ink);
+	cursor: grab;
+	pointer-events: auto;
 }
 
 .audio-clip.isDragging .audio-clip-bar {
@@ -91,6 +92,7 @@
 	z-index: 2;
 	width: var(--spacing-2);
 	cursor: ew-resize;
+	pointer-events: auto;
 }
 
 .audio-clip-edge.isStart {

@@ -1,6 +1,8 @@
 import { clamp } from './settings'
 import type {
 	BlendModeT,
+	ClipT,
+	ClipTransformT,
 	FxKindT,
 	LayerFxT,
 	LayerKindT,
@@ -114,6 +116,22 @@ export const findLayerParam = (key: LayerParamKeyT): LayerParamSpecT => {
 
 const createIdentityTransform = (): LayerTransformT => ({ x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, depth: 0, tilt: 0, turn: 0, volume: 1 })
 
+export const createClipTransform = (): ClipTransformT => ({ x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 })
+
+export const createClip = (clip: Partial<ClipT> = {}): ClipT => ({
+	id: crypto.randomUUID(),
+	startTime: 0,
+	endTime: null,
+	sourceOffset: 0,
+	isActive: true,
+	name: '',
+	color: null,
+	text: '',
+	textStyle: {},
+	...clip,
+	transform: { ...createClipTransform(), ...clip.transform }
+})
+
 const createBaseLayer = (kind: LayerKindT, name: string): LayerT => ({
 	id: crypto.randomUUID(),
 	kind,
@@ -122,14 +140,12 @@ const createBaseLayer = (kind: LayerKindT, name: string): LayerT => ({
 	transform: createIdentityTransform(),
 	modulations: {},
 	blend: 'normal',
-	startTime: 0,
-	endTime: null,
+	clips: [createClip()],
 	fx: [],
 	text: null,
 	shape: null,
 	assetId: null,
-	svgColor: 'original',
-	sourceOffset: 0
+	svgColor: 'original'
 })
 
 export const createLogoLayer = (): LayerT => {
@@ -141,7 +157,6 @@ export const createTextLayer = (text: string): LayerT => {
 	const layer = createBaseLayer('text', 'Text')
 	const transform = { ...layer.transform, y: 30 }
 	const content = {
-		text,
 		weight: 900 as TextWeightT,
 		isUppercase: true,
 		isLowercase: false,
@@ -150,7 +165,8 @@ export const createTextLayer = (text: string): LayerT => {
 		isStrike: false,
 		color: WHITE_COLOR_ID
 	}
-	return { ...layer, transform, text: content }
+	const clips = [createClip({ text })]
+	return { ...layer, transform, text: content, clips }
 }
 
 // A shape starts as a white square.
@@ -183,19 +199,56 @@ export const createFx = (kind: FxKindT): LayerFxT => {
 // A new project has no layers at all.
 export const createDefaultLayers = (): LayerT[] => []
 
-// A layer fades in and out over this long at its time edges.
-const EDGE_FADE_SECONDS = 0.25
+// How long a clip fades in and out at its edges. Zero is a hard cut.
+// Clips will get their own value later.
+const EDGE_FADE_SECONDS = 0
 
 // 0-1 visibility from the layer's time range. A layer that
 // starts at zero is fully on from the first frame.
-export const getTimeRangeLevel = (layer: LayerT, time: number): number => {
-	const endTime = layer.endTime ?? Number.POSITIVE_INFINITY
-	const isBeforeStart = time < layer.startTime
+export const getClipLevel = (clip: ClipT, time: number): number => {
+	if (!clip.isActive) return 0
+	const endTime = clip.endTime ?? Number.POSITIVE_INFINITY
+	const isBeforeStart = time < clip.startTime
 	const isAfterEnd = time > endTime
 	if (isBeforeStart || isAfterEnd) return 0
-	const fadeInLevel = clamp((time - layer.startTime) / EDGE_FADE_SECONDS, 0, 1)
-	const fadeOutLevel = clamp((endTime - time) / EDGE_FADE_SECONDS, 0, 1)
-	const hasStartAtZero = layer.startTime <= 0
+	const hasFade = EDGE_FADE_SECONDS > 0
+	const fadeInLevel = hasFade ? clamp((time - clip.startTime) / EDGE_FADE_SECONDS, 0, 1) : 1
+	const fadeOutLevel = hasFade ? clamp((endTime - time) / EDGE_FADE_SECONDS, 0, 1) : 1
+	const hasStartAtZero = clip.startTime <= 0
 	const startLevel = hasStartAtZero ? 1 : fadeInLevel
 	return Math.min(startLevel, fadeOutLevel)
+}
+
+// The layer shows through whichever of its clips is on right now.
+export const getTimeRangeLevel = (layer: LayerT, time: number): number => {
+	let level = 0
+	for (const clip of layer.clips) level = Math.max(level, getClipLevel(clip, time))
+	return level
+}
+
+// What a text layer says at this moment: its active clip's words, or
+// the first clip's when none is showing.
+export const getClipTextAt = (layer: LayerT, time: number): string => {
+	const clip = findClipAt(layer, time) ?? layer.clips[0]
+	return clip?.text ?? ''
+}
+
+// The layer as it looks at this moment: the clip showing now adds its
+// own transform and text style on top of the layer's.
+export const applyClipToLayer = (layer: LayerT, time: number): LayerT => {
+	const clip = findClipAt(layer, time)
+	if (clip === undefined) return layer
+	const { x, y, scale, rotation, opacity } = clip.transform
+	const hasTransform = x !== 0 || y !== 0 || scale !== 1 || rotation !== 0 || opacity !== 1
+	const hasStyle = layer.text !== null && Object.keys(clip.textStyle).length > 0
+	if (!hasTransform && !hasStyle) return layer
+	const base = layer.transform
+	const transform = { ...base, x: base.x + x, y: base.y + y, scale: base.scale * scale, rotation: base.rotation + rotation, opacity: base.opacity * opacity }
+	const text = hasStyle && layer.text !== null ? { ...layer.text, ...clip.textStyle } : layer.text
+	return { ...layer, transform, text }
+}
+
+// The active clip that covers this moment, if any.
+export const findClipAt = (layer: LayerT, time: number): ClipT | undefined => {
+	return layer.clips.find((clip) => clip.isActive && time >= clip.startTime && time <= (clip.endTime ?? Number.POSITIVE_INFINITY))
 }

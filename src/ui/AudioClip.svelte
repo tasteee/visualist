@@ -4,19 +4,20 @@
 	import { MIN_CLIP_SECONDS } from '../engine/settings'
 	import { formatPreciseTime, ratioToTime, snapToGrid, timeToPercent } from '../engine/timeline'
 	import type { TimelineGridT } from '../engine/timeline'
-	import type { LayerT } from '../engine/types'
-	import { layerStore } from '../layers.svelte'
-	import { pickLayer, readModifiers } from '../selection.svelte'
+	import type { ClipT, LayerT } from '../engine/types'
+	
+	import { pickClip } from '../selection.svelte'
 	import { app, getAudioLayerBuffer, getAudioLayerPeaks } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import './AudioClip.css'
 
 	// An audio layer on the timeline, like a clip in Ableton. The bar
 	// along its top selects it and drags it along the timeline. Its
-	// left and right edges trim where the sound starts and ends. The
-	// picture inside is the waveform of the part that plays.
+	// left and right edges trim where the sound starts and ends.
+
 	type AudioClipPropsT = {
 		layer: LayerT
+		clip: ClipT
 		grid: TimelineGridT
 		isSelected: boolean
 	}
@@ -47,14 +48,14 @@
 	const view = $derived(timeline.view)
 	const buffer = $derived(getAudioLayerBuffer(props.layer.id))
 	const fileLength = $derived(buffer === undefined ? 0 : buffer.duration)
-	const startTime = $derived(props.layer.startTime)
-	const offset = $derived(props.layer.sourceOffset)
+	const startTime = $derived(props.clip.startTime)
+	const offset = $derived(props.clip.sourceOffset)
 	// Where the sound ends if it is never cut short.
 	const naturalEnd = $derived(startTime + Math.max(0, fileLength - offset))
-	const endTime = $derived(props.layer.endTime ?? naturalEnd)
+	const endTime = $derived(props.clip.endTime ?? naturalEnd)
 	const leftPercent = $derived(timeToPercent(startTime, view))
 	const rightPercent = $derived(100 - timeToPercent(endTime, view))
-	const isMuted = $derived(!props.layer.isVisible)
+	const isMuted = $derived(!props.layer.isVisible || !props.clip.isActive)
 	const isDragging = $derived(drag !== null)
 	const rangeLabel = $derived(`${formatPreciseTime(startTime)} – ${formatPreciseTime(endTime)}`)
 
@@ -77,8 +78,7 @@
 		if (!isPrimaryButton) return
 		event.stopPropagation()
 		root.setPointerCapture(event.pointerId)
-		const orderedIds = [...layerStore.layers].reverse().map((candidate) => candidate.id)
-		pickLayer(props.layer.id, orderedIds, readModifiers(event))
+		pickClip(props.layer.id, props.clip.id)
 		drag = { mode, grabOffset: readTime(event) - startTime, startX: event.clientX, hasMoved: false }
 	}
 
@@ -86,9 +86,9 @@
 		const length = endTime - startTime
 		const rawStart = Math.max(0, readTime(event) - activeDrag.grabOffset)
 		const nextStart = snapTime(rawStart, event)
-		props.layer.startTime = nextStart
-		const hasCut = props.layer.endTime !== null
-		if (hasCut) props.layer.endTime = nextStart + length
+		props.clip.startTime = nextStart
+		const hasCut = props.clip.endTime !== null
+		if (hasCut) props.clip.endTime = nextStart + length
 	}
 
 	// Trimming the start moves where in the file the clip begins, so
@@ -98,14 +98,14 @@
 		const latest = endTime - MIN_CLIP_SECONDS
 		const nextStart = clamp(snapTime(readTime(event), event), Math.max(0, earliest), latest)
 		const shift = nextStart - startTime
-		props.layer.sourceOffset = Math.max(0, offset + shift)
-		props.layer.startTime = nextStart
+		props.clip.sourceOffset = Math.max(0, offset + shift)
+		props.clip.startTime = nextStart
 	}
 
 	const trimEnd = (event: PointerEvent) => {
 		const nextEnd = clamp(snapTime(readTime(event), event), startTime + MIN_CLIP_SECONDS, naturalEnd)
 		const isAtNaturalEnd = nextEnd >= naturalEnd - 0.005
-		props.layer.endTime = isAtNaturalEnd ? null : nextEnd
+		props.clip.endTime = isAtNaturalEnd ? null : nextEnd
 	}
 
 	const handleMove = (event: PointerEvent) => {
@@ -186,6 +186,7 @@
 	class="audio-clip"
 	class:isSelected={props.isSelected}
 	class:isMuted
+	data-tone={props.clip.color ?? undefined}
 	class:isDragging
 	bind:this={root}
 	style:--clip-left="{leftPercent}%"
@@ -197,7 +198,7 @@
 	onpointercancel={handleUp}
 >
 	<div class="audio-clip-bar" data-clip-control role="presentation" title="{props.layer.name} · {rangeLabel} · drag to move" onpointerdown={(event) => handleDown(event, 'move')}>
-		<span class="audio-clip-name">{props.layer.name}</span>
+		<span class="audio-clip-name">{props.clip.name || props.layer.name}</span>
 		{#if isDragging}
 			<span class="audio-clip-range">{rangeLabel}</span>
 		{/if}

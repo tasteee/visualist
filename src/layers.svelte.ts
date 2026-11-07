@@ -2,9 +2,10 @@ import { toaster } from '@tasteee/zest'
 import { recordHistory, removeLanesForFx, removeLanesForLayer } from './automation.svelte'
 import { importAssetFile, restoreAssets } from './engine/assets'
 import type { AssetRequestT } from './engine/assets'
-import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createShapeLayer, createTextLayer, createVideoLayer } from './engine/layers'
+import { LOGO_LAYER_ID, createAssetLayer, createClip, createDefaultLayers, createFx, createLogoLayer, createShapeLayer, createTextLayer, createVideoLayer } from './engine/layers'
+import { MIN_CLIP_SECONDS } from './engine/settings'
 import { importVideoFile, restoreVideos } from './engine/video'
-import type { FxKindT, LayerFxT, LayerT, ShapeT, TextContentT } from './engine/types'
+import type { ClipT, FxKindT, LayerFxT, LayerT, ShapeT, TextContentT } from './engine/types'
 
 type LayerStoreT = {
 	layers: LayerT[]
@@ -12,6 +13,8 @@ type LayerStoreT = {
 	// in the current selection. The first is always one of them.
 	selectedLayerId: string | null
 	selectedLayerIds: string[]
+	// A clip picked on its own. It never selects its layer.
+	selectedClip: { layerId: string; clipId: string } | null
 	// Bumps when a decoded file arrives, so the frame redraws.
 	assetVersion: number
 	isImporting: boolean
@@ -42,6 +45,37 @@ const migrateColorId = (value: unknown, fallback: string): string => {
 
 // Stored layers come back merged over fresh defaults, so older
 // saves gain any field added since.
+type LegacyClipFieldsT = {
+	startTime?: number
+	endTime?: number | null
+	sourceOffset?: number
+	audioOffset?: number
+	isClipActive?: boolean
+}
+
+const normalizeClips = (stored: Partial<LayerT>): ClipT[] => {
+	// Saves from before text moved to the clips kept it on the layer.
+	const legacyText = (stored.text as { text?: string } | null | undefined)?.text ?? ''
+	const hasClips = Array.isArray(stored.clips) && stored.clips.length > 0
+	if (hasClips) return (stored.clips as Partial<ClipT>[]).map((clip) => createClip({ text: legacyText, ...clip }))
+	const legacy = stored as LegacyClipFieldsT
+	return [
+		createClip({
+			startTime: legacy.startTime ?? 0,
+			endTime: legacy.endTime ?? null,
+			sourceOffset: legacy.sourceOffset ?? legacy.audioOffset ?? 0,
+			isActive: legacy.isClipActive !== false,
+			text: legacyText
+		})
+	]
+}
+
+const withoutText = (content: TextContentT): TextContentT => {
+	const { text: legacy, ...rest } = content as TextContentT & { text?: string }
+	void legacy
+	return rest
+}
+
 const normalizeLayer = (stored: Partial<LayerT>): LayerT | null => {
 	const kind = stored.kind
 	const isKnownKind = kind === 'logo' || kind === 'text' || kind === 'image' || kind === 'svg' || kind === 'audio' || kind === 'video' || kind === 'shape'
@@ -53,14 +87,16 @@ const normalizeLayer = (stored: Partial<LayerT>): LayerT | null => {
 	const modulations = { ...stored.modulations }
 	const fx = Array.isArray(stored.fx) ? stored.fx : []
 	const mergedText = { ...base.text, ...stored.text } as TextContentT
-	const text = kind === 'text' ? { ...mergedText, color: migrateColorId(mergedText.color, 'white') } : null
+	const text = kind === 'text' ? withoutText({ ...mergedText, color: migrateColorId(mergedText.color, 'white') }) : null
 	const shapeBase = createShapeLayer().shape as ShapeT
 	const mergedShape = { ...shapeBase, ...stored.shape } as ShapeT
 	const shape = kind === 'shape' ? { ...mergedShape, color: migrateColorId(mergedShape.color, 'white'), color2: migrateColorId(mergedShape.color2, 'accent-1') } : null
 	const svgColor = migrateColorId(stored.svgColor, 'original')
-	const legacyOffset = (stored as { audioOffset?: unknown }).audioOffset
-	const offsetFallback = typeof legacyOffset === 'number' ? { sourceOffset: legacyOffset } : {}
-	const normalized = { ...base, ...offsetFallback, ...stored, kind, transform, modulations, fx, text, shape, svgColor } as LayerT
+	const clips = normalizeClips(stored)
+	const normalized = { ...base, ...stored, kind, transform, modulations, fx, text, shape, svgColor, clips } as LayerT
+	// Saves from before layers held several clips kept one set of fields.
+	const legacyKeys = ['startTime', 'endTime', 'sourceOffset', 'audioOffset', 'isClipActive']
+	for (const key of legacyKeys) delete (normalized as unknown as Record<string, unknown>)[key]
 	return normalized
 }
 
@@ -92,6 +128,7 @@ export const layerStore = $state<LayerStoreT>({
 	layers: loadLayers(),
 	selectedLayerId: null,
 	selectedLayerIds: [],
+	selectedClip: null,
 	assetVersion: 0,
 	isImporting: false
 })
@@ -106,6 +143,32 @@ export const getSelectedLayer = (): LayerT | undefined => findLayer(layerStore.s
 export const selectLayers = (layerIds: string[], primaryId: string | null): void => {
 	layerStore.selectedLayerIds = layerIds
 	layerStore.selectedLayerId = primaryId
+	layerStore.selectedClip = null
+}
+
+// Picking a clip leaves every layer unselected.
+export const selectClip = (layerId: string, clipId: string): void => {
+	selectLayers([], null)
+	layerStore.selectedClip = { layerId, clipId }
+}
+
+export const getSelectedClip = (): { layer: LayerT; clip: ClipT } | undefined => {
+	const picked = layerStore.selectedClip
+	if (picked === null) return undefined
+	const layer = findLayer(picked.layerId)
+	const clip = layer?.clips.find((candidate) => candidate.id === picked.clipId)
+	if (layer === undefined || clip === undefined) return undefined
+	return { layer, clip }
+}
+
+// Removing a layer's only clip removes the layer.
+export const removeClip = (layerId: string, clipId: string): void => {
+	const layer = findLayer(layerId)
+	if (layer === undefined) return
+	if (layer.clips.length <= 1) return removeLayers([layerId])
+	recordHistory()
+	layer.clips = layer.clips.filter((clip) => clip.id !== clipId)
+	layerStore.selectedClip = null
 }
 
 export const selectLayer = (layerId: string | null): void => {
@@ -132,7 +195,6 @@ export const renameLayer = (layerId: string, name: string): void => {
 	layer.name = trimmed
 }
 
-const MIN_CLIP_SECONDS = 0.1
 
 export type LayerTimeRangeT = {
 	startTime: number
@@ -141,14 +203,15 @@ export type LayerTimeRangeT = {
 
 // endTime at or past the song's end means "to the end", so the
 // layer keeps going if a longer song is loaded later.
-export const setLayerTimeRange = (layerId: string, startTime: number, endTime: number, songLength: number): void => {
+export const setLayerTimeRange = (layerId: string, clipId: string, startTime: number, endTime: number, songLength: number): void => {
 	const layer = findLayer(layerId)
-	if (layer === undefined) return
+	const clip = layer?.clips.find((candidate) => candidate.id === clipId)
+	if (clip === undefined) return
 	const safeStart = Math.max(0, Math.min(startTime, songLength - MIN_CLIP_SECONDS))
 	const safeEnd = Math.max(safeStart + MIN_CLIP_SECONDS, endTime)
 	const isAtSongEnd = safeEnd >= songLength - 0.005
-	layer.startTime = safeStart
-	layer.endTime = isAtSongEnd ? null : safeEnd
+	clip.startTime = safeStart
+	clip.endTime = isAtSongEnd ? null : safeEnd
 }
 
 // New layers land on top of the stack, in front of everything.
@@ -204,8 +267,9 @@ export const addVideoLayer = async (file: File, startTime: number): Promise<void
 		const layer = createVideoLayer('', getFileBaseName(file.name))
 		layer.assetId = layer.id
 		const asset = await importVideoFile(layer.id, file)
-		layer.startTime = Math.max(0, startTime)
-		layer.endTime = layer.startTime + asset.duration
+		const clip = layer.clips[0]
+		clip.startTime = Math.max(0, startTime)
+		clip.endTime = clip.startTime + asset.duration
 		pushLayer(layer)
 		layerStore.assetVersion += 1
 	} catch {

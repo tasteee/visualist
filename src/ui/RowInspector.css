@@ -62,10 +62,15 @@
 	border-radius: 50%;
 	background: var(--tone);
 	content: '';
+	box-shadow: 0px 0px 8px -1px var(--tone-7), 0px 0.8px 2px 0px var(--color-neutral-1), 0px 0.75px 3px 0px var(--color-neutral-3);
+    border: 1px solid var(--tone-7);
 }
 
 .row-inspector-swatch:hover {
-	background: var(--paper-soft);
+    background: var(--tone-2);
+    box-shadow: 0px 0px 16px 0px var(--tone-4), 0px 0px 3px 1.5px var(--tone-8), 0px 2px 4px 0px var(--color-neutral-4), 0px 1px 15px 0px var(--tone-3);
+    outline: 1px solid var(--tone-1);
+    border: 2px dotted var(--tone-6);
 }
 
 .row-inspector-swatch.isActive {

@@ -12,8 +12,8 @@ importers:
         specifier: ^5.2.8
         version: 5.3.0
       '@tasteee/zest':
-        specifier: github:tasteee/zest#build
-        version: https://codeload.github.com/tasteee/zest/tar.gz/97fe4ea59e73438981e53fcb24c74c2eddc7469e
+        specifier: tasteee/zest#build
+        version: https://codeload.github.com/tasteee/zest/tar.gz/248e272c7d62fe731e60c57d327f09f559991e7c
       phosphor-svelte:
         specifier: ^3.1.1
         version: 3.1.1(svelte@5.57.3)(vite@6.4.5(@types/node@26.6.6))
@@ -380,8 +380,8 @@ packages:
       svelte: ^5.0.0
       vite: ^6.0.0
 
-  '@tasteee/zest@https://codeload.github.com/tasteee/zest/tar.gz/97fe4ea59e73438981e53fcb24c74c2eddc7469e':
-    resolution: {tarball: https://codeload.github.com/tasteee/zest/tar.gz/97fe4ea59e73438981e53fcb24c74c2eddc7469e}
+  '@tasteee/zest@https://codeload.github.com/tasteee/zest/tar.gz/248e272c7d62fe731e60c57d327f09f559991e7c':
+    resolution: {tarball: https://codeload.github.com/tasteee/zest/tar.gz/248e272c7d62fe731e60c57d327f09f559991e7c}
     version: 1.0.0
 
   '@tsconfig/svelte@5.0.8':
@@ -837,7 +837,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@tasteee/zest@https://codeload.github.com/tasteee/zest/tar.gz/97fe4ea59e73438981e53fcb24c74c2eddc7469e':
+  '@tasteee/zest@https://codeload.github.com/tasteee/zest/tar.gz/248e272c7d62fe731e60c57d327f09f559991e7c':
     dependencies:
       atomico: 2.2.0
 

@@ -523,8 +523,12 @@ const syncExtraTracks = (): void => {
 		const isAudio = layer.kind === 'audio'
 		const buffer = isAudio ? audioLayerBuffers.get(layer.id) : undefined
 		if (!isAudio || buffer === undefined || !layer.isVisible) continue
-		extraLayerIds.push(layer.id)
-		tracks.push({ buffer, startTime: layer.startTime, endTime: layer.endTime, volume: layer.transform.volume, offset: layer.sourceOffset })
+		// One track per active clip, so volume follows the layer's lane.
+		for (const clip of layer.clips) {
+			if (!clip.isActive) continue
+			extraLayerIds.push(layer.id)
+			tracks.push({ buffer, startTime: clip.startTime, endTime: clip.endTime, volume: layer.transform.volume, offset: clip.sourceOffset })
+		}
 	}
 	setExtraTracks(tracks)
 }
@@ -698,8 +702,12 @@ const getContentEnd = (layer: LayerT): number | null => {
 	const fileLength = isAudio ? (audioLayerBuffers.get(layer.id)?.duration ?? 0) : getVideoDuration(layer.assetId)
 	const hasFile = fileLength > 0
 	if (!hasFile) return null
-	const naturalEnd = layer.startTime + Math.max(0, fileLength - layer.sourceOffset)
-	return layer.endTime ?? naturalEnd
+	let contentEnd = 0
+	for (const clip of layer.clips) {
+		const naturalEnd = clip.startTime + Math.max(0, fileLength - clip.sourceOffset)
+		contentEnd = Math.max(contentEnd, clip.endTime ?? naturalEnd)
+	}
+	return contentEnd
 }
 
 // Rebuilds the silent base when the project grows or shrinks.
@@ -927,7 +935,7 @@ const startWatchers = (): void => {
 		// from where it is, so the change is heard at once.
 		$effect(() => {
 			const audioLayers = layerStore.layers.filter((layer) => layer.kind === 'audio')
-			const mixKey = audioLayers.map((layer) => [layer.id, layer.startTime, layer.endTime, layer.sourceOffset, layer.isVisible].join(':')).join('|')
+			const mixKey = audioLayers.map((layer) => [layer.id, layer.isVisible, ...layer.clips.map((clip) => [clip.startTime, clip.endTime, clip.sourceOffset, clip.isActive].join(','))].join(':')).join('|')
 			void mixKey
 			untrack(restartMixIfPlaying)
 		})
@@ -1066,9 +1074,11 @@ const readSongPlacement = (): ClipPlacementT | null => {
 	const layer = layerId === undefined ? undefined : findLayer(layerId)
 	const buffer = layerId === undefined ? undefined : audioLayerBuffers.get(layerId)
 	if (layer === undefined || buffer === undefined) return null
-	const naturalEnd = layer.startTime + Math.max(0, buffer.duration - layer.sourceOffset)
-	const endTime = layer.endTime ?? naturalEnd
-	return { startTime: layer.startTime, endTime: Math.min(endTime, naturalEnd), sourceOffset: layer.sourceOffset }
+	const clip = layer.clips[0]
+	if (clip === undefined) return null
+	const naturalEnd = clip.startTime + Math.max(0, buffer.duration - clip.sourceOffset)
+	const endTime = clip.endTime ?? naturalEnd
+	return { startTime: clip.startTime, endTime: Math.min(endTime, naturalEnd), sourceOffset: clip.sourceOffset }
 }
 
 export type AddAudioOptionsT = {

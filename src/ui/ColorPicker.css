@@ -1,0 +1,107 @@
+.color-picker {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-2);
+}
+
+.color-picker-trigger {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	height: var(--spacing-8);
+	padding: 0 var(--spacing-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--foreground);
+	font: inherit;
+	font-size: var(--font-size-small);
+	cursor: pointer;
+}
+
+.color-picker-trigger:hover {
+	background: var(--paper-soft);
+}
+
+.color-picker-trigger:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.color-picker-swatch {
+	flex: none;
+	width: var(--spacing-4);
+	height: var(--spacing-4);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+}
+
+.color-picker-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.color-picker-menu {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-2);
+	padding: var(--spacing-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--paper);
+}
+
+.color-picker-heading {
+	color: var(--muted);
+	font-size: var(--font-size-0);
+	font-weight: var(--font-weight-semibold);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.color-picker-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--spacing-1);
+}
+
+.color-picker-chip {
+	width: var(--spacing-6);
+	height: var(--spacing-6);
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.color-picker-chip.isActive {
+	outline: 2px solid var(--foreground);
+	outline-offset: 1px;
+}
+
+.color-picker-chip:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 1px;
+}
+
+.color-picker-custom {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	color: var(--secondary);
+	font-size: var(--font-size-small);
+	cursor: pointer;
+}
+
+.color-picker-custom input {
+	width: var(--spacing-6);
+	height: var(--spacing-6);
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+}

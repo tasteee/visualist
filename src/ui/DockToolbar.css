@@ -37,7 +37,7 @@
 	border: 0;
 	border-radius: var(--radius-lg);
 	background: transparent;
-	color: var(--secondary);
+	color: var(--color-neutral-6);
 	font-size: var(--font-size-3);
 	cursor: pointer;
 	transition:

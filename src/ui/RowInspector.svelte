@@ -83,12 +83,12 @@
 	})
 
 	const defaultColor = $derived.by((): ColorNameT => {
-		if (open === null) return 'slate'
+		if (open === null) return 'lavender'
 		if (layer !== undefined) return pickColorForId(layer.id)
 		if (lane !== undefined) return getToneColor(getTargetTone(lane.target, layers))
 		if (track !== undefined) return getRoleColor(track.role)
 		if (open.kind === 'band') return 'amber'
-		return 'slate'
+		return 'lavender'
 	})
 
 	const rowColorId = $derived(open === null ? '' : open.rowId)

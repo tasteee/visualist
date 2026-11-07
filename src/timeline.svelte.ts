@@ -3,7 +3,12 @@ import { clampView, getViewEnd, panView, zoomView } from './engine/timeline'
 import type { GridDivisionT, TimelineViewT } from './engine/timeline'
 import { app } from './store.svelte'
 
+export type EditorModeT = 'staging' | 'modulation'
+
 type TimelineStateT = {
+	// Staging places clips. Modulation holds the lanes and emitters
+	// that drive layer values.
+	mode: EditorModeT
 	view: TimelineViewT
 	isFollowing: boolean
 	isSnapping: boolean
@@ -15,9 +20,9 @@ type TimelineStateT = {
 	trackWidth: number
 }
 
-const HEADER_WIDTH_KEY = 'vink.headerWidth'
-export const DEFAULT_HEADER_WIDTH = 216
-export const MIN_HEADER_WIDTH = 160
+const HEADER_WIDTH_KEY = 'vink.headerWidth.v3'
+export const DEFAULT_HEADER_WIDTH = 240
+export const MIN_HEADER_WIDTH = 172
 export const MAX_HEADER_WIDTH = 360
 const DOCK_HEIGHT_KEY = 'vink.dockHeight'
 const DEFAULT_DOCK_HEIGHT = 384
@@ -50,6 +55,7 @@ const readStoredHeaderWidth = (): number => {
 }
 
 export const timeline = $state<TimelineStateT>({
+	mode: 'staging',
 	view: { start: 0, span: 1 },
 	isFollowing: true,
 	isSnapping: true,
@@ -63,6 +69,10 @@ export const timeline = $state<TimelineStateT>({
 
 const setView = (view: TimelineViewT): void => {
 	timeline.view = clampView(view, app.duration)
+}
+
+export const setEditorMode = (mode: EditorModeT): void => {
+	timeline.mode = mode
 }
 
 export const fitView = (): void => {

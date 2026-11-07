@@ -1,14 +1,12 @@
 <script lang="ts">
 	import { untrack } from 'svelte'
-	import CaretDoubleDownIcon from 'phosphor-svelte/lib/CaretDoubleDownIcon'
-	import CaretDoubleUpIcon from 'phosphor-svelte/lib/CaretDoubleUpIcon'
+	import CrosshairSimpleIcon from 'phosphor-svelte/lib/CrosshairSimpleIcon'
+	import MagnetStraightIcon from 'phosphor-svelte/lib/MagnetStraightIcon'
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import {
 		addLayerLane,
 		automation,
-		checkAreAllCollapsed,
 		checkCanAddLayerLane,
-		checkIsGroupCollapsed,
 		getLanesInGroup,
 		movePoints,
 		recordHistory,
@@ -16,7 +14,6 @@
 		redo,
 		revealLane,
 		selectAllPoints,
-		toggleAllCollapsed,
 		undo
 	} from '../automation.svelte'
 	import { getTargetControl } from '../engine/automation'
@@ -26,12 +23,12 @@
 	import type { CompiledBandT } from '../engine/types'
 	import { buildGrid, ratioToTime } from '../engine/timeline'
 	import type { LayerT } from '../engine/types'
-	import { layerStore, moveLayer, moveLayerToFrontIndex, toggleLayerVisible } from '../layers.svelte'
+	import { layerStore, moveLayer, moveLayerToFrontIndex, removeLayer, toggleLayerVisible } from '../layers.svelte'
+	import { help } from '../help.svelte'
 	import { rowInspector } from '../rowInspector.svelte'
-	import { toggleRowFolded } from '../rowLayout.svelte'
-	import type { RowRefT } from '../rowLayout.svelte'
+		import type { RowRefT } from '../rowLayout.svelte'
 	import { checkHasSelection, clearSelection, deleteSelection, pickLayer, readModifiers } from '../selection.svelte'
-	import { copySelectedLayers, duplicateSelectedLayers, pasteLayers, toggleSelectedLayersActive } from '../layerEdit.svelte'
+	import { copySelectedLayers, duplicateSelectedLayers, pasteLayers, sliceSelectedLayers, toggleSelectedLayersActive } from '../layerEdit.svelte'
 	import { nudgeSelectedLayers } from '../stage.svelte'
 	import {
 		addEmptyTrack,
@@ -45,7 +42,7 @@
 	import { getRowColor } from '../appearance.svelte'
 	import { pickColorForId } from '../engine/palette'
 	import type { ColorNameT } from '../engine/palette'
-	import { openGridMenu } from '../timelineMenus.svelte'
+	import { openAddLayerMenu, openGridMenu } from '../timelineMenus.svelte'
 	import { app, getAnalysis, getAudioLayerBuffer, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
 	import { getVideoDuration } from '../engine/video'
 	import type { ImpulseMoveT } from '../sources.svelte'
@@ -83,6 +80,8 @@
 	import TransportBar from './TransportBar.svelte'
 	import { checkIsTextEntry, checkIsTyping } from './keyboard'
 	import './EditorDock.css'
+	import { RepeatIcon } from 'phosphor-svelte'
+	import { press } from './press'
 
 	type PointEditorT = {
 		laneId: string
@@ -138,6 +137,8 @@
 	let reorder = $state<ReorderDragT | null>(null)
 	let dropMarker = $state<DropMarkerT | null>(null)
 	let shouldSkipSelect = false
+	const loopLabel = $derived(app.isLoopEnabled ? 'Loop on (L)' : 'Loop off (L)')
+	const canPlay = $derived(app.hasAudio && !app.isRecording && !app.isAnalyzing)
 
 	const analysis = $derived(getAnalysis())
 
@@ -153,11 +154,9 @@
 		})
 	)
 
-	const laneCount = $derived(automation.lanes.length)
-	const hasLanes = $derived(laneCount > 0)
-
-	const areAllCollapsed = $derived(checkAreAllCollapsed())
-	const collapseAllLabel = $derived(areAllCollapsed ? 'Expand all lanes' : 'Collapse all lanes')
+	const isModulation = $derived(timeline.mode === 'modulation')
+	const followLabel = $derived(timeline.isFollowing ? 'Following playhead (F)' : 'Follow playhead (F)')
+	const snapLabel = $derived(timeline.isSnapping ? 'Snapping to the grid (S) · hold Shift to move freely' : 'Snap to the grid (S)')
 
 	const trackCount = $derived(sources.tracks.length)
 	const bandCount = $derived(sources.bands.length)
@@ -169,7 +168,6 @@
 
 	// Front to back, matching the Layers panel.
 	const layersFrontToBack = $derived([...layerStore.layers].reverse() as LayerT[])
-	const laneCountLabel = $derived(String(laneCount))
 	const layerIdsInOrder = $derived(layersFrontToBack.map((layer) => layer.id))
 	const trackIdsInOrder = $derived([...sources.tracks.map((track) => track.id), ...sources.bands.map((band) => band.id)])
 	const getLaneIdsInGroup = (groupId: string): string[] => getLanesInGroup(groupId).map((lane) => lane.id)
@@ -333,6 +331,14 @@
 	const handleKeyDown = (event: KeyboardEvent) => {
 		const isTap = checkIsTapKey(event) && !checkIsTextEntry(event)
 		if (isTap) return handleTap()
+		// Ctrl+E slices the selected clips at the playhead. It is claimed
+		// even from a button, so the browser's search bar never opens.
+		const isSlice = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'e'
+		if (isSlice && !checkIsTextEntry(event)) {
+			event.preventDefault()
+			if (!event.repeat) sliceSelectedLayers(app.currentTime, getFileLength)
+			return
+		}
 		if (checkIsTyping(event)) return
 		const isHandled = event.defaultPrevented
 		if (isHandled) return
@@ -387,7 +393,7 @@
 			return didCopy
 		}
 		if (key === 'v') {
-			const didPaste = pasteLayers(app.currentTime)
+			const didPaste = pasteLayers(app.currentTime, getFileLength)
 			if (didPaste) event.preventDefault()
 			return didPaste
 		}
@@ -407,7 +413,7 @@
 		return getVideoDuration(layer?.assetId ?? null)
 	}
 
-	// Zero deactivates the selected layers, like Ableton. With nothing
+	// Zero deactivates the selected clips, like Ableton. With nothing
 	// selected it fits the timeline.
 	const handleZeroKey = (event: KeyboardEvent) => {
 		const didToggle = toggleSelectedLayersActive()
@@ -546,17 +552,21 @@
 		recordTap(tapTime, tempo, snapToStep)
 	}
 
-	// The caret folds a layer's lanes. With the primary modifier,
-	// every other layer is set to the same state.
-	const handleLayerToggle = (layerId: string, event: MouseEvent) => {
-		const isPrimary = event.metaKey || event.ctrlKey
-		const siblings = isPrimary ? layerSiblings.filter((sibling) => sibling.id !== layerId) : []
-		toggleRowFolded({ kind: 'layer', id: layerId }, siblings)
-	}
-
 	const handleTriggersToggle = () => {
 		recordHistory()
 		toggleTriggersCollapsed()
+	}
+
+	// Only a clip picked on its own is lit. Selecting its layer does not
+	// select its clips.
+	const checkIsClipSelected = (layer: LayerT, clipId: string, isLayerSelected: boolean): boolean => {
+		void isLayerSelected
+		const picked = layerStore.selectedClip
+		return picked !== null && picked.layerId === layer.id && picked.clipId === clipId
+	}
+
+	const handleAddLayerClick = (event: Event) => {
+		openAddLayerMenu(event.currentTarget as HTMLElement)
 	}
 
 	const handleAddTrack = () => {
@@ -727,35 +737,73 @@
 			onpointercancel={handleHeaderResizeUp}
 			ondblclick={resetHeaderWidth}
 		></button>
-		<div class="editor-row isRuler">
-			<div class="editor-corner">
-				<span class="editor-eyebrow">Automation</span>
-				<span class="editor-count">{laneCountLabel}</span>
-				<div class="editor-corner-actions">
-					<z-tooltip content={collapseAllLabel} placement="top">
-						<button class="editor-icon" type="button" aria-label={collapseAllLabel} disabled={!hasLanes} onclick={toggleAllCollapsed}>
-							{#if areAllCollapsed}
-								<CaretDoubleDownIcon weight="bold" />
-							{:else}
-								<CaretDoubleUpIcon weight="bold" />
-							{/if}
-						</button>
-					</z-tooltip>
-				</div>
-			</div>
+		<z-row class="editor-row isRuler">
+			<z-row style="height: 54px; padding-left: var(--spacing-3); padding-right: var(--spacing-2)" aligns-y="center" aligns-x="evenly" gap="3">
+			<z-tooltip content={loopLabel} placement="right">
+				<z-button isIcon size="sm" kind={app.isLoopEnabled ? 'soft' : 'ghost'} tone="neutral" isDisabled={!canPlay} aria-pressed={app.isLoopEnabled} aria-label="Loop" {...press(toggleLoop)}>
+					<RepeatIcon weight="bold" />
+				</z-button>
+			</z-tooltip>
+			<z-tooltip content="Add a layer" placement="bottom">
+					<z-button isIcon size="sm" kind="soft" aria-label="Add a layer" onclick={handleAddLayerClick}>
+						<PlusIcon weight="bold" />
+					</z-button>
+				</z-tooltip>
+				<z-tooltip content={snapLabel} placement="bottom">
+					<z-button isIcon size="sm" kind={timeline.isSnapping ? 'soft' : 'ghost'} tone="neutral" aria-pressed={timeline.isSnapping} aria-label="Snap to grid" onclick={toggleSnapping}>
+						<MagnetStraightIcon weight="bold" />
+					</z-button>
+				</z-tooltip>
+				<z-tooltip content={followLabel} placement="bottom">
+					<z-button isIcon size="sm" kind={timeline.isFollowing ? 'soft' : 'ghost'} tone="neutral" aria-pressed={timeline.isFollowing} aria-label="Follow playhead" onclick={toggleFollowing}>
+						<CrosshairSimpleIcon weight="bold" />
+					</z-button>
+				</z-tooltip>
+			</z-row>
 			<TimeRuler {grid} />
-		</div>
+		</z-row>
 
 		<div class="editor-lanes" role="presentation" oncontextmenu={handleLanesContextMenu}>
-			{#each sources.tracks as track (track.id)}
-				<ImpulseLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} onedit={openImpulseEditor} />
-			{/each}
-			{#each sources.bands as band (band.id)}
-				<BandLane {band} compiled={findCompiledBand(band.id)} {grid} siblingTrackIds={trackIdsInOrder} />
-			{/each}
+			{#if isModulation}
+				{#each sources.tracks as track (track.id)}
+					<ImpulseLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} onedit={openImpulseEditor} />
+				{/each}
+				{#each sources.bands as band (band.id)}
+					<BandLane {band} compiled={findCompiledBand(band.id)} {grid} siblingTrackIds={trackIdsInOrder} />
+				{/each}
+				<div class="editor-mod-row">
+					<div class="editor-mod-header">
+						<span class="editor-mod-title">Emitters</span>
+						<z-tooltip content="Add an emitter lane" placement="top" openDelay={300}>
+							<z-button isIcon size="sm" kind="ghost" tone="neutral" aria-label="Add an emitter lane" onclick={handleAddTrack}>
+								<PlusIcon weight="bold" />
+							</z-button>
+						</z-tooltip>
+					</div>
+				</div>
 
+				{#each layersFrontToBack as layer (layer.id)}
+					{@const laneIds = getLaneIdsInGroup(layer.id)}
+					{@const canAddLane = layer.kind !== 'audio' && checkCanAddLayerLane(layer.id)}
+					<div class="editor-mod-row" data-tone={getLayerColor(layer)}>
+						<div class="editor-mod-header">
+							<span class="editor-mod-swatch"></span>
+							<span class="editor-mod-title">{layer.name}</span>
+							<z-tooltip content={canAddLane ? `Automate a ${layer.name} control` : `${layer.name} has no more controls to automate`} placement="top" openDelay={300}>
+								<z-button isIcon size="sm" kind="ghost" tone="neutral" aria-label="Automate a {layer.name} control" isDisabled={!canAddLane} onclick={() => handleAddLayerLane(layer.id)}>
+									<PlusIcon weight="bold" />
+								</z-button>
+							</z-tooltip>
+						</div>
+					</div>
+					<div class="editor-layer-lanes" role="presentation">
+						{#each getLanesInGroup(layer.id) as lane (lane.id)}
+							<AutomationLane {lane} {grid} isNested siblingLaneIds={laneIds} onedit={openEditor} />
+						{/each}
+					</div>
+				{/each}
+			{:else}
 			{#each layersFrontToBack as layer (layer.id)}
-				{@const isCollapsed = checkIsGroupCollapsed(layer.id)}
 				{@const isSelected = layerStore.selectedLayerIds.includes(layer.id)}
 				<TimelineLayer
 					kind={layer.kind}
@@ -763,13 +811,10 @@
 					color={getLayerColor(layer)}
 					title={layer.name}
 					{grid}
-					{isCollapsed}
 					{isSelected}
 					siblings={layerSiblings.filter((sibling) => sibling.id !== layer.id)}
 					isHidden={!layer.isVisible}
-					canAddLane={layer.kind !== 'audio' && checkCanAddLayerLane(layer.id)}
-					ontoggle={(event) => handleLayerToggle(layer.id, event)}
-					onadd={() => handleAddLayerLane(layer.id)}
+					ondelete={() => removeLayer(layer.id)}
 					onselect={(event) => handleGroupSelect(layer.id, event)}
 					ontogglevisible={() => toggleLayerVisible(layer.id)}
 					layerId={layer.id}
@@ -779,34 +824,29 @@
 					onreorderkey={(direction) => moveLayer(layer.id, direction)}
 				>
 					{#snippet track()}
-						{#if layer.kind === 'audio'}
-							<AudioClip {layer} {grid} {isSelected} />
-						{:else}
-							<LayerClip {layer} {grid} {isSelected} />
-						{/if}
+						{#each layer.clips as clip (clip.id)}
+							{#if layer.kind === 'audio'}
+								<AudioClip {layer} {clip} {grid} isSelected={checkIsClipSelected(layer, clip.id, isSelected)} />
+							{:else}
+								<LayerClip {layer} {clip} {grid} isSelected={checkIsClipSelected(layer, clip.id, isSelected)} />
+							{/if}
+						{/each}
 					{/snippet}
 				</TimelineLayer>
-				{#if !isCollapsed}
-					{@const laneIds = getLaneIdsInGroup(layer.id)}
-					<div class="editor-layer-lanes" role="presentation">
-						{#each getLanesInGroup(layer.id) as lane (lane.id)}
-							<AutomationLane {lane} {grid} isNested siblingLaneIds={laneIds} onedit={openEditor} />
-						{/each}
-					</div>
-				{/if}
 			{/each}
+			{/if}
 
 			<div class="editor-add-row">
 				<div class="editor-add-cell"></div>
 				<div class="editor-add-fill">
-					<span class="editor-add-hint">Drag a clip to move it. Drag its edges to trim. Press 0 to turn a selected clip off. Press + on a row to automate one of its controls.</span>
+					<span class="editor-add-hint">{isModulation ? 'Press + on a layer to automate one of its controls, or add an emitter to trigger them.' : 'Drag a clip to move it. Drag its edges to trim. Press Ctrl+E to slice at the playhead. Press 0 to turn a selected clip off.'}</span>
 				</div>
 			</div>
 		</div>
 
 		<div class="editor-row isOverview">
 			<div class="editor-overview-label">
-				<span class="editor-eyebrow">Overview</span>
+				<span class="editor-help">{help.text}</span>
 			</div>
 			<OverviewBar />
 		</div>

@@ -2,7 +2,6 @@
 	import { applyPendingBpm, app, dismissPendingBpm } from '../store.svelte'
 	import { formatBpm } from '../engine/timeline'
 	import { focusShell } from './focus'
-	import './BpmDialog.css'
 
 	// Asked once for a song's tempo, when it loads: should the
 	// project take the tempo that was found in it?
@@ -21,16 +20,11 @@
 	}
 </script>
 
-{#if pending !== null}
-	<div class="bpm-dialog-backdrop" role="presentation">
-		<div class="bpm-dialog" role="dialog" aria-modal="true" aria-labelledby="bpm-dialog-title">
-			<span class="bpm-dialog-eyebrow">Tempo</span>
-			<h2 class="bpm-dialog-title" id="bpm-dialog-title">This song sounds like {detectedLabel} BPM</h2>
-			<p class="bpm-dialog-text">The project is at {currentLabel} BPM. Use the song's tempo for the grid and the beat lines? You can change it any time in Settings.</p>
-			<div class="bpm-dialog-actions">
-				<button class="bpm-dialog-button" type="button" onclick={handleKeep}>Keep {currentLabel}</button>
-				<button class="bpm-dialog-button isPrimary" type="button" onclick={handleApply}>Use {detectedLabel} BPM</button>
-			</div>
-		</div>
+<z-dialog isOpen={pending !== null} heading="This song sounds like {detectedLabel} BPM" description="Tempo" onclose={handleKeep}>
+	<p>The project is at {currentLabel} BPM. Use the song's tempo for the grid and the beat lines? You can change it any time in Settings.</p>
+
+	<div slot="footer">
+		<z-button size="md" kind="ghost" tone="neutral" onclick={handleKeep}>Keep {currentLabel}</z-button>
+		<z-button size="md" kind="solid" tone="primary" onclick={handleApply}>Use {detectedLabel} BPM</z-button>
 	</div>
-{/if}
+</z-dialog>

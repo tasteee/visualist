@@ -46,9 +46,9 @@
 				</button>
 			</label>
 		{/each}
-		<button class="palette-add" type="button" aria-label="Add a color" onclick={handleAdd}>
+		<z-button isIcon size="sm" kind="outline" tone="neutral" aria-label="Add a color" onclick={handleAdd}>
 			<PlusIcon weight="bold" />
-		</button>
+		</z-button>
 	</div>
 	{#if !hasColors}
 		<p class="palette-empty">No colors yet. Add one to use it on a layer.</p>

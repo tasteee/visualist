@@ -1,3 +1,5 @@
+import type { ColorNameT } from './palette'
+
 export type ModeT = 'light' | 'dark'
 export type ResolutionT = '1080' | '720'
 export type AspectRatioT = '16:9' | '9:16' | '1:1' | '4:5'
@@ -265,7 +267,8 @@ export type PaletteSlotT = string
 // SVG layers can keep their own colors or take one from the palette.
 export type SvgColorT = string
 
-export type TextWeightT = 400 | 700 | 900
+// Any CSS weight. DM Sans ships 400 to 900, so others snap to those.
+export type TextWeightT = number
 
 // x and y are percent of the frame from its center. scale 1 is
 // the layer's natural size. rotation is in degrees. depth is how
@@ -297,8 +300,8 @@ export type LayerFxT = {
 	modulation: ModulationT | null
 }
 
+// The words themselves live on each clip. This is how they look.
 export type TextContentT = {
-	text: string
 	weight: TextWeightT
 	// Caps and lower case never both apply.
 	isUppercase: boolean
@@ -323,7 +326,37 @@ export type ShapeT = {
 	angle: number
 }
 
-// endTime null means the layer runs to the end of the song.
+// One stretch of a layer on the timeline. A layer can hold several,
+// each moved, trimmed, sliced and switched off on its own.
+// endTime null means the clip runs to the end of the song. sourceOffset
+// is how far into an audio or video file the clip begins.
+export type ClipT = {
+	id: string
+	startTime: number
+	endTime: number | null
+	sourceOffset: number
+	isActive: boolean
+	// Text layers: what this clip says, and how. Anything left out
+	// is inherited from the layer.
+	// What the clip is called on the timeline and its own color. Empty
+	// and null fall back to the text or layer name, and the layer color.
+	name: string
+	color: ColorNameT | null
+	text: string
+	textStyle: Partial<TextContentT>
+	// How this clip adds to the layer's own transform: position and
+	// rotation add to it, scale and opacity multiply it.
+	transform: ClipTransformT
+}
+
+export type ClipTransformT = {
+	x: number
+	y: number
+	scale: number
+	rotation: number
+	opacity: number
+}
+
 export type LayerT = {
 	id: string
 	kind: LayerKindT
@@ -332,14 +365,10 @@ export type LayerT = {
 	transform: LayerTransformT
 	modulations: Partial<Record<LayerParamKeyT, ModulationT>>
 	blend: BlendModeT
-	startTime: number
-	endTime: number | null
+	clips: ClipT[]
 	fx: LayerFxT[]
 	text: TextContentT | null
 	shape: ShapeT | null
 	assetId: string | null
 	svgColor: SvgColorT
-	// Audio and video layers: how far into the file the clip begins
-	// (trimming its start moves this).
-	sourceOffset: number
 }

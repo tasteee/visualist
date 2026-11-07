@@ -43,6 +43,10 @@ export const setRowColor = (rowId: string, color: ColorNameT): void => {
 
 export const getRowHeight = (rowId: string): number | null => appearance.heights[rowId] ?? null
 
+export const setRowHeight = (rowId: string, height: number): void => {
+	appearance.heights[rowId] = height
+}
+
 export const resetRowHeight = (rowId: string): void => {
 	delete appearance.heights[rowId]
 }

@@ -3,7 +3,8 @@
 	import MusicNotesIcon from 'phosphor-svelte/lib/MusicNotesIcon'
 	import { formatBarBeat, formatBpm, formatPreciseTime } from '../engine/timeline'
 	import { app, getAnalysis } from '../store.svelte'
-	import { checkIsFitted, fitView, getZoomLevel } from '../timeline.svelte'
+	import { checkIsFitted, fitView, getZoomLevel, setEditorMode, timeline } from '../timeline.svelte'
+	import type { EditorModeT } from '../timeline.svelte'
 	import { openAudioPicker } from './filePicker'
 	import { press } from './press'
 	import './TransportBar.css'
@@ -20,9 +21,27 @@
 	const zoomLevel = $derived(getZoomLevel())
 	const zoomLabel = $derived(zoomLevel < 1.05 ? 'Fit' : `${zoomLevel.toFixed(1)}×`)
 	const isFitted = $derived(checkIsFitted())
+
+	let modes = $state<HTMLElement | undefined>()
+
+	const handleModeChange = (event: Event) => {
+		const detail = (event as CustomEvent<{ value?: string | string[] }>).detail
+		const value = Array.isArray(detail.value) ? detail.value[0] : detail.value
+		if (value === 'staging' || value === 'modulation') return setEditorMode(value as EditorModeT)
+		// A toggle group lets the pressed item be released. A mode always stays on.
+		const items = modes?.querySelectorAll<HTMLElement & { value?: string; isPressed?: boolean }>('z-toggle-button-group-item') ?? []
+		for (const item of items) item.isPressed = item.value === timeline.mode
+	}
 </script>
 
 <div class="transport-bar">
+	<z-toggle-button-group bind:this={modes} class="transport-bar-modes" name="editor-mode" size="sm" kind="soft" aria-label="Editor mode" onchange={handleModeChange}>
+		<z-toggle-button-group-item value="staging" isPressed={timeline.mode === 'staging'}>Staging</z-toggle-button-group-item>
+		<z-toggle-button-group-item value="modulation" isPressed={timeline.mode === 'modulation'}>Modulation</z-toggle-button-group-item>
+	</z-toggle-button-group>
+
+	<span class="transport-bar-divider"></span>
+
 	<div class="transport-bar-readout" aria-live="off">
 		<div class="transport-bar-cell isWide">
 			<span class="transport-bar-eyebrow">Time</span>
@@ -39,22 +58,4 @@
 			<span class="transport-bar-figure">{bpmLabel}</span>
 		</div>
 	</div>
-
-	<div class="transport-bar-spacer"></div>
-
-	<div class="transport-bar-zoom">
-		<span class="transport-bar-zoom-level">{zoomLabel}</span>
-		<z-tooltip content="Zoom to fit (0)" placement="top">
-			<button class="transport-bar-icon" type="button" disabled={isFitted} aria-label="Zoom to fit" {...press(fitView)}>
-				<ArrowsOutLineHorizontalIcon weight="bold" />
-			</button>
-		</z-tooltip>
-	</div>
-
-	<span class="transport-bar-divider"></span>
-
-	<z-button size="sm" kind="ghost" tone="neutral" isDisabled={!canAddAudio} onclick={openAudioPicker}>
-		<MusicNotesIcon weight="bold" />
-		Add audio
-	</z-button>
 </div>

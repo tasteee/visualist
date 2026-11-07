@@ -1,9 +1,15 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte'
-	import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon'
+	import ImageIcon from 'phosphor-svelte/lib/ImageIcon'
+	import MusicNotesIcon from 'phosphor-svelte/lib/MusicNotesIcon'
+	import ShapesIcon from 'phosphor-svelte/lib/ShapesIcon'
+	import SparkleIcon from 'phosphor-svelte/lib/SparkleIcon'
+	import TextAaIcon from 'phosphor-svelte/lib/TextAaIcon'
+	import VectorTwoIcon from 'phosphor-svelte/lib/VectorTwoIcon'
+	import VideoCameraIcon from 'phosphor-svelte/lib/VideoCameraIcon'
 	import EyeIcon from 'phosphor-svelte/lib/EyeIcon'
 	import EyeSlashIcon from 'phosphor-svelte/lib/EyeSlashIcon'
-	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
+	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import { PATH_WIDTH } from '../engine/automation'
 	import type { ColorNameT } from '../engine/palette'
 	import { checkIsTimeVisible, timeToPercent, timeToRatio } from '../engine/timeline'
@@ -13,6 +19,8 @@
 	import { ratioToTime, snapToGrid } from '../engine/timeline'
 	import { app, seekTo } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
+	import { getRowHeight, resetRowHeight, setRowHeight } from '../appearance.svelte'
+	import { recordHistory } from '../automation.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
 	import { openRowInspector } from '../rowInspector.svelte'
 	import type { InspectorRowKindT } from '../rowInspector.svelte'
@@ -28,13 +36,9 @@
 		color: ColorNameT
 		title: string
 		grid: TimelineGridT
-		isCollapsed: boolean
 		isSelected?: boolean
 		isHidden?: boolean
-		canAddLane: boolean
-		addLabel?: string
-		ontoggle: (event: MouseEvent) => void
-		onadd: () => void
+		ondelete?: () => void
 		// A click on the header away from its controls.
 		onselect?: (event: PointerEvent) => void
 		// The rows that follow along with the primary modifier.
@@ -55,9 +59,7 @@
 	const view = $derived(timeline.view)
 	const isAudio = $derived(props.kind === 'audio')
 	const canToggleVisible = $derived(props.ontogglevisible !== undefined)
-	const collapseLabel = $derived(props.isCollapsed ? `Show ${props.title} automations` : `Hide ${props.title} automations`)
-	const defaultAddLabel = $derived(props.canAddLane ? `Automate a ${props.title} control` : `Every ${props.title} control is automated`)
-	const addLabel = $derived(props.addLabel ?? defaultAddLabel)
+	const deleteLabel = $derived(`Delete ${props.title}`)
 	const visibilityLabel = $derived(props.isHidden ? `Show ${props.title}` : `Hide ${props.title}`)
 	// Every line the ruler draws, so what a click snaps to is visible.
 	const gridLines = $derived(props.grid.lines)
@@ -85,6 +87,43 @@
 		const rawTime = clamp(ratioToTime(ratio, view), 0, app.duration)
 		const shouldSnap = timeline.isSnapping && !event.shiftKey
 		seekTo(shouldSnap ? snapToGrid(rawTime, props.grid) : rawTime)
+	}
+
+	// Audio layers stretch to show more of their waveform.
+	const MIN_HEIGHT = 64
+	const MAX_HEIGHT = 160
+	let resizeDrag: { startY: number; startHeight: number; hasMoved: boolean } | null = null
+
+	const storedHeight = $derived(isAudio ? getRowHeight(props.rowId) : null)
+	const customHeight = $derived(storedHeight === null ? undefined : `${clamp(storedHeight, MIN_HEIGHT, MAX_HEIGHT)}px`)
+
+	const handleResizeDown = (event: PointerEvent) => {
+		if (event.button !== 0) return
+		event.stopPropagation()
+		event.preventDefault()
+		const handle = event.currentTarget as HTMLElement
+		handle.setPointerCapture(event.pointerId)
+		const startHeight = clamp(storedHeight ?? MIN_HEIGHT, MIN_HEIGHT, MAX_HEIGHT)
+		resizeDrag = { startY: event.clientY, startHeight, hasMoved: false }
+	}
+
+	const handleResizeMove = (event: PointerEvent) => {
+		const drag = resizeDrag
+		if (drag === null) return
+		const travel = event.clientY - drag.startY
+		if (!drag.hasMoved && Math.abs(travel) < 3) return
+		if (!drag.hasMoved) recordHistory()
+		drag.hasMoved = true
+		setRowHeight(props.rowId, clamp(drag.startHeight + travel, MIN_HEIGHT, MAX_HEIGHT))
+	}
+
+	const handleResizeUp = () => {
+		resizeDrag = null
+	}
+
+	const handleResizeReset = () => {
+		recordHistory()
+		resetRowHeight(props.rowId)
 	}
 
 	const handleInspect = (anchor: HTMLElement) => openRowInspector(inspectorKind, props.rowId, anchor)
@@ -117,7 +156,7 @@
 	class:isSelected={props.isSelected}
 	class:isHidden={props.isHidden}
 	class:isAudio
-	class:isCollapsed={props.isCollapsed}
+	style:--timeline-layer-custom-height={customHeight}
 	class:isDragSource={props.isDragSource}
 	class:isDropBefore
 	class:isDropAfter
@@ -125,30 +164,46 @@
 	data-tone={props.color}
 >
 	<div class="timeline-layer-header" class:canReorder role="presentation" use:rowHeader={headerOptions} onkeydown={handleHeaderKey}>
-		<button class="timeline-layer-caret" type="button" aria-expanded={!props.isCollapsed} aria-label={collapseLabel} onclick={props.ontoggle}>
-			<CaretRightIcon weight="bold" />
-		</button>
-
-		{#if canToggleVisible}
-			<z-tooltip content={visibilityLabel} placement="top" openDelay={300}>
-				<button class="timeline-layer-action" type="button" aria-label={visibilityLabel} aria-pressed={props.isHidden} onclick={props.ontogglevisible}>
-					{#if props.isHidden}
-						<EyeSlashIcon weight="bold" />
-					{/if}
-					{#if !props.isHidden}
-						<EyeIcon weight="bold" />
-					{/if}
-				</button>
-			</z-tooltip>
-		{/if}
+		<span class="timeline-layer-type" aria-hidden="true" title={props.kind} style="margin-right: var(--spacing-2)">
+			{#if props.kind === 'text'}
+				<TextAaIcon weight="bold" />
+			{:else if props.kind === 'video'}
+				<VideoCameraIcon weight="bold" />
+			{:else if props.kind === 'audio'}
+				<MusicNotesIcon weight="bold" />
+			{:else if props.kind === 'image'}
+				<ImageIcon weight="bold" />
+			{:else if props.kind === 'svg'}
+				<VectorTwoIcon weight="bold" />
+			{:else if props.kind === 'shape'}
+				<ShapesIcon weight="bold" />
+			{:else}
+				<SparkleIcon weight="bold" />
+			{/if}
+		</span>
 
 		<span class="timeline-layer-name">{props.title}</span>
 
-		<z-tooltip content={addLabel} placement="top" openDelay={300}>
-			<button class="timeline-layer-action" type="button" aria-label={addLabel} disabled={!props.canAddLane} onclick={props.onadd}>
-				<PlusIcon weight="bold" />
-			</button>
-		</z-tooltip>
+		<div class="timeline-layer-actions">
+			{#if props.ondelete}
+				<z-tooltip content={deleteLabel} placement="top" openDelay={300}>
+					<z-button class="timeline-layer-action" isIcon size="sm" kind="ghost" tone="danger" aria-label={deleteLabel} onclick={props.ondelete}>
+						<TrashIcon weight="bold" />
+					</z-button>
+				</z-tooltip>
+			{/if}
+			{#if canToggleVisible}
+				<z-tooltip content={visibilityLabel} placement="top" openDelay={300}>
+					<z-button class="timeline-layer-action" isIcon size="sm" kind="ghost" tone="neutral" aria-label={visibilityLabel} aria-pressed={props.isHidden} onclick={props.ontogglevisible}>
+						{#if props.isHidden}
+							<EyeSlashIcon weight="bold" />
+						{:else}
+							<EyeIcon weight="bold" />
+						{/if}
+					</z-button>
+				</z-tooltip>
+			{/if}
+		</div>
 	</div>
 
 	<div class="timeline-layer-track" data-track="layer" role="presentation" onclick={handleTrackClick}>
@@ -165,4 +220,19 @@
 		{/if}
 	</div>
 
+
+	{#if isAudio}
+		<button
+			class="timeline-layer-resize"
+			type="button"
+			tabindex="-1"
+			aria-label="Resize {props.title} height. Drag, or double-click to reset."
+			title="Drag to resize · double-click to reset"
+			onpointerdown={handleResizeDown}
+			onpointermove={handleResizeMove}
+			onpointerup={handleResizeUp}
+			onpointercancel={handleResizeUp}
+			ondblclick={handleResizeReset}
+		></button>
+	{/if}
 </div>

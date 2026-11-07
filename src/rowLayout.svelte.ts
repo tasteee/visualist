@@ -20,7 +20,7 @@ type RowSpecT = {
 }
 
 export const ROW_SPECS: Record<RowKindT, RowSpecT> = {
-	layer: { minHeight: 48, foldHeight: 48, defaultHeight: 48, foldBelow: 36, unfoldAbove: 60 },
+	layer: { minHeight: 64, foldHeight: 64, defaultHeight: 64, foldBelow: 48, unfoldAbove: 76 },
 	lane: { minHeight: 72, foldHeight: 28, defaultHeight: 96, foldBelow: 56, unfoldAbove: 44 },
 	impulse: { minHeight: 72, foldHeight: 28, defaultHeight: 72, foldBelow: 56, unfoldAbove: 44 }
 }

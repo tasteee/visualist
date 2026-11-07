@@ -1,38 +1,125 @@
-/* Row colors. Any element with data-tone gets --tone, which
-   its own styles read. Names come from engine/palette.ts. */
-
-[data-tone='purple'] {
-	--tone: var(--purple);
-}
-
-[data-tone='lavender'] {
-	--tone: var(--color-secondary-6);
-}
-
-[data-tone='pink'] {
-	--tone: var(--pink);
-}
-
-[data-tone='blush'] {
-	--tone: var(--color-primary-6);
-}
-
-[data-tone='red'] {
-	--tone: var(--destructive);
-}
-
-[data-tone='amber'] {
-	--tone: var(--warning);
-}
-
-[data-tone='green'] {
-	--tone: var(--success);
-}
-
-[data-tone='silver'] {
-	--tone: var(--color-neutral-7);
-}
-
-[data-tone='slate'] {
-	--tone: var(--color-neutral-5);
-}
+/* Row colors. Any element with data-tone gets --tone, which its own
+   styles read. Names come from engine/palette.ts. */
+   /* Row colors. Any element with data-tone gets --tone, which its own
+      styles read. Names come from engine/palette.ts. */
+   [data-tone='blue'] {
+	--tone-1: #D8E4EE;
+	--tone-2: #BCD5EB;
+	--tone-3: #9EC7EB;
+	--tone-4: #7FB9EB;
+	--tone-5: #53A6EE;
+	--tone-6: #3099F3;
+	--tone-7: #0B8BF9;
+	--tone-8: #027BE4;
+	--tone: #7fb9eb;
+   }
+   [data-tone='cyan'] {
+	--tone-1: #D9EEEE;
+	--tone-2: #BEEAEB;
+	--tone-3: #A1E8EA;
+	--tone-4: #83E7E9;
+	--tone-5: #59E8EB;
+	--tone-6: #36EBEF;
+	--tone-7: #12EFF4;
+	--tone cont: #07DDE1;
+	--tone: #83e7e9;
+   }
+   [data-tone='mint'] {
+	--tone-1: #E5F0EE;
+	--tone-2: #CEE9E2;
+	--tone-3: #B5E3D7;
+	--tone-4: #9CDECD;
+	--tone-5: #78D9C0;
+	--tone-6: #5BD7B7;
+	--tone-7: #3ED6AF;
+	--tone-8: #28CEA3;
+	--tone: #9cdecd;
+   }
+   [data-tone='green'] {
+	--tone-1: #E5F3E4;
+	--tone-2: #CDEECA;
+	--tone-3: #B2ECAD;
+	--tone-4: #97EB90;
+	--tone-5: #71EC66;
+	--tone-6: #51F044;
+	--tone-7: #31F421;
+	--tone-8: #19EF08;
+	--tone: #97eb90;
+   }
+   [data-tone='amber'] {
+	--tone-1: #F4EEE2;
+	--tone-2: #F1E4C6;
+	--tone-3: #F1DAA8;
+	--tone-4: #F2D188;
+	--tone-5: #F6C65B;
+	--tone-6: #FDBF36;
+	--tone-7: #FFB615;
+	--tone-8: #F5A900;
+	--tone: #f2d188;
+   }
+   [data-tone='lime'] {
+	--tone-1: #F4F5EC;
+	--tone-2: #ECEED4;
+	--tone-3: #E5E9BB;
+	--tone-4: #DFE5A0;
+	--tone-5: #D9E27A;
+	--tone-6: #D6E25C;
+	--tone-7: #D4E23D;
+	--tone-8: #D1E21F;
+	--tone: #dfe5a0;
+   }
+   [data-tone='peach'] {
+	--tone-1: #FAF7F5;
+	--tone-2: #F7EBE3;
+	--tone-3: #F4E0D6;
+	--tone-4: #F2DAC9;
+	--tone-5: #EEC3A4;
+	--tone-6: #EDB186;
+	--tone-7: #EE9F67;
+	--tone-8: #EE8D49;
+	--tone: #f2dac9;
+   }
+   [data-tone='coral'] {
+	--tone-1: #F5ECEC;
+	--tone-2: #EED6D4;
+	--tone-3: #EABEBA;
+	--tone-4: #E6A59F;
+	--tone-5: #E38279;
+	--tone-6: #E4665A;
+	--tone-7: #E5493A;
+	--tone-8: #E52D1C;
+	--tone: #e6a59f;
+   }
+   [data-tone='rose'] {
+	--tone-1: #EAD3DA;
+	--tone-2: #E5B9C8;
+	--tone-3: #E29DB4;
+	--tone-4: #E180A1;
+	--tone-5: #E15786;
+	--tone-6: #E33872;
+	--tone-7: #E2195E;
+	--tone-8: #C81451;
+	--tone: #E180A1;
+   }
+   [data-tone='pink'] {
+	--tone-1: #F8F2F8;
+	--tone-2: #F0DBF0;
+	--tone-3: #EAC3EA;
+	--tone-4: #E5A9E5;
+	--tone-5: #E085E0;
+	--tone-6: #DF67DF;
+	--tone-7: #DF49DF;
+	--tone-8: #DD2CDD;
+	--tone: #e5a9e5;
+   }
+   [data-tone='lavender'] {
+	--tone-1: #F7F5FA;
+	--tone-2: #EBE4F6;
+	--tone-3: #DBC9F1;
+	--tone-4: #CAAEEE;
+	--tone-5: #B387EC;
+	--tone-6: #A267EE;
+	--tone-7: #9046F0;
+	--tone-8: #7F26F1;
+	--tone: #caaeee;
+   }

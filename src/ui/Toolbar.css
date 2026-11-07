@@ -1,23 +1,21 @@
+/* The menu bar, docked across the top of the window. */
 .toolbar {
-	position: fixed;
-	top: var(--spacing-5);
-	right: var(--spacing-5);
+	position: relative;
 	z-index: 30;
 	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	gap: var(--spacing-2);
-	max-height: calc(100vh - var(--spacing-10));
+	flex: none;
+	align-items: center;
+	justify-content: flex-end;
+	height: var(--dock-bar-height);
+	padding: 0 var(--spacing-3);
+	border-bottom: 1px solid var(--border);
+	background: var(--paper);
 }
 
 .toolbar-bar {
 	display: flex;
 	align-items: center;
 	gap: 2px;
-	padding: var(--spacing-1);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-xl);
-	background: var(--paper);
 }
 
 .toolbar-item {
@@ -55,6 +53,10 @@
 }
 
 .toolbar-menu {
+	position: absolute;
+	top: calc(100% + var(--spacing-2));
+	right: var(--spacing-3);
+	max-height: calc(100vh - var(--dock-bar-height) - var(--spacing-5));
 	width: 23.5rem;
 	min-height: 0;
 	padding: 0 var(--spacing-5) var(--spacing-6);

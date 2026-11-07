@@ -8,18 +8,23 @@
 	import { readDroppedKind } from './droppedFiles'
 	import BpmDialog from './ui/BpmDialog.svelte'
 	import DockToolbar from './ui/DockToolbar.svelte'
+	import { installHelpText } from './help.svelte'
+	import InspectorPanel from './ui/InspectorPanel.svelte'
 	import DropZone from './ui/DropZone.svelte'
 	import EditorDock from './ui/EditorDock.svelte'
 	import Toolbar from './ui/Toolbar.svelte'
 	import MidiImportDialog from './ui/MidiImportDialog.svelte'
 	import Stage from './ui/Stage.svelte'
-	import { layerStore } from './layers.svelte'
+	import { getSelectedClip, getSelectedLayer, layerStore } from './layers.svelte'
 	import { timeline } from './timeline.svelte'
 	import { toggleStageFocused, toggleUiHidden, uiState } from './uiState.svelte'
 	import { installFocusGuard } from './ui/focus'
 	import { checkIsTyping } from './ui/keyboard'
 
 	let shell: HTMLElement
+
+	// The inspector docks on the left while a clip or layer is selected.
+	const hasInspector = $derived(!uiState.isUiHidden && (getSelectedClip() !== undefined || getSelectedLayer() !== undefined))
 
 	// Space plays. A focused button, select or field keeps the
 	// key, which is only possible after a Tab, since a click
@@ -100,9 +105,13 @@
 
 	onMount(() => {
 		const removeFocusGuard = installFocusGuard(shell)
+		const removeHelpText = installHelpText()
 		shell.focus({ preventScroll: true })
 		void bootApp()
-		return removeFocusGuard
+		return () => {
+			removeFocusGuard()
+			removeHelpText()
+		}
 	})
 </script>
 
@@ -113,13 +122,19 @@
 	     The editor never covers the workspace. Dragging the divider
 	     between them gives one pane the height the other loses, and the
 	     stage fits itself into whatever the top pane has left. -->
-	<div class="app-top">
+	{#if !uiState.isUiHidden}
+		<Toolbar />
+	{/if}
+
+	<div class="app-top" class:hasInspector>
+		{#if !uiState.isUiHidden}
+			<InspectorPanel />
+		{/if}
 		<div class="app-canvas">
 			<Stage />
 		</div>
 
 		{#if !uiState.isUiHidden}
-			<Toolbar />
 			{#if !app.hasSong && layerStore.layers.length === 0}
 				<div class="app-dropzone">
 					<DropZone />

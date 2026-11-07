@@ -182,9 +182,9 @@
 
 		<div class="pattern-popover-presets">
 			{#each PRESETS as preset (preset.value)}
-				<button class="pattern-popover-preset" type="button" onclick={() => handlePreset(preset)}>{preset.label}</button>
+				<z-button size="sm" kind="outline" tone="neutral" onclick={() => handlePreset(preset)}>{preset.label}</z-button>
 			{/each}
-			<button class="pattern-popover-preset" type="button" onclick={handleClearSteps}>None</button>
+			<z-button size="sm" kind="outline" tone="neutral" onclick={handleClearSteps}>None</z-button>
 		</div>
 
 		<div class="pattern-popover-steps" role="group" aria-label="Steps, one bar">

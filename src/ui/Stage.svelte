@@ -7,7 +7,15 @@
 	import { checkIsLayerSelected } from '../layers.svelte'
 	import { clearSelection, pickLayer, readModifiers } from '../selection.svelte'
 	import type { PickModifiersT } from '../selection.svelte'
-	import { checkIsStageReset, getSelectedLayers, moveLayerBy, resetStageView, setStageZoom, stageView, zoomStageAt } from '../stage.svelte'
+	import {
+		checkIsStageReset,
+		getSelectedLayers,
+		moveLayerBy,
+		resetStageView,
+		setStageZoom,
+		stageView,
+		zoomStageAt
+	} from '../stage.svelte'
 	import { findLayerAtPoint, readFrame } from '../stageGeometry'
 	import type { FramePointT } from '../stageGeometry'
 	import { buildEnginePalette } from '../palette.svelte'
@@ -53,6 +61,12 @@
 	const frame = $derived(readFrame(app.settings.aspectRatio))
 	const isViewReset = $derived(checkIsStageReset())
 	const ZOOM_PERCENTS = [25, 50, 100, 200, 400]
+	const ZOOM_25_OPTION = { label: '25', value: '25' }
+	const ZOOM_50_OPTION = { label: '50', value: '50' }
+	const ZOOM_100_OPTION = { label: '100', value: '100' }
+	const ZOOM_200_OPTION = { label: '200', value: '200' }
+	const ZOOM_400_OPTION = { label: '400', value: '400' }
+	const ZOOM_OPTIONS = [ZOOM_25_OPTION, ZOOM_50_OPTION, ZOOM_100_OPTION, ZOOM_200_OPTION, ZOOM_400_OPTION]
 	const outputWidth = $derived(getOutputSize().width)
 	// 100% is one picture pixel to one screen pixel.
 	const zoomPercent = $derived(fitWidth > 0 ? (stageView.zoom * fitWidth * 100) / outputWidth : 100)
@@ -63,7 +77,9 @@
 	const isFocused = $derived(uiState.isStageFocused)
 	const shouldShowHandles = $derived(canEditLayers && !uiState.isUiHidden && !isFocused)
 
-	const frameStyle = $derived(`--stage-zoom: ${stageView.zoom}; transform: translate(${stageView.panX}px, ${stageView.panY}px) scale(${stageView.zoom});`)
+	const frameStyle = $derived(
+		`--stage-zoom: ${stageView.zoom}; transform: translate(${stageView.panX}px, ${stageView.panY}px) scale(${stageView.zoom});`
+	)
 
 	const getFrameRect = (): DOMRect => frameElement.getBoundingClientRect()
 
@@ -97,10 +113,15 @@
 	}
 
 	const handlePointerDown = (event: PointerEvent) => {
+		const target = event.target as HTMLHtmlElement
+		const eventTargetId = target?.id
+		const isZoomer = eventTargetId === 'stage-zoomer'
+		if (isZoomer) return
 		const isPanButton = event.button === 0 || event.button === 1
 		if (!isPanButton || checkIsControl(event.target) || isFocused) return
 		const modifiers = readModifiers(event)
 		const isPicking = modifiers.isRange || modifiers.isToggle
+		console.log({ isPanButton, modifiers, isPicking })
 		const layer = canEditLayers ? findLayerUnderPointer(event) : null
 		const isOnSelected = layer !== null && checkIsLayerSelected(layer.id)
 		const shouldMove = isOnSelected && !isPicking
@@ -204,6 +225,10 @@
 	const handleZoomChange = (event: Event) => {
 		const select = event.currentTarget as HTMLSelectElement
 		const choice = select.value
+		event.stopPropagation()
+		event.preventDefault()
+
+		console.log(event.target, event.currentTarget)
 		select.blur()
 		if (choice === 'fit') return resetStageView()
 		const percent = Number(choice)
@@ -218,6 +243,11 @@
 	})
 
 	onMount(() => attachCanvas(canvas))
+
+	$effect(() => {
+		const zoomer = document.getElementById('stage-zoomer')
+		if (zoomer) zoomer.options = ZOOM_OPTIONS
+	})
 </script>
 
 <div
@@ -231,7 +261,15 @@
 	onpointercancel={handlePointerUp}
 	ondblclick={handleDoubleClick}
 >
-	<div class="stage-frame" class:isRecording={app.isRecording} class:isVertical class:isSquare class:isPortrait bind:this={frameElement} style={frameStyle}>
+	<div
+		class="stage-frame"
+		class:isRecording={app.isRecording}
+		class:isVertical
+		class:isSquare
+		class:isPortrait
+		bind:this={frameElement}
+		style={frameStyle}
+	>
 		<div class="stage-clip">
 			<canvas class="stage-canvas" bind:this={canvas} width="1920" height="1080" aria-label="Visualizer preview"></canvas>
 
@@ -264,14 +302,25 @@
 	</div>
 
 	{#if !isFocused && !uiState.isUiHidden}
-		<select class="stage-zoom" aria-label="Stage zoom" value={zoomValue} onchange={handleZoomChange}>
-			<option value="fit">Fit</option>
-			{#each ZOOM_PERCENTS as percent (percent)}
-				<option value={percent}>{percent}%</option>
-			{/each}
-			{#if zoomValue === 'custom'}
-				<option value="custom" disabled>{customLabel}</option>
-			{/if}
-		</select>
+		<z-row class="zoomer-box" style="max-width: 200px; background: var(--color-neutral-1);">
+			<z-select
+				id="stage-zoomer"
+				style="min-width: 100px"
+				aria-label="Stage zoom"
+				value={zoomValue}
+				onchange={handleZoomChange}
+			>
+				<!-- TODO: Actually set this up as a number input with zoom.... -->
+			</z-select>
+		</z-row>
 	{/if}
 </div>
+
+<style>
+	.zoomer-box {
+		max-width: 200px;
+		position: fixed;
+		right: 12px;
+		top: 50px;
+	}
+</style>

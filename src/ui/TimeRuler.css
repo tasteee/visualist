@@ -89,8 +89,8 @@
 	padding: 0 var(--spacing-2);
 	overflow: hidden;
 	border: 1px solid color-mix(in oklab, var(--ruler-bar-tone) 60%, transparent);
-	border-radius: var(--radius-sm);
-	background: color-mix(in oklab, var(--ruler-bar-tone) 22%, var(--paper));
+	border-radius: var(--radius-xs);
+	background: color-mix(in oklab, var(--ruler-bar-tone) 42%, var(--paper));
 	color: var(--foreground);
 	cursor: grab;
 	pointer-events: auto;
@@ -117,7 +117,7 @@
 
 .time-ruler-bar.isLoop.isOn {
 	--ruler-bar-tone: var(--accent);
-	background: color-mix(in oklab, var(--accent) 38%, var(--paper));
+	background: color-mix(in oklab, var(--accent) 50%, var(--paper));
 	opacity: 1;
 }
 
@@ -239,7 +239,7 @@
 	bottom: var(--spacing-1);
 	left: var(--spacing-1);
 	padding: 0 var(--spacing-1);
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-xs);
 	background: var(--foreground);
 	color: var(--bg);
 	font-size: var(--font-size-0);

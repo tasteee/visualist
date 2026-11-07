@@ -1,4 +1,4 @@
-import { FX_SPECS, LAYER_PARAMS, findFxSpec, findLayerParam, getLayerParams } from './layers'
+import { FX_SPECS, LAYER_PARAMS, findFxSpec, findLayerParam, applyClipToLayer, getLayerParams } from './layers'
 import { clamp } from './settings'
 import type {
 	AutomatableKeyT,
@@ -240,9 +240,6 @@ const applyLaneToLayer = (layer: LayerT, lane: AutomationLaneT, value: number): 
 // are passed through as they are.
 export const applyLayerAutomation = (layers: LayerT[], settings: SettingsT, lanes: AutomationLaneT[], time: number): LayerT[] => {
 	const layerLanes = lanes.filter((lane) => lane.target.kind !== 'setting' && checkHasPoints(lane))
-	const hasAutomation = layerLanes.length > 0
-	if (!hasAutomation) return layers
-
 	return layers.map((layer) => {
 		const ownLanes = layerLanes.filter((lane) => getTargetGroupId(lane.target) === layer.id)
 		let live = layer
@@ -251,7 +248,7 @@ export const applyLayerAutomation = (layers: LayerT[], settings: SettingsT, lane
 			if (value === null) continue
 			live = applyLaneToLayer(live, lane, value)
 		}
-		return live
+		return applyClipToLayer(live, time)
 	})
 }
 

@@ -1,5 +1,5 @@
 .timeline-layer {
-	--timeline-layer-height: 48px;
+	--timeline-layer-height: 64px;
 	position: relative;
 	display: grid;
 	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
@@ -10,7 +10,7 @@
 /* The audio layer stays pinned to the top of the list, so the
    waveform is in view while its lanes scroll under it. */
 .timeline-layer.isAudio {
-	--timeline-layer-height: 48px;
+	--timeline-layer-height: 64px;
 	position: sticky;
 	top: 0;
 	z-index: 3;
@@ -22,10 +22,11 @@
 .timeline-layer-header {
 	position: relative;
 	display: flex;
-	align-items: flex-start;
+	align-items: center;
+	justify-content: space-between;
 	gap: var(--spacing-1);
 	min-width: 0;
-	padding: var(--spacing-3) var(--spacing-2) 0;
+	padding: 0 var(--spacing-3) 0 var(--spacing-3);
 	border-right: 1px solid var(--border);
 	background: var(--paper-soft);
 	transition: background-color var(--motion-base) ease;
@@ -33,7 +34,7 @@
 
 /* A thin accent rule marks the layer open in the panel. */
 .timeline-layer.isSelected .timeline-layer-header {
-	background: var(--color-neutral-2);
+	background: #262e28;
 }
 
 .timeline-layer.isSelected .timeline-layer-header::before {
@@ -42,41 +43,19 @@
 	bottom: 0;
 	left: 0;
 	width: 2px;
-	background: var(--accent);
+	background: var(--tone, var(--accent));
 	content: '';
 }
 
-.timeline-layer-caret {
+.timeline-layer-type {
 	display: inline-flex;
 	flex: none;
 	align-items: center;
 	justify-content: center;
-	width: var(--spacing-6);
+	width: var(--spacing-5);
 	height: var(--spacing-6);
-	padding: 0;
-	border: 0;
-	border-radius: var(--radius-sm);
-	background: transparent;
-	color: var(--secondary);
-	font-size: var(--font-size-1);
-	cursor: pointer;
-	transition:
-		background-color var(--motion-fast) ease,
-		color var(--motion-fast) ease;
-}
-
-.timeline-layer-caret svg {
-	transform: rotate(90deg);
-	transition: transform var(--motion-base) var(--ease-move);
-}
-
-.timeline-layer.isCollapsed .timeline-layer-caret svg {
-	transform: rotate(0deg);
-}
-
-.timeline-layer-caret:hover {
-	background: var(--paper);
-	color: var(--foreground);
+	color: var(--color-neutral-7);
+	font-size: var(--font-size-3);
 }
 
 .timeline-layer-name {
@@ -94,6 +73,25 @@
 
 .timeline-layer.isHidden .timeline-layer-name {
 	opacity: 0.45;
+}
+
+/* Trash and eye show only while the layer is hovered or focused. */
+.timeline-layer-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--spacing-3);
+	opacity: 0;
+	transition: opacity var(--motion-fast) ease;
+}
+
+.timeline-layer-actions z-tooltip {
+	display: inline-flex;
+}
+
+.timeline-layer:hover .timeline-layer-actions,
+.timeline-layer:focus-within .timeline-layer-actions {
+	opacity: 1;
 }
 
 .timeline-layer-action {
@@ -115,8 +113,11 @@
 }
 
 .timeline-layer-action:hover:not(:disabled) {
-	background: var(--paper);
 	color: var(--foreground);
+}
+
+.timeline-layer-action.isDanger:hover:not(:disabled) {
+	color: var(--destructive);
 }
 
 .timeline-layer-action:disabled {
@@ -124,7 +125,6 @@
 	opacity: var(--control-disabled-opacity);
 }
 
-.timeline-layer-caret:focus-visible,
 .timeline-layer-action:focus-visible {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 1px;
@@ -202,4 +202,36 @@
 
 .timeline-layer.isDropAfter::after {
 	bottom: -1px;
+}
+
+/* The bottom border of an audio layer: drag it taller or shorter. */
+.timeline-layer-resize {
+	position: absolute;
+	right: 0;
+	bottom: -4px;
+	left: 0;
+	z-index: 5;
+	height: 8px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: ns-resize;
+	outline: none;
+	touch-action: none;
+}
+
+.timeline-layer-resize::after {
+	position: absolute;
+	right: 0;
+	bottom: 3px;
+	left: 0;
+	height: 2px;
+	background: transparent;
+	content: '';
+	transition: background-color var(--motion-fast) ease;
+}
+
+.timeline-layer-resize:hover::after,
+.timeline-layer-resize:active::after {
+	background: var(--focus-ring);
 }

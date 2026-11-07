@@ -24,8 +24,8 @@ export type FramePointT = {
 
 export const readFrame = (aspectRatio: Parameters<typeof getFrameLayout>[0]): FrameLayoutT => getFrameLayout(aspectRatio)
 
-export const buildLayerBox = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT): LayerBoxT | null => {
-	const size = measureLayerSize(layer, palette, frame)
+export const buildLayerBox = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT, time = 0): LayerBoxT | null => {
+	const size = measureLayerSize(layer, palette, frame, time)
 	if (size === null) return null
 	const centerX = frame.width / 2 + (layer.transform.x / 100) * frame.width
 	const centerY = frame.height / 2 + (layer.transform.y / 100) * frame.height
@@ -75,7 +75,7 @@ export const findLayerAtPoint = (layers: LayerT[], palette: PaletteT, frame: Fra
 	for (const layer of frontToBack) {
 		const isPickable = checkIsLayerPickable(layer, time)
 		if (!isPickable) continue
-		const box = buildLayerBox(layer, palette, frame)
+		const box = buildLayerBox(layer, palette, frame, time)
 		if (box === null) continue
 		const isImpulse = checkIsPointInBox(box, point)
 		if (isImpulse) return layer

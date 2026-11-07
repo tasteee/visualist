@@ -7,7 +7,7 @@ import {
 	selectPoints,
 	togglePointSelected
 } from './automation.svelte'
-import { layerStore, removeLayers, selectLayers } from './layers.svelte'
+import { layerStore, removeClip, removeLayers, selectClip, selectLayers } from './layers.svelte'
 import {
 	addImpulsesToSelection,
 	clearImpulseSelection,
@@ -76,7 +76,8 @@ export const checkHasSelection = (): boolean => {
 	const hasLanes = selection.laneIds.length > 0
 	const hasPoints = automation.selectedPointIds.length > 0
 	const hasImpulses = sources.impulseSelection.impulseIds.length > 0
-	return hasLayers || hasLanes || hasPoints || hasImpulses
+	const hasClip = layerStore.selectedClip !== null
+	return hasLayers || hasClip || hasLanes || hasPoints || hasImpulses
 }
 
 const pickFromList = (currentIds: string[], anchorId: string | null, targetId: string, orderedIds: string[], modifiers: PickModifiersT): string[] => {
@@ -98,6 +99,12 @@ const pickFromList = (currentIds: string[], anchorId: string | null, targetId: s
 // ---- Layers -------------------------------------------------
 
 // orderedIds is the list the click happened in, as shown.
+// A clip is picked on its own, and nothing else stays selected.
+export const pickClip = (layerId: string, clipId: string): void => {
+	clearOtherKinds('none')
+	selectClip(layerId, clipId)
+}
+
 export const pickLayer = (layerId: string, orderedIds: string[], modifiers: PickModifiersT): void => {
 	const previousIds = layerStore.selectedLayerIds
 	clearOtherKinds('layer')
@@ -196,6 +203,11 @@ export const deleteSelection = (): boolean => {
 	if (hasLanes) {
 		removeLanes(selection.laneIds)
 		clearLaneSelection()
+		return true
+	}
+	const pickedClip = layerStore.selectedClip
+	if (pickedClip !== null) {
+		removeClip(pickedClip.layerId, pickedClip.clipId)
 		return true
 	}
 	const hasLayers = layerStore.selectedLayerIds.length > 0

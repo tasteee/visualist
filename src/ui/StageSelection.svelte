@@ -57,7 +57,7 @@
 
 	const boxes = $derived.by(() => {
 		const selected = liveLayers.filter((layer) => selectedIds.includes(layer.id))
-		const built = selected.map((layer) => buildLayerBox(layer, palette, props.frame))
+		const built = selected.map((layer) => buildLayerBox(layer, palette, props.frame, app.currentTime))
 		return built.filter((box): box is LayerBoxT => box !== null)
 	})
 
