@@ -166,7 +166,9 @@
 	const liveValue = $derived(getLiveLaneValue(props.lane, app.settings, layers, app.currentTime))
 	const liveLabel = $derived(liveValue === null ? '—' : formatControlValue(liveValue))
 
-	const gridLines = $derived(props.grid.lines.filter((line) => line.kind !== 'sub'))
+	// Every line the ruler draws, so a point can be placed on exactly
+	// what it will snap to.
+	const gridLines = $derived(props.grid.lines)
 	const playheadPercent = $derived(timeToPercent(app.currentTime, view))
 	const isPlayheadVisible = $derived(checkIsTimeVisible(app.currentTime, view))
 	const hoverTime = $derived(timeline.hoverTime)
@@ -630,7 +632,7 @@
 	>
 		<svg class="automation-lane-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
 			{#each gridLines as line (line.time)}
-				<line class="automation-lane-gridline" class:isLabel={line.kind === 'label'} class:isBar={line.kind === 'bar'} x1={getGridX(line)} x2={getGridX(line)} y1="0" y2="100" />
+				<line class="automation-lane-gridline" class:isLabel={line.kind === 'label'} class:isBar={line.kind === 'bar'} class:isSub={line.kind === 'sub'} x1={getGridX(line)} x2={getGridX(line)} y1="0" y2="100" />
 			{/each}
 		</svg>
 

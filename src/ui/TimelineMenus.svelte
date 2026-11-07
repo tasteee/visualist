@@ -3,10 +3,11 @@
 	import CubeIcon from 'phosphor-svelte/lib/CubeIcon'
 	import ImageIcon from 'phosphor-svelte/lib/ImageIcon'
 	import PulseIcon from 'phosphor-svelte/lib/PulseIcon'
+	import SquareIcon from 'phosphor-svelte/lib/SquareIcon'
 	import TextTIcon from 'phosphor-svelte/lib/TextTIcon'
 	import VideoCameraIcon from 'phosphor-svelte/lib/VideoCameraIcon'
 	import WaveformIcon from 'phosphor-svelte/lib/WaveformIcon'
-	import { addImageLayer, addTextLayer } from '../layers.svelte'
+	import { addImageLayer, addShapeLayer, addTextLayer } from '../layers.svelte'
 	import { addEmptyTrack } from '../sources.svelte'
 	import { openAddAudioPicker } from './filePicker'
 	import { GRID_DIVISIONS, formatGridDivision } from '../engine/timeline'
@@ -86,6 +87,11 @@
 		closeTimelineMenus()
 	}
 
+	const handleAddShape = () => {
+		addShapeLayer()
+		closeTimelineMenus()
+	}
+
 	const handleAddImpulse = () => {
 		addEmptyTrack()
 		closeTimelineMenus()
@@ -161,6 +167,10 @@
 		<button class="timeline-menu-item" type="button" role="menuitem" onclick={handleAddImage}>
 			<span class="timeline-menu-check"><ImageIcon weight="bold" /></span>
 			Image
+		</button>
+		<button class="timeline-menu-item" type="button" role="menuitem" onclick={handleAddShape}>
+			<span class="timeline-menu-check"><SquareIcon weight="bold" /></span>
+			Shape
 		</button>
 		<button class="timeline-menu-item" type="button" role="menuitem" disabled>
 			<span class="timeline-menu-check"><VideoCameraIcon weight="bold" /></span>

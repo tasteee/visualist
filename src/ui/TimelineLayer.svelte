@@ -61,7 +61,8 @@
 	const defaultAddLabel = $derived(props.canAddLane ? `Automate a ${props.title} control` : `Every ${props.title} control is automated`)
 	const addLabel = $derived(props.addLabel ?? defaultAddLabel)
 	const visibilityLabel = $derived(props.isHidden ? `Show ${props.title}` : `Hide ${props.title}`)
-	const barLines = $derived(props.grid.lines.filter((line) => line.kind === 'label' || line.kind === 'bar'))
+	// Every line the ruler draws, so what a click snaps to is visible.
+	const gridLines = $derived(props.grid.lines)
 	const playheadPercent = $derived(timeToPercent(app.currentTime, view))
 	const isPlayheadVisible = $derived(checkIsTimeVisible(app.currentTime, view))
 	const row = $derived<RowRefT>({ kind: 'layer', id: props.rowId })
@@ -159,8 +160,8 @@
 	<div class="timeline-layer-track" data-track="layer" role="presentation" onclick={handleTrackClick}>
 		{#if hasOverlay}
 			<svg class="timeline-layer-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
-				{#each barLines as line (line.time)}
-					<line class="timeline-layer-gridline" class:isLabel={line.kind === 'label'} x1={getGridX(line)} x2={getGridX(line)} y1="0" y2="100" />
+				{#each gridLines as line (line.time)}
+					<line class="timeline-layer-gridline" class:isLabel={line.kind === 'label'} class:isSub={line.kind === 'sub'} x1={getGridX(line)} x2={getGridX(line)} y1="0" y2="100" />
 				{/each}
 			</svg>
 		{/if}

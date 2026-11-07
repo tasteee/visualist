@@ -5,7 +5,7 @@ import { getTinted } from './logoLayers'
 import { applyModulation } from './modulation'
 import { createRandom } from './rng'
 import { FLICKER_RATE, clamp } from './settings'
-import type { FxKindT, LayerT, LayerTransformT, PaletteSlotT, PaletteT, SignalsT, TextContentT } from './types'
+import type { FxKindT, LayerT, LayerTransformT, PaletteSlotT, PaletteT, ShapeT, SignalsT, TextContentT } from './types'
 
 // A drawable layer picture. width and height are in frame units,
 // the canvas itself may hold more pixels than that.
@@ -64,7 +64,9 @@ const getContext = (canvas: HTMLCanvasElement): CanvasRenderingContext2D => {
 	return context
 }
 
-const getPaletteColor = (palette: PaletteT, slot: PaletteSlotT): string => palette[slot]
+// A color the user has, by id. One that was deleted draws as the
+// stage's contrast color, so a layer never vanishes.
+const getPaletteColor = (palette: PaletteT, slot: PaletteSlotT): string => palette.colors[slot] ?? palette.foreground
 
 const getShortSide = (frame: FrameLayoutT): number => Math.min(frame.width, frame.height)
 
@@ -156,6 +158,59 @@ const getTextSource = (content: TextContentT, palette: PaletteT): LayerSourceT |
 	return painted
 }
 
+// ---- Shapes --------------------------------------------------
+
+const SHAPE_FIT_SHARE = 0.3
+const SHAPE_RASTER_SIDE = 512
+const MAX_SHAPE_CACHE = 40
+const shapeCache = new Map<string, HTMLCanvasElement>()
+
+const paintShapeFill = (context: CanvasRenderingContext2D, shape: ShapeT, firstColor: string, secondColor: string): void => {
+	const isGradient = shape.fill === 'gradient'
+	if (!isGradient) {
+		context.fillStyle = firstColor
+		return
+	}
+	const radians = (shape.angle * Math.PI) / 180
+	const half = SHAPE_RASTER_SIDE / 2
+	const reachX = Math.cos(radians) * half
+	const reachY = Math.sin(radians) * half
+	const gradient = context.createLinearGradient(half - reachX, half - reachY, half + reachX, half + reachY)
+	gradient.addColorStop(0, firstColor)
+	gradient.addColorStop(1, secondColor)
+	context.fillStyle = gradient
+}
+
+const paintShape = (shape: ShapeT, firstColor: string, secondColor: string): HTMLCanvasElement => {
+	const canvas = createCanvas(SHAPE_RASTER_SIDE, SHAPE_RASTER_SIDE)
+	const context = getContext(canvas)
+	paintShapeFill(context, shape, firstColor, secondColor)
+	const isCircle = shape.kind === 'circle'
+	if (!isCircle) context.fillRect(0, 0, SHAPE_RASTER_SIDE, SHAPE_RASTER_SIDE)
+	if (isCircle) {
+		context.beginPath()
+		context.arc(SHAPE_RASTER_SIDE / 2, SHAPE_RASTER_SIDE / 2, SHAPE_RASTER_SIDE / 2, 0, Math.PI * 2)
+		context.fill()
+	}
+	return canvas
+}
+
+const getShapeSource = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT): LayerSourceT | null => {
+	const shape = layer.shape
+	if (shape === null) return null
+	const firstColor = getPaletteColor(palette, shape.color)
+	const secondColor = getPaletteColor(palette, shape.color2)
+	const cacheKey = `${shape.kind}|${shape.fill}|${firstColor}|${secondColor}|${shape.angle}`
+	const cached = shapeCache.get(cacheKey)
+	const side = getShortSide(frame) * SHAPE_FIT_SHARE
+	if (cached !== undefined) return { canvas: cached, width: side, height: side }
+	const isCacheFull = shapeCache.size >= MAX_SHAPE_CACHE
+	if (isCacheFull) shapeCache.clear()
+	const painted = paintShape(shape, firstColor, secondColor)
+	shapeCache.set(cacheKey, painted)
+	return { canvas: painted, width: side, height: side }
+}
+
 const getSvgTint = (layer: LayerT, palette: PaletteT): string | null => {
 	const isSvg = layer.kind === 'svg'
 	if (!isSvg) return null
@@ -212,6 +267,11 @@ export type LayerSizeT = {
 export const measureLayerSize = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT): LayerSizeT | null => {
 	const isLogo = layer.kind === 'logo'
 	if (isLogo) return { width: LOGO_ART_WIDTH * frame.sceneScale, height: LOGO_ART_HEIGHT * frame.sceneScale }
+	const isShape = layer.kind === 'shape'
+	if (isShape) {
+		const shapeSource = getShapeSource(layer, palette, frame)
+		return shapeSource === null ? null : { width: shapeSource.width, height: shapeSource.height }
+	}
 	const isText = layer.kind === 'text'
 	if (isText) {
 		const content = layer.text
@@ -231,6 +291,8 @@ const getLayerSource = (target: CanvasRenderingContext2D, layer: LayerT, input: 
 
 // Text, image and SVG pictures, cached until they change.
 const getStaticSource = (layer: LayerT, input: LayerStackInputT): LayerSourceT | null => {
+	const isShape = layer.kind === 'shape'
+	if (isShape) return getShapeSource(layer, input.palette, input.frame)
 	const isText = layer.kind === 'text'
 	if (!isText) return getAssetSource(layer, input.palette, input.frame)
 	const content = layer.text

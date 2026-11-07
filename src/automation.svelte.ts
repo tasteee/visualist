@@ -14,6 +14,8 @@ import {
 } from './engine/automation'
 import type { AutomationLaneT, AutomationPointT, LaneTargetT, LayerT } from './engine/types'
 import { appearance } from './appearance.svelte'
+import { restorePaletteSnapshot, takePaletteSnapshot } from './palette.svelte'
+import type { PaletteColorT } from './palette.svelte'
 import { findLayer, layerStore } from './layers.svelte'
 import { restoreTrackSnapshot, sources, takeTrackSnapshot } from './sources.svelte'
 import type { TrackSnapshotT } from './sources.svelte'
@@ -136,6 +138,7 @@ type HistoryEntryT = {
 	impulseTracks: TrackSnapshotT
 	settings: SettingsT
 	appearance: AppearanceSnapshotT
+	paletteColors: PaletteColorT[]
 	loop: RegionT
 	isLoopEnabled: boolean
 	exportRange: RegionT
@@ -162,6 +165,7 @@ const takeSnapshot = (): HistoryEntryT => ({
 	impulseTracks: takeTrackSnapshot(),
 	settings: $state.snapshot(app.settings) as SettingsT,
 	appearance: takeAppearanceSnapshot(),
+	paletteColors: takePaletteSnapshot(),
 	loop: { start: app.loopStart, end: app.loopEnd },
 	isLoopEnabled: app.isLoopEnabled,
 	exportRange: { start: app.trimStart, end: app.trimEnd },
@@ -230,6 +234,7 @@ const restoreEntry = (entry: HistoryEntryT): void => {
 	restoreTrackSnapshot(entry.impulseTracks)
 	Object.assign(app.settings, entry.settings)
 	restoreAppearance(entry.appearance)
+	restorePaletteSnapshot(entry.paletteColors)
 	app.trimStart = entry.exportRange.start
 	app.trimEnd = entry.exportRange.end
 	app.isLoopEnabled = entry.isLoopEnabled

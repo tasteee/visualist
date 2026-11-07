@@ -2,8 +2,8 @@ import { toaster } from '@tasteee/zest'
 import { recordHistory, removeLanesForFx, removeLanesForLayer } from './automation.svelte'
 import { importAssetFile, restoreAssets } from './engine/assets'
 import type { AssetRequestT } from './engine/assets'
-import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createTextLayer } from './engine/layers'
-import type { FxKindT, LayerFxT, LayerT } from './engine/types'
+import { LOGO_LAYER_ID, createAssetLayer, createDefaultLayers, createFx, createLogoLayer, createShapeLayer, createTextLayer } from './engine/layers'
+import type { FxKindT, LayerFxT, LayerT, ShapeT, TextContentT } from './engine/types'
 
 type LayerStoreT = {
 	layers: LayerT[]
@@ -26,18 +26,38 @@ const getFileBaseName = (fileName: string): string => {
 	return withoutExtension.slice(0, NAME_LIMIT)
 }
 
+// Layers saved before colors lived in the palette named a slot.
+const LEGACY_COLOR_IDS: Record<string, string> = {
+	foreground: 'white',
+	background: 'black',
+	accent1: 'accent-1',
+	accent2: 'accent-2'
+}
+
+const migrateColorId = (value: unknown, fallback: string): string => {
+	if (typeof value !== 'string') return fallback
+	return LEGACY_COLOR_IDS[value] ?? value
+}
+
 // Stored layers come back merged over fresh defaults, so older
-// saves gain any field added since. The logo is always present.
+// saves gain any field added since.
 const normalizeLayer = (stored: Partial<LayerT>): LayerT | null => {
 	const kind = stored.kind
-	const isKnownKind = kind === 'logo' || kind === 'text' || kind === 'image' || kind === 'svg' || kind === 'audio'
+	const isKnownKind = kind === 'logo' || kind === 'text' || kind === 'image' || kind === 'svg' || kind === 'audio' || kind === 'shape'
 	if (!isKnownKind) return null
 	const base = kind === 'logo' ? createLogoLayer() : createTextLayer('')
-	const transform = { ...base.transform, ...stored.transform }
+	const legacyVolume = (stored as { volume?: unknown }).volume
+	const volumeFallback = typeof legacyVolume === 'number' ? { volume: legacyVolume } : {}
+	const transform = { ...base.transform, ...volumeFallback, ...stored.transform }
 	const modulations = { ...stored.modulations }
 	const fx = Array.isArray(stored.fx) ? stored.fx : []
-	const text = kind === 'text' ? { ...base.text, ...stored.text } : null
-	const normalized = { ...base, ...stored, kind, transform, modulations, fx, text } as LayerT
+	const mergedText = { ...base.text, ...stored.text } as TextContentT
+	const text = kind === 'text' ? { ...mergedText, color: migrateColorId(mergedText.color, 'white') } : null
+	const shapeBase = createShapeLayer().shape as ShapeT
+	const mergedShape = { ...shapeBase, ...stored.shape } as ShapeT
+	const shape = kind === 'shape' ? { ...mergedShape, color: migrateColorId(mergedShape.color, 'white'), color2: migrateColorId(mergedShape.color2, 'accent-1') } : null
+	const svgColor = migrateColorId(stored.svgColor, 'original')
+	const normalized = { ...base, ...stored, kind, transform, modulations, fx, text, shape, svgColor } as LayerT
 	return normalized
 }
 
@@ -139,6 +159,10 @@ const pushLayer = (layer: LayerT): void => {
 // scene, so new text starts as a placeholder.
 export const addTextLayer = (): void => {
 	pushLayer(createTextLayer('Your text'))
+}
+
+export const addShapeLayer = (): void => {
+	pushLayer(createShapeLayer())
 }
 
 // An image layer starts empty. The picture is chosen in the

@@ -10,6 +10,7 @@ import {
 	retargetLoop,
 	setActiveLoop,
 	setExtraTracks,
+	setExtraVolumes,
 	startExtras,
 	setPausedPosition,
 	startPlayback
@@ -20,6 +21,7 @@ import { applySettingsModulation, computeSignals } from './engine/modulation'
 import { checkHasPost, getPostAmounts } from './engine/post'
 import { startAppearanceWatchers } from './appearance.svelte'
 import { layerStore, restoreLayerAssets, selectLayer, startLayerWatchers } from './layers.svelte'
+import { buildEnginePalette } from './palette.svelte'
 import { clearSavedProject } from './project.svelte'
 import { createAudioLayer } from './engine/layers'
 import { buildSongKey, getCompiledSources, getRoleImpulses, startSourceWatchers, switchSong } from './sources.svelte'
@@ -150,12 +152,7 @@ let activeRecording: ActiveRecordingT | null = null
 let recorderFormat: RecorderFormatT | null = null
 
 function readPalette(settings: SettingsT): PaletteT {
-	return {
-		accent1: settings.accent1,
-		accent2: settings.accent2,
-		background: settings.background,
-		foreground: settings.foreground
-	}
+	return buildEnginePalette(settings.background)
 }
 
 // What the audio analysis found, before any user corrections.
@@ -399,6 +396,7 @@ const tick = (): void => {
 	if (shouldDraw && app.isRecording) drawVideoFade(context, size.width, size.height, recordingElapsed)
 	isDirty = false
 
+	if (app.isPlaying && extraLayerIds.length > 0) followVolumeAutomation(time)
 	const hasWrapped = app.isPlaying && !app.isRecording && app.isLoopEnabled && time < lastTickTime - 0.05
 	if (hasWrapped) {
 		syncExtraTracks()
@@ -485,13 +483,17 @@ export const getAudioLayerPeaks = (layerId: string): BufferPeaksT | undefined =>
 }
 
 // A hidden audio layer is muted.
+let extraLayerIds: string[] = []
+
 const syncExtraTracks = (): void => {
 	const tracks = []
+	extraLayerIds = []
 	for (const layer of layerStore.layers) {
 		const isAudio = layer.kind === 'audio'
 		const buffer = isAudio ? audioLayerBuffers.get(layer.id) : undefined
 		if (!isAudio || buffer === undefined || !layer.isVisible) continue
-		tracks.push({ buffer, startTime: layer.startTime, endTime: layer.endTime, volume: layer.volume, offset: layer.audioOffset })
+		extraLayerIds.push(layer.id)
+		tracks.push({ buffer, startTime: layer.startTime, endTime: layer.endTime, volume: layer.transform.volume, offset: layer.audioOffset })
 	}
 	setExtraTracks(tracks)
 }
@@ -832,6 +834,14 @@ export const setTheme = (mode: ModeT): void => {
 	app.settings.mode = mode
 }
 
+// Volume lanes change what is heard as the song plays.
+const followVolumeAutomation = (time: number): void => {
+	const audioLayers = layerStore.layers.filter((layer) => extraLayerIds.includes(layer.id)) as LayerT[]
+	const live = applyLayerAutomation(audioLayers, app.settings, automation.lanes, time)
+	const volumes = extraLayerIds.map((layerId) => live.find((layer) => layer.id === layerId)?.transform.volume ?? 1)
+	setExtraVolumes(volumes)
+}
+
 const restartMixIfPlaying = (): void => {
 	const canRestart = app.isPlaying && !app.isRecording && audioBuffer !== null
 	if (!canRestart || audioBuffer === null) return
@@ -864,7 +874,7 @@ const startWatchers = (): void => {
 		// from where it is, so the change is heard at once.
 		$effect(() => {
 			const audioLayers = layerStore.layers.filter((layer) => layer.kind === 'audio')
-			const mixKey = audioLayers.map((layer) => [layer.id, layer.startTime, layer.endTime, layer.volume, layer.audioOffset, layer.isVisible].join(':')).join('|')
+			const mixKey = audioLayers.map((layer) => [layer.id, layer.startTime, layer.endTime, layer.audioOffset, layer.isVisible].join(':')).join('|')
 			void mixKey
 			untrack(restartMixIfPlaying)
 		})

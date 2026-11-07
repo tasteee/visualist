@@ -10,6 +10,7 @@
 	import { checkIsStageReset, getSelectedLayers, moveLayerBy, resetStageView, setStageZoom, stageView, zoomStageAt } from '../stage.svelte'
 	import { findLayerAtPoint, readFrame } from '../stageGeometry'
 	import type { FramePointT } from '../stageGeometry'
+	import { buildEnginePalette } from '../palette.svelte'
 	import { uiState } from '../uiState.svelte'
 	import { app, attachCanvas, getOutputSize } from '../store.svelte'
 	import StageSelection from './StageSelection.svelte'
@@ -78,7 +79,7 @@
 	}
 
 	const findLayerUnderPointer = (event: PointerEvent): LayerT | null => {
-		const palette = { accent1: app.settings.accent1, accent2: app.settings.accent2, background: app.settings.background, foreground: app.settings.foreground }
+		const palette = buildEnginePalette(app.settings.background)
 		const point = readFramePoint(event)
 		return findLayerAtPoint(readLiveLayers(), palette, frame, app.currentTime, point)
 	}

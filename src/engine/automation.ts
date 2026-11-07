@@ -1,4 +1,4 @@
-import { FX_SPECS, LAYER_PARAMS, findFxSpec, findLayerParam } from './layers'
+import { FX_SPECS, LAYER_PARAMS, findFxSpec, findLayerParam, getLayerParams } from './layers'
 import { clamp } from './settings'
 import type {
 	AutomatableKeyT,
@@ -258,8 +258,9 @@ export const applyLayerAutomation = (layers: LayerT[], settings: SettingsT, lane
 // Every target a layer offers, in menu order: its transform,
 // then each effect it carries.
 export const listLayerTargets = (layer: LayerT): LaneTargetT[] => {
-	const paramTargets: LaneTargetT[] = LAYER_PARAMS.map((spec) => ({ kind: 'layer', layerId: layer.id, param: spec.key }))
-	const fxTargets: LaneTargetT[] = layer.fx.map((fx) => ({ kind: 'fx', layerId: layer.id, fxId: fx.id }))
+	const paramTargets: LaneTargetT[] = getLayerParams(layer.kind).map((spec) => ({ kind: 'layer', layerId: layer.id, param: spec.key }))
+	const isAudio = layer.kind === 'audio'
+	const fxTargets: LaneTargetT[] = isAudio ? [] : layer.fx.map((fx) => ({ kind: 'fx', layerId: layer.id, fxId: fx.id }))
 	return [...paramTargets, ...fxTargets]
 }
 

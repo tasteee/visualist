@@ -171,6 +171,8 @@ export type PaletteT = {
 	accent2: string
 	background: string
 	foreground: string
+	// Every color the user has, by id.
+	colors: Record<string, string>
 }
 
 export type FrameInputT = {
@@ -253,14 +255,15 @@ export type AutomationLaneT = {
 	isBypassed?: boolean
 }
 
-export type LayerKindT = 'logo' | 'text' | 'image' | 'svg' | 'audio'
+export type LayerKindT = 'logo' | 'text' | 'image' | 'svg' | 'audio' | 'shape'
 
 export type BlendModeT = 'normal' | 'screen' | 'multiply' | 'overlay' | 'softLight' | 'add' | 'difference'
 
-export type PaletteSlotT = 'foreground' | 'accent1' | 'accent2' | 'background'
+// A color in the user's palette, by id.
+export type PaletteSlotT = string
 
 // SVG layers can keep their own colors or take one from the palette.
-export type SvgColorT = 'original' | PaletteSlotT
+export type SvgColorT = string
 
 export type TextWeightT = 400 | 700 | 900
 
@@ -279,6 +282,8 @@ export type LayerTransformT = {
 	depth: number
 	tilt: number
 	turn: number
+	// Audio layers only.
+	volume: number
 }
 
 export type LayerParamKeyT = keyof LayerTransformT
@@ -304,6 +309,20 @@ export type TextContentT = {
 	color: PaletteSlotT
 }
 
+export type ShapeKindT = 'square' | 'circle'
+
+export type ShapeFillT = 'solid' | 'gradient'
+
+// A shape is filled with one color, or a gradient from one color to
+// another, at an angle in degrees.
+export type ShapeT = {
+	kind: ShapeKindT
+	fill: ShapeFillT
+	color: string
+	color2: string
+	angle: number
+}
+
 // endTime null means the layer runs to the end of the song.
 export type LayerT = {
 	id: string
@@ -317,10 +336,10 @@ export type LayerT = {
 	endTime: number | null
 	fx: LayerFxT[]
 	text: TextContentT | null
+	shape: ShapeT | null
 	assetId: string | null
 	svgColor: SvgColorT
-	// Audio layers only: how loud the layer is in the mix, and how far
-	// into the file the clip begins (trimming its start moves this).
-	volume: number
+	// Audio layers only: how far into the file the clip begins (trimming
+	// its start moves this).
 	audioOffset: number
 }

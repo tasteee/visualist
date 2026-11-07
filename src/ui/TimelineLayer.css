@@ -153,6 +153,10 @@
 	vector-effect: non-scaling-stroke;
 }
 
+.timeline-layer-gridline.isSub {
+	opacity: 0.6;
+}
+
 .timeline-layer-gridline.isLabel {
 	stroke: var(--color-neutral-3);
 }

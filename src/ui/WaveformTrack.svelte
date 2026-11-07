@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { clamp } from '../engine/settings'
-	import { checkIsTimeVisible, formatPreciseTime, ratioToTime, snapToGrid, timeToPercent } from '../engine/timeline'
+	import { checkIsTimeVisible, formatPreciseTime, ratioToTime, snapToGrid, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { TimelineGridT } from '../engine/timeline'
 	import { readPeak } from '../engine/peaks'
 	import { app, getAnalysis, seekTo } from '../store.svelte'
@@ -141,6 +141,11 @@
 	onpointerdown={handlePointerDown}
 	onpointermove={handlePointerMove}
 >
+	<svg class="waveform-track-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+		{#each props.grid.lines as line (line.time)}
+			<line class="waveform-track-gridline" class:isLabel={line.kind === 'label'} class:isSub={line.kind === 'sub'} x1={timeToRatio(line.time, timeline.view) * 1000} x2={timeToRatio(line.time, timeline.view) * 1000} y1="0" y2="100" />
+		{/each}
+	</svg>
 	<canvas class="waveform-track-canvas" bind:this={canvas}></canvas>
 	{#if hasHover}
 		<div class="waveform-track-hover" style:--wave-x="{hoverPercent}%"></div>

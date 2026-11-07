@@ -75,6 +75,13 @@ browsers keep those cached.
 - **Audio clips**: drag the bar on top to move a clip or select it,
   drag the left or right edge to trim. With a clip selected, **0**
   deactivates it, Cmd/Ctrl+C, V and D copy, paste and duplicate it.
+- **Blank start**: a new project has no layers, only a Scene and a Post
+  row (their lanes automate the camera and the lens). The plus adds
+  audio, text, image, shape or impulse layers. The first audio is the
+  song. Options > Reset project clears everything.
+- **Palette**: the colors you make. Layers pick from them by name, so
+  changing a color changes it everywhere it is used. The stage has its
+  own background color.
 - **Right-click a row header**, or press its gear, for that row's
   inspector: name, color and its controls.
 - **Pinch a header** to change the row's height. Drag a row border past

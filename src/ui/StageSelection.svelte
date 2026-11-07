@@ -12,6 +12,7 @@
 	import { buildLayerBox, getBoxAngle, getBoxDistance } from '../stageGeometry'
 	import type { FramePointT, LayerBoxT } from '../stageGeometry'
 	import { app } from '../store.svelte'
+	import { buildEnginePalette } from '../palette.svelte'
 	import { press } from './press'
 	import './StageSelection.css'
 
@@ -45,12 +46,7 @@
 	let handleDrag: HandleDragT | null = null
 	let dragStartClient: { x: number; y: number } | null = null
 
-	const palette = $derived({
-		accent1: app.settings.accent1,
-		accent2: app.settings.accent2,
-		background: app.settings.background,
-		foreground: app.settings.foreground
-	})
+	const palette = $derived(buildEnginePalette(app.settings.background))
 
 	// Boxes follow what is on screen at the playhead, so an
 	// animated layer is boxed where it is, not where it started.

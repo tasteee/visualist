@@ -3,7 +3,7 @@
 	import { formatBpm } from '../engine/timeline'
 	import { findLayer, removeLayer } from '../layers.svelte'
 	import { app, detectLayerBpm, getDetectedAnalysis, removeSong, setBpm } from '../store.svelte'
-	import SettingSlider from './SettingSlider.svelte'
+	import LayerParamSlider from './LayerParamSlider.svelte'
 
 	// Settings for audio. With no layer id it is the song itself,
 	// whose tempo was found when it loaded. Otherwise it is an audio
@@ -38,10 +38,6 @@
 		if (shownBpm !== null) setBpm(shownBpm)
 	}
 
-	const handleVolume = (value: number) => {
-		if (layer !== undefined) layer.volume = value
-	}
-
 	const handleRemove = () => {
 		if (props.layerId === null) return void removeSong()
 		removeLayer(props.layerId)
@@ -49,7 +45,7 @@
 </script>
 
 {#if layer !== undefined}
-	<SettingSlider label="Volume" value={layer.volume} min={0} max={1.5} step={0.01} onchange={handleVolume} />
+	<LayerParamSlider {layer} paramKey="volume" />
 {/if}
 
 <div class="audio-controls-tempo">

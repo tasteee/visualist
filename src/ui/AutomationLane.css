@@ -248,6 +248,10 @@
 	stroke: var(--color-neutral-2);
 }
 
+.automation-lane-gridline.isSub {
+	opacity: 0.7;
+}
+
 .automation-lane-gridline.isLabel {
 	stroke: var(--color-neutral-3);
 }
