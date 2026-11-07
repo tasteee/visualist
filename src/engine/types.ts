@@ -53,6 +53,9 @@ export type SettingsT = {
 	scanlineAmount: number
 	noiseAmount: number
 	vignetteAmount: number
+	cameraOrbit: number
+	cameraTilt: number
+	cameraDistance: number
 	modulations: SettingModulationsT
 }
 
@@ -198,6 +201,9 @@ export type AutomatableKeyT =
 	| 'scanlineAmount'
 	| 'noiseAmount'
 	| 'vignetteAmount'
+	| 'cameraOrbit'
+	| 'cameraTilt'
+	| 'cameraDistance'
 
 export type AutomationControlT = {
 	key: AutomatableKeyT
@@ -252,13 +258,15 @@ export type SvgColorT = 'original' | PaletteSlotT
 export type TextWeightT = 400 | 700 | 900
 
 // x and y are percent of the frame from its center. scale 1 is
-// the layer's natural size. rotation is in degrees.
+// the layer's natural size. rotation is in degrees. depth is how
+// far the layer floats off the frame toward the camera, 0-100.
 export type LayerTransformT = {
 	x: number
 	y: number
 	scale: number
 	rotation: number
 	opacity: number
+	depth: number
 }
 
 export type LayerParamKeyT = keyof LayerTransformT

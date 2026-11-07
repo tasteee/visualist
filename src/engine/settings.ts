@@ -44,6 +44,9 @@ export const createDefaultSettings = (): SettingsT => ({
 	scanlineAmount: 0,
 	noiseAmount: 0,
 	vignetteAmount: 0,
+	cameraOrbit: 0,
+	cameraTilt: 0,
+	cameraDistance: 1,
 	modulations: {}
 })
 

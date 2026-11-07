@@ -27,6 +27,8 @@ Pushes to `main` deploy to GitHub Pages at `/visualist/`
 - **Svelte 5 + Vite**, no SvelteKit. State lives in runes (`src/store.svelte.ts`).
 - **@tasteee/zest** for every control: tabs, sliders, switches, color
   pickers, number inputs, tooltips, toasts, progress and buttons.
+- **Three.js** for the 3D stage (layer depth and the camera). It loads
+  only when a project uses them; otherwise frames are drawn flat.
 - **Canvas 2D** for the picture. **Web Audio** for playback and analysis.
   **MediaRecorder** for export (MP4 when the browser can, else WebM).
 
@@ -45,6 +47,8 @@ src/
     logoLayers.ts  splits the logo raster into masks, tints and distresses them
     echoes.ts      which echoes exist at time t, and how they look
     render.ts      one frame, back to front
+    depth.ts       splits the layer stack into depth slices
+    scene3d.ts     3D stage: slices on sheets in front of a perspective camera
     audio.ts       the audio clock (visuals follow it, never drift)
     recorder.ts    format pick + MediaRecorder
   store.svelte.ts  app state, render loop, load / play / seek / record

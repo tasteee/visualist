@@ -283,9 +283,19 @@ const resolveTransform = (layer: LayerT, signals: SignalsT): LayerTransformT => 
 	const resolved: LayerTransformT = { ...layer.transform }
 	for (const spec of LAYER_PARAMS) {
 		const modulation = layer.modulations[spec.key]
-		resolved[spec.key] = applyModulation(layer.transform[spec.key], spec, modulation, signals)
+		const base = layer.transform[spec.key] ?? 0
+		resolved[spec.key] = applyModulation(base, spec, modulation, signals)
 	}
 	return resolved
+}
+
+// Depth after modulation, 0-100. Older projects have no depth.
+export const resolveLayerDepth = (layer: LayerT, signals: SignalsT): number => {
+	const modulation = layer.modulations.depth
+	const base = layer.transform.depth ?? 0
+	const spec = LAYER_PARAMS.find((candidate) => candidate.key === 'depth')
+	if (spec === undefined) return base
+	return clamp(applyModulation(base, spec, modulation, signals), spec.min, spec.max)
 }
 
 const createEmptyFx = (): ResolvedFxT => ({ glow: 0, split: 0, glitch: 0, shake: 0, flicker: 0, blur: 0 })
