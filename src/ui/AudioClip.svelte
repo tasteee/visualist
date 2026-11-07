@@ -7,7 +7,7 @@
 	import type { LayerT } from '../engine/types'
 	import { layerStore } from '../layers.svelte'
 	import { pickLayer, readModifiers } from '../selection.svelte'
-	import { app, getAudioLayerBuffer, getAudioLayerPeaks } from '../store.svelte'
+	import { app, getAudioLayerBuffer, getAudioLayerPeaks, seekTo } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import './AudioClip.css'
 
@@ -80,6 +80,19 @@
 		const orderedIds = [...layerStore.layers].reverse().map((candidate) => candidate.id)
 		pickLayer(props.layer.id, orderedIds, readModifiers(event))
 		drag = { mode, grabOffset: readTime(event) - startTime, startX: event.clientX, hasMoved: false }
+	}
+
+	// A click on the waveform selects the clip and puts the playhead
+	// at that point in it, ready to slice.
+	const handleBodyDown = (event: PointerEvent) => {
+		const isPrimaryButton = event.button === 0
+		if (!isPrimaryButton) return
+		event.stopPropagation()
+		const orderedIds = [...layerStore.layers].reverse().map((candidate) => candidate.id)
+		pickLayer(props.layer.id, orderedIds, readModifiers(event))
+		const rawTime = readTime(event)
+		const shouldSnap = timeline.isSnapping && !event.shiftKey
+		seekTo(shouldSnap ? snapToGrid(rawTime, props.grid) : rawTime)
 	}
 
 	const moveClip = (event: PointerEvent, activeDrag: ClipDragT) => {
@@ -202,7 +215,7 @@
 			<span class="audio-clip-range">{rangeLabel}</span>
 		{/if}
 	</div>
-	<div class="audio-clip-wave" bind:this={wave}>
+	<div class="audio-clip-wave" data-clip-control role="presentation" bind:this={wave} onpointerdown={handleBodyDown}>
 		<canvas class="audio-clip-canvas" bind:this={canvas}></canvas>
 	</div>
 	<span class="audio-clip-edge isStart" data-clip-control role="presentation" onpointerdown={(event) => handleDown(event, 'start')}></span>

@@ -31,7 +31,7 @@
 	import { toggleRowFolded } from '../rowLayout.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
 	import { checkHasSelection, clearSelection, deleteSelection, pickLayer, readModifiers } from '../selection.svelte'
-	import { copySelectedLayers, duplicateSelectedLayers, pasteLayers, toggleSelectedLayersActive } from '../layerEdit.svelte'
+	import { copySelectedLayers, cutSelectedLayers, duplicateSelectedLayers, nudgeSelectedLayerTimes, pasteLayers, sliceSelectedLayers, toggleSelectedLayersActive } from '../layerEdit.svelte'
 	import { nudgeSelectedLayers } from '../stage.svelte'
 	import {
 		addEmptyTrack,
@@ -46,9 +46,8 @@
 	import { pickColorForId } from '../engine/palette'
 	import type { ColorNameT } from '../engine/palette'
 	import { openGridMenu } from '../timelineMenus.svelte'
-	import { app, getAnalysis, getAudioLayerBuffer, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
-	import { getVideoDuration } from '../engine/video'
-	import type { ImpulseMoveT } from '../sources.svelte'
+	import { app, getAnalysis, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
+		import type { ImpulseMoveT } from '../sources.svelte'
 	import {
 			DEFAULT_HEADER_WIDTH,
 		MAX_HEADER_WIDTH,
@@ -391,20 +390,22 @@
 			if (didPaste) event.preventDefault()
 			return didPaste
 		}
+		if (key === 'x') {
+			const didCut = cutSelectedLayers()
+			if (didCut) event.preventDefault()
+			return didCut
+		}
+		if (key === 'e') {
+			const didSlice = sliceSelectedLayers(app.currentTime)
+			if (didSlice) event.preventDefault()
+			return didSlice
+		}
 		if (key === 'd') {
-			const didDuplicate = duplicateSelectedLayers(getFileLength)
+			const didDuplicate = duplicateSelectedLayers()
 			if (didDuplicate) event.preventDefault()
 			return didDuplicate
 		}
 		return false
-	}
-
-	// How long a clip's file is, for audio and for video.
-	const getFileLength = (layerId: string): number => {
-		const audioLength = getAudioLayerBuffer(layerId)?.duration
-		if (audioLength !== undefined) return audioLength
-		const layer = layerStore.layers.find((candidate) => candidate.id === layerId)
-		return getVideoDuration(layer?.assetId ?? null)
 	}
 
 	// Zero deactivates the selected layers, like Ableton. With nothing
@@ -503,9 +504,21 @@
 		return true
 	}
 
+	// Left and right move the selected clips along the timeline, one
+	// visible marker at a time. Up and down move them on the stage.
 	const nudgeLayers = (event: KeyboardEvent, direction: ArrowDirectionT): boolean => {
+		const hasLayers = layerStore.selectedLayerIds.length > 0
+		if (!hasLayers) return false
+		if (direction.horizontal !== 0) return nudgeLayerTimes(event, direction.horizontal)
 		const step = event.shiftKey ? FINE_LAYER_STEP_PERCENT : LAYER_STEP_PERCENT
-		return nudgeSelectedLayers(direction.horizontal * step, -direction.vertical * step)
+		return nudgeSelectedLayers(0, -direction.vertical * step)
+	}
+
+	const nudgeLayerTimes = (event: KeyboardEvent, horizontal: number): boolean => {
+		const isSnapped = timeline.isSnapping && !event.shiftKey
+		const step = isSnapped ? grid.snapStep : FINE_TIME_STEP
+		const gridOffset = isSnapped ? grid.beatOffset : null
+		return nudgeSelectedLayerTimes({ direction: horizontal, step, gridOffset })
 	}
 
 	// One visible grid division left or right of the playhead.

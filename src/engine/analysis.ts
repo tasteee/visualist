@@ -1,6 +1,6 @@
 import { GRID_STEP, clamp } from './settings'
 import { buildSpectrum } from './spectrum'
-import type { AnalysisT, AudioLevelsT, ImpulseT, SpectrumT } from './types'
+import type { AnalysisT, AudioLevelsT, ImpulseT } from './types'
 
 const FRAMES_PER_SECOND = 100
 const ENERGY_WINDOW_FRAMES = 180
@@ -346,65 +346,4 @@ export const findFirstImpulseIndex = (impulses: ImpulseT[], time: number): numbe
 		if (!isBefore) high = middle
 	}
 	return low
-}
-
-// Where an audio clip sits on the project timeline: it starts at
-// startTime, plays from sourceOffset in its file, and stops at endTime.
-export type ClipPlacementT = {
-	startTime: number
-	endTime: number
-	sourceOffset: number
-}
-
-const copyShifted = (source: Float32Array, frameCount: number, fromFrame: number, toFrame: number, length: number): Float32Array => {
-	const shifted = new Float32Array(frameCount)
-	const available = Math.max(0, Math.min(length, source.length - fromFrame, frameCount - toFrame))
-	if (available <= 0) return shifted
-	shifted.set(source.subarray(fromFrame, fromFrame + available), toFrame)
-	return shifted
-}
-
-const shiftImpulses = (impulses: ImpulseT[], placement: ClipPlacementT): ImpulseT[] => {
-	const clipLength = placement.endTime - placement.startTime
-	const shift = placement.startTime - placement.sourceOffset
-	const inside = impulses.filter((impulse) => impulse.time >= placement.sourceOffset && impulse.time < placement.sourceOffset + clipLength)
-	return inside.map((impulse) => ({ ...impulse, time: impulse.time + shift }))
-}
-
-const shiftSpectrum = (spectrum: SpectrumT, frameCount: number, fromFrame: number, toFrame: number, length: number): SpectrumT => {
-	const bandCount = spectrum.bandCount
-	const power = new Float32Array(frameCount * bandCount)
-	const available = Math.max(0, Math.min(length, spectrum.frameCount - fromFrame, frameCount - toFrame))
-	if (available > 0) power.set(spectrum.power.subarray(fromFrame * bandCount, (fromFrame + available) * bandCount), toFrame * bandCount)
-	return { ...spectrum, power, frameCount }
-}
-
-// Puts a file's analysis where its clip sits on the timeline, so
-// moving or trimming the clip moves everything the picture hears.
-// Time outside the clip is silent.
-export const placeAnalysis = (raw: AnalysisT, placement: ClipPlacementT, projectDuration: number): AnalysisT => {
-	const frameCount = Math.max(1, Math.ceil(projectDuration / GRID_STEP))
-	const toFrame = Math.max(0, Math.round(placement.startTime / GRID_STEP))
-	const fromFrame = Math.max(0, Math.round(placement.sourceOffset / GRID_STEP))
-	const length = Math.round((placement.endTime - placement.startTime) / GRID_STEP)
-	const copy = (series: Float32Array) => copyShifted(series, frameCount, fromFrame, toFrame, length)
-	const beatLength = 60 / raw.bpm
-	const shiftedOffset = raw.beatOffset - placement.sourceOffset + placement.startTime
-	const beatOffset = ((shiftedOffset % beatLength) + beatLength) % beatLength
-
-	return {
-		duration: projectDuration,
-		low: copy(raw.low),
-		mid: copy(raw.mid),
-		high: copy(raw.high),
-		level: copy(raw.level),
-		energy: copy(raw.energy),
-		flux: copy(raw.flux),
-		kicks: shiftImpulses(raw.kicks, placement),
-		snaps: shiftImpulses(raw.snaps, placement),
-		bpm: raw.bpm,
-		beatOffset,
-		spectrum: shiftSpectrum(raw.spectrum, frameCount, fromFrame, toFrame, length),
-		isDemo: false
-	}
 }

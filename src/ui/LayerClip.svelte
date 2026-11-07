@@ -1,16 +1,20 @@
 <script lang="ts">
 	import { recordHistory } from '../automation.svelte'
 	import { MIN_CLIP_SECONDS, clamp } from '../engine/settings'
-	import { getVideoDuration } from '../engine/video'
 	import { formatPreciseTime, ratioToTime, snapToGrid, timeToPercent } from '../engine/timeline'
 	import type { TimelineGridT } from '../engine/timeline'
 	import type { LayerT } from '../engine/types'
+	import { getVideoDuration } from '../engine/video'
 	import { layerStore, setLayerTimeRange } from '../layers.svelte'
 	import { pickLayer, readModifiers } from '../selection.svelte'
-	import { app } from '../store.svelte'
+	import { app, seekTo } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import './LayerClip.css'
 
+	// A text, image, shape or video layer on the timeline. The bar along
+	// its top selects it and drags it along the timeline. Its edges trim
+	// where it starts and ends. Clicking its body selects it and puts
+	// the playhead there, ready to slice.
 	type LayerClipPropsT = {
 		layer: LayerT
 		grid: TimelineGridT
@@ -30,34 +34,31 @@
 	const props: LayerClipPropsT = $props()
 
 	const MOVE_THRESHOLD_PX = 3
-	const KEY_STEP_SECONDS = 0.1
 
 	let root: HTMLDivElement
 	let drag = $state<ClipDragT | null>(null)
 
-	const isVideoLayer = (): boolean => props.layer.kind === 'video'
-
 	const view = $derived(timeline.view)
 	const duration = $derived(app.duration)
-	const startTime = $derived(isVideoLayer() ? props.layer.startTime : Math.min(props.layer.startTime, duration))
 	const isVideo = $derived(props.layer.kind === 'video')
 	const sourceOffset = $derived(props.layer.sourceOffset)
+	const startTime = $derived(isVideo ? props.layer.startTime : Math.min(props.layer.startTime, duration))
 	// A video plays its file once. Where it ends if it is never cut short.
 	const naturalEnd = $derived(startTime + Math.max(0, getVideoDuration(props.layer.assetId) - sourceOffset))
 	const endTime = $derived(props.layer.endTime ?? (isVideo ? naturalEnd : duration))
 	const leftPercent = $derived(clamp(timeToPercent(startTime, view), -1, 101))
 	const rightPercent = $derived(clamp(100 - timeToPercent(endTime, view), -1, 101))
 	const isDragging = $derived(drag !== null)
-	const isFullSong = $derived(startTime <= 0 && props.layer.endTime === null)
 	const rangeLabel = $derived(`${formatPreciseTime(startTime)} – ${formatPreciseTime(endTime)}`)
-	const ariaLabel = $derived(`${props.layer.name} shows from ${rangeLabel}. Drag to move, drag an edge to trim.`)
+	const ariaLabel = $derived(`${props.layer.name} shows from ${rangeLabel}`)
+	const barTitle = $derived(`${props.layer.name} · ${rangeLabel} · drag to move`)
 
 	const readTime = (event: PointerEvent): number => {
 		const track = root.closest<HTMLElement>('[data-track]')
 		if (track === null) return 0
 		const bounds = track.getBoundingClientRect()
 		const ratio = (event.clientX - bounds.left) / bounds.width
-		return clamp(ratioToTime(ratio, view), 0, duration)
+		return clamp(ratioToTime(ratio, view), 0, Number.POSITIVE_INFINITY)
 	}
 
 	// Shift frees the clip from the beat grid, like points.
@@ -75,6 +76,11 @@
 		return 'move'
 	}
 
+	const selectLayer = (event: PointerEvent) => {
+		const orderedIds = [...layerStore.layers].reverse().map((layer) => layer.id)
+		pickLayer(props.layer.id, orderedIds, readModifiers(event))
+	}
+
 	const handleDown = (event: PointerEvent) => {
 		const isPrimaryButton = event.button === 0
 		if (!isPrimaryButton) return
@@ -83,8 +89,27 @@
 		const pointerTime = readTime(event)
 		const mode = readMode(event)
 		drag = { mode, grabOffset: pointerTime - startTime, length: endTime - startTime, hasMoved: false, startX: event.clientX }
-		const orderedIds = [...layerStore.layers].reverse().map((layer) => layer.id)
-		pickLayer(props.layer.id, orderedIds, readModifiers(event))
+		selectLayer(event)
+	}
+
+	// A click on the body selects the clip and puts the playhead at
+	// that point.
+	const handleBodyDown = (event: PointerEvent) => {
+		const isPrimaryButton = event.button === 0
+		if (!isPrimaryButton) return
+		event.stopPropagation()
+		selectLayer(event)
+		const rawTime = Math.min(readTime(event), duration)
+		const shouldSnap = timeline.isSnapping && !event.shiftKey
+		seekTo(shouldSnap ? snapToGrid(rawTime, props.grid) : rawTime)
+	}
+
+	const moveClip = (event: PointerEvent, activeDrag: ClipDragT) => {
+		const pointerTime = readTime(event)
+		const latestStart = Math.max(0, duration - activeDrag.length)
+		const nextStart = clamp(pointerTime - activeDrag.grabOffset, 0, latestStart)
+		const snappedStart = snapTime(nextStart, event, latestStart)
+		setLayerTimeRange(props.layer.id, snappedStart, snappedStart + activeDrag.length, duration)
 	}
 
 	// A video can sit anywhere on the timeline, even past the end,
@@ -117,14 +142,6 @@
 		trimVideoEnd(event)
 	}
 
-	const moveClip = (event: PointerEvent, activeDrag: ClipDragT) => {
-		const pointerTime = readTime(event)
-		const latestStart = Math.max(0, duration - activeDrag.length)
-		const nextStart = clamp(pointerTime - activeDrag.grabOffset, 0, latestStart)
-		const snappedStart = snapTime(nextStart, event, latestStart)
-		setLayerTimeRange(props.layer.id, snappedStart, snappedStart + activeDrag.length, duration)
-	}
-
 	const handleMove = (event: PointerEvent) => {
 		const activeDrag = drag
 		if (activeDrag === null) return
@@ -147,41 +164,6 @@
 	const handleUp = () => {
 		drag = null
 	}
-
-	// Double-click fills the whole song again.
-	const handleDoubleClick = (event: MouseEvent) => {
-		event.stopPropagation()
-		if (isVideo) return
-		if (isFullSong) return
-		recordHistory()
-		setLayerTimeRange(props.layer.id, 0, duration, duration)
-	}
-
-	const nudgeVideo = (step: number, shouldMoveEnd: boolean) => {
-		if (shouldMoveEnd) {
-			props.layer.endTime = clamp(endTime + step, startTime + MIN_CLIP_SECONDS, naturalEnd)
-			return
-		}
-		const length = endTime - startTime
-		const nextStart = Math.max(0, startTime + step)
-		props.layer.startTime = nextStart
-		props.layer.endTime = nextStart + length
-	}
-
-	// Arrows move the clip, Shift+arrows move only its end.
-	const handleKey = (event: KeyboardEvent) => {
-		const isLeft = event.key === 'ArrowLeft'
-		const isRight = event.key === 'ArrowRight'
-		if (!isLeft && !isRight) return
-		event.preventDefault()
-		recordHistory()
-		const step = isLeft ? -KEY_STEP_SECONDS : KEY_STEP_SECONDS
-		if (isVideo) return nudgeVideo(step, event.shiftKey)
-		if (event.shiftKey) return setLayerTimeRange(props.layer.id, startTime, endTime + step, duration)
-		const length = endTime - startTime
-		const nextStart = clamp(startTime + step, 0, Math.max(0, duration - length))
-		setLayerTimeRange(props.layer.id, nextStart, nextStart + length, duration)
-	}
 </script>
 
 <div
@@ -189,29 +171,22 @@
 	class:isSelected={props.isSelected}
 	class:isDragging
 	class:isHidden={!props.layer.isVisible}
-	class:isFullSong
 	bind:this={root}
 	style:--clip-left="{leftPercent}%"
 	style:--clip-right="{rightPercent}%"
-	role="slider"
-	tabindex="0"
+	role="group"
 	aria-label={ariaLabel}
-	aria-valuemin={0}
-	aria-valuemax={duration}
-	aria-valuenow={startTime}
-	onpointerdown={handleDown}
 	onpointermove={handleMove}
 	onpointerup={handleUp}
 	onpointercancel={handleUp}
-	ondblclick={handleDoubleClick}
-	onkeydown={handleKey}
 >
-	<span class="layer-clip-edge isStart" data-edge="start" aria-hidden="true"></span>
-	<span class="layer-clip-label">
+	<div class="layer-clip-bar" data-clip-control role="presentation" title={barTitle} onpointerdown={handleDown}>
 		<span class="layer-clip-name">{props.layer.name}</span>
 		{#if isDragging}
 			<span class="layer-clip-range">{rangeLabel}</span>
 		{/if}
-	</span>
-	<span class="layer-clip-edge isEnd" data-edge="end" aria-hidden="true"></span>
+	</div>
+	<div class="layer-clip-body" data-clip-control role="presentation" onpointerdown={handleBodyDown}></div>
+	<span class="layer-clip-edge isStart" data-edge="start" data-clip-control role="presentation" onpointerdown={handleDown}></span>
+	<span class="layer-clip-edge isEnd" data-edge="end" data-clip-control role="presentation" onpointerdown={handleDown}></span>
 </div>
