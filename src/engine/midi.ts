@@ -1,7 +1,7 @@
-import type { HitRoleT } from './types'
+import type { ImpulseRoleT } from './types'
 
 // A small Standard MIDI File reader: notes, tempo map and track
-// names. Enough to turn a drum export into hit tracks.
+// names. Enough to turn a drum export into impulse tracks.
 
 export type MidiNoteT = {
 	trackIndex: number
@@ -32,7 +32,7 @@ export type MidiGroupingT = 'note' | 'track'
 export type MidiGroupT = {
 	key: string
 	name: string
-	role: HitRoleT
+	role: ImpulseRoleT
 	notes: MidiNoteT[]
 }
 
@@ -300,7 +300,7 @@ export const getNoteName = (pitch: number): string => {
 
 const getDrumName = (pitch: number): string | null => GENERAL_MIDI_DRUMS[pitch] ?? null
 
-export const guessRole = (name: string): HitRoleT => {
+export const guessRole = (name: string): ImpulseRoleT => {
 	const lowered = name.toLowerCase()
 	const isKick = lowered.includes('kick') || lowered.includes('bd')
 	if (isKick) return 'kick'
@@ -329,7 +329,7 @@ const buildTrackGroupName = (note: MidiNoteT): string => {
 // Only one group per role, so the first kick-like and the
 // first snare-like groups take those roles.
 const assignRoles = (groups: MidiGroupT[]): MidiGroupT[] => {
-	const takenRoles = new Set<HitRoleT>()
+	const takenRoles = new Set<ImpulseRoleT>()
 	return groups.map((group) => {
 		const role = guessRole(group.name)
 		const isTaken = takenRoles.has(role)

@@ -9,12 +9,14 @@
 	import MusicNotesIcon from 'phosphor-svelte/lib/MusicNotesIcon'
 	import PauseIcon from 'phosphor-svelte/lib/PauseIcon'
 	import PlayIcon from 'phosphor-svelte/lib/PlayIcon'
+	import RepeatIcon from 'phosphor-svelte/lib/RepeatIcon'
 	import SkipBackIcon from 'phosphor-svelte/lib/SkipBackIcon'
 	import { automation, redo, undo } from '../automation.svelte'
 	import { formatBarBeat, formatBpm, formatPreciseTime } from '../engine/timeline'
-	import { app, getAnalysis, seekTo, togglePlay } from '../store.svelte'
+	import { app, getAnalysis, goToBeginning, toggleLoop, togglePlay } from '../store.svelte'
 	import { checkIsFitted, fitView, getZoomLevel, timeline, toggleFollowing, toggleSnapping, zoomIn, zoomOut } from '../timeline.svelte'
 	import { openAudioPicker } from './filePicker'
+	import { press } from './press'
 	import './TransportBar.css'
 
 	const canPlay = $derived(app.hasAudio && !app.isRecording && !app.isAnalyzing)
@@ -35,23 +37,29 @@
 	const followLabel = $derived(timeline.isFollowing ? 'Following playhead (F)' : 'Follow playhead (F)')
 	const snapLabel = $derived(timeline.isSnapping ? 'Snapping to beat grid (S) · hold Shift to move freely' : 'Snap to beat grid (S)')
 
-	const handleRewind = () => seekTo(0)
+	const loopLabel = $derived(app.isLoopEnabled ? 'Loop on (L)' : 'Loop off (L)')
+	const canLoop = $derived(canPlay)
 </script>
 
 <div class="transport-bar">
 	<div class="transport-bar-group">
-		<z-tooltip content="Back to start (Home)" placement="top">
-			<button class="transport-bar-icon" type="button" disabled={!canPlay} aria-label="Back to start" onclick={handleRewind}>
+		<z-tooltip content="Go to beginning (Home)" placement="top">
+			<button class="transport-bar-icon" type="button" disabled={!canPlay} aria-label="Go to beginning" {...press(goToBeginning)}>
 				<SkipBackIcon weight="fill" />
 			</button>
 		</z-tooltip>
 		<z-tooltip content={playLabel} placement="top">
-			<button class="transport-bar-play" class:isPlaying={app.isPlaying} type="button" disabled={!canPlay} aria-label={playLabel} onclick={togglePlay}>
+			<button class="transport-bar-play" class:isPlaying={app.isPlaying} type="button" disabled={!canPlay} aria-label={playLabel} {...press(togglePlay)}>
 				{#if app.isPlaying}
 					<PauseIcon weight="fill" />
 				{:else}
 					<PlayIcon weight="fill" />
 				{/if}
+			</button>
+		</z-tooltip>
+		<z-tooltip content={loopLabel} placement="top">
+			<button class="transport-bar-icon" class:isPressed={app.isLoopEnabled} type="button" disabled={!canLoop} aria-pressed={app.isLoopEnabled} aria-label="Loop" {...press(toggleLoop)}>
+				<RepeatIcon weight="bold" />
 			</button>
 		</z-tooltip>
 	</div>
@@ -77,12 +85,12 @@
 
 	<div class="transport-bar-group">
 		<z-tooltip content="Undo (⌘Z)" placement="top">
-			<button class="transport-bar-icon" type="button" disabled={!canUndo} aria-label="Undo" onclick={undo}>
+			<button class="transport-bar-icon" type="button" disabled={!canUndo} aria-label="Undo" {...press(undo)}>
 				<ArrowUUpLeftIcon weight="bold" />
 			</button>
 		</z-tooltip>
 		<z-tooltip content="Redo (⇧⌘Z)" placement="top">
-			<button class="transport-bar-icon" type="button" disabled={!canRedo} aria-label="Redo" onclick={redo}>
+			<button class="transport-bar-icon" type="button" disabled={!canRedo} aria-label="Redo" {...press(redo)}>
 				<ArrowUUpRightIcon weight="bold" />
 			</button>
 		</z-tooltip>
@@ -92,12 +100,12 @@
 
 	<div class="transport-bar-group">
 		<z-tooltip content={followLabel} placement="top">
-			<button class="transport-bar-icon" class:isPressed={timeline.isFollowing} type="button" aria-pressed={timeline.isFollowing} aria-label="Follow playhead" onclick={toggleFollowing}>
+			<button class="transport-bar-icon" class:isPressed={timeline.isFollowing} type="button" aria-pressed={timeline.isFollowing} aria-label="Follow playhead" {...press(toggleFollowing)}>
 				<CrosshairSimpleIcon weight="bold" />
 			</button>
 		</z-tooltip>
 		<z-tooltip content={snapLabel} placement="top">
-			<button class="transport-bar-icon" class:isPressed={timeline.isSnapping} type="button" aria-pressed={timeline.isSnapping} aria-label="Snap to grid" onclick={toggleSnapping}>
+			<button class="transport-bar-icon" class:isPressed={timeline.isSnapping} type="button" aria-pressed={timeline.isSnapping} aria-label="Snap to grid" {...press(toggleSnapping)}>
 				<MagnetStraightIcon weight="bold" />
 			</button>
 		</z-tooltip>
@@ -107,18 +115,18 @@
 
 	<div class="transport-bar-zoom">
 		<z-tooltip content="Zoom out (−)" placement="top">
-			<button class="transport-bar-icon" type="button" disabled={isFitted} aria-label="Zoom out" onclick={zoomOut}>
+			<button class="transport-bar-icon" type="button" disabled={isFitted} aria-label="Zoom out" {...press(zoomOut)}>
 				<MagnifyingGlassMinusIcon weight="bold" />
 			</button>
 		</z-tooltip>
 		<span class="transport-bar-zoom-level">{zoomLabel}</span>
 		<z-tooltip content="Zoom in (=)" placement="top">
-			<button class="transport-bar-icon" type="button" aria-label="Zoom in" onclick={zoomIn}>
+			<button class="transport-bar-icon" type="button" aria-label="Zoom in" {...press(zoomIn)}>
 				<MagnifyingGlassPlusIcon weight="bold" />
 			</button>
 		</z-tooltip>
 		<z-tooltip content="Zoom to fit (0)" placement="top">
-			<button class="transport-bar-icon" type="button" disabled={isFitted} aria-label="Zoom to fit" onclick={fitView}>
+			<button class="transport-bar-icon" type="button" disabled={isFitted} aria-label="Zoom to fit" {...press(fitView)}>
 				<ArrowsOutLineHorizontalIcon weight="bold" />
 			</button>
 		</z-tooltip>

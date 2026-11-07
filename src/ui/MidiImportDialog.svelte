@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { HIT_ROLE_OPTIONS, formatHitCount } from '../engine/hits'
+	import { IMPULSE_ROLE_OPTIONS, formatImpulseCount } from '../engine/impulses'
 	import type { MidiGroupingT, MidiTimingT } from '../engine/midi'
 	import { formatBpm } from '../engine/timeline'
-	import type { HitRoleT } from '../engine/types'
+	import type { ImpulseRoleT } from '../engine/types'
 	import {
 		closeMidiImport,
 		confirmMidiImport,
@@ -52,7 +52,7 @@
 	const getRowDetail = (row: MidiImportRowT): string => {
 		const inSong = countNotesInSong(row.key)
 		const isAllInSong = inSong === row.noteCount
-		const countLabel = formatHitCount(row.noteCount)
+		const countLabel = formatImpulseCount(row.noteCount)
 		if (isAllInSong) return countLabel
 		return `${countLabel} · ${inSong} in the song`
 	}
@@ -80,7 +80,7 @@
 
 	const handleRoleChange = (row: MidiImportRowT, event: Event) => {
 		const detail = (event as CustomEvent<{ value: string }>).detail
-		setMidiRowRole(row.key, detail.value as HitRoleT)
+		setMidiRowRole(row.key, detail.value as ImpulseRoleT)
 	}
 </script>
 
@@ -105,7 +105,7 @@
 						<z-input size="sm" value={row.name} aria-label="Track name" onchange={(event: Event) => handleNameChange(row, event)} oninput={(event: Event) => handleNameChange(row, event)}></z-input>
 						<span class="midi-import-row-detail">{getRowDetail(row)}</span>
 					</div>
-					<z-select class="midi-import-row-role" size="sm" value={row.role} options={HIT_ROLE_OPTIONS} aria-label="Role" onchange={(event: Event) => handleRoleChange(row, event)}></z-select>
+					<z-select class="midi-import-row-role" size="sm" value={row.role} options={IMPULSE_ROLE_OPTIONS} aria-label="Role" onchange={(event: Event) => handleRoleChange(row, event)}></z-select>
 				</li>
 			{/each}
 		</ul>

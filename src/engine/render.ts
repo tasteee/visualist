@@ -1,4 +1,4 @@
-import { findFirstHitIndex, getLevels } from './analysis'
+import { findFirstImpulseIndex, getLevels } from './analysis'
 import { collectEchoes } from './echoes'
 import { getFrameLayout } from './formats'
 import type { FrameLayoutT } from './formats'
@@ -64,7 +64,7 @@ const getGlitchAmount = (input: FrameInputT, high: number, energy: number): numb
 	if (settings.glitchAmount <= 0) return 0
 
 	const snaps = input.analysis.snaps
-	const startIndex = findFirstHitIndex(snaps, input.time - GLITCH_BURST_SECONDS)
+	const startIndex = findFirstImpulseIndex(snaps, input.time - GLITCH_BURST_SECONDS)
 	let burst = 0
 	for (let snapIndex = startIndex; snapIndex < snaps.length; snapIndex++) {
 		const snap = snaps[snapIndex]

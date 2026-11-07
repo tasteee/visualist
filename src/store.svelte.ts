@@ -5,6 +5,7 @@ import {
 	decodeAudioFile,
 	getPlaybackTime,
 	pausePlayback,
+	retargetLoop,
 	setActiveLoop,
 	setPausedPosition,
 	startPlayback
@@ -15,8 +16,8 @@ import { applySettingsModulation, computeSignals } from './engine/modulation'
 import { checkHasPost, getPostAmounts } from './engine/post'
 import { startAppearanceWatchers } from './appearance.svelte'
 import { layerStore, restoreLayerAssets, startLayerWatchers } from './layers.svelte'
-import { buildSongKey, getCompiledSources, getRoleHits, startSourceWatchers, switchSong } from './sources.svelte'
-import type { RoleHitsT } from './sources.svelte'
+import { buildSongKey, getCompiledSources, getRoleImpulses, startSourceWatchers, switchSong } from './sources.svelte'
+import type { RoleImpulsesT } from './sources.svelte'
 import { buildDemoAnalysis } from './engine/demo'
 import { buildLogoLayers } from './engine/logoLayers'
 import type { LogoLayersT } from './engine/logoLayers'
@@ -146,16 +147,16 @@ function readPalette(settings: SettingsT): PaletteT {
 export const getDetectedAnalysis = (): AnalysisT => detectedAnalysis
 
 // The analysis everything renders from: the user's tempo and
-// downbeat, and any hit tracks standing in for kicks or snares.
-const buildEffectiveAnalysis = (detected: AnalysisT, bpm: number, beatOffset: number, roleHits: RoleHitsT): AnalysisT => ({
+// downbeat, and any impulse tracks standing in for kicks or snares.
+const buildEffectiveAnalysis = (detected: AnalysisT, bpm: number, beatOffset: number, roleImpulses: RoleImpulsesT): AnalysisT => ({
 	...detected,
 	bpm,
 	beatOffset,
-	kicks: roleHits.kicks ?? detected.kicks,
-	snaps: roleHits.snaps ?? detected.snaps
+	kicks: roleImpulses.kicks ?? detected.kicks,
+	snaps: roleImpulses.snaps ?? detected.snaps
 })
 
-const effectiveAnalysis = $derived(buildEffectiveAnalysis(detectedAnalysis, app.bpm, app.beatOffset, getRoleHits()))
+const effectiveAnalysis = $derived(buildEffectiveAnalysis(detectedAnalysis, app.bpm, app.beatOffset, getRoleImpulses()))
 
 export const getAnalysis = (): AnalysisT => effectiveAnalysis
 export const getLogoLayers = (): LogoLayersT | null => layers
@@ -429,12 +430,17 @@ export const clampToLoop = (seconds: number): number => {
 const applyLoopToTransport = (): void => {
 	const canApply = app.hasAudio && audioBuffer !== null && !app.isRecording
 	if (!canApply || audioBuffer === null) return
-	setActiveLoop(getLoopRegion())
-	const clampedTime = clampToLoop(app.currentTime)
+	const region = getLoopRegion()
+	const liveTime = app.isPlaying ? getPlaybackTime() : app.currentTime
+	const clampedTime = clampToLoop(liveTime)
 	const clampedMarker = clampToLoop(app.playMarker)
 	app.playMarker = clampedMarker
 	app.currentTime = clampedTime
 	markDirty()
+	const isInsideRegion = clampedTime === liveTime
+	const canRetarget = app.isPlaying && isInsideRegion
+	if (canRetarget) return retargetLoop(region)
+	setActiveLoop(region)
 	if (app.isPlaying) startPlayback(audioBuffer, clampedTime, null, handleEnded)
 	if (!app.isPlaying) setPausedPosition(clampedMarker)
 }

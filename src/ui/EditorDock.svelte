@@ -23,7 +23,7 @@
 	} from '../automation.svelte'
 	import { GLOBAL_GROUP_ID } from '../engine/automation'
 	import { getOutputLatency, getPlaybackTime } from '../engine/audio'
-	import { snapToStep } from '../engine/hits'
+	import { snapToStep } from '../engine/impulses'
 	import { getBandSourceId } from '../engine/sources'
 	import type { CompiledBandT } from '../engine/types'
 	import { buildGrid, ratioToTime } from '../engine/timeline'
@@ -38,9 +38,9 @@
 	import {
 		addEmptyTrack,
 		getCompiledSources,
-		moveHits,
+		moveImpulses,
 		recordTap,
-		selectAllHits,
+		selectAllImpulses,
 		sources,
 		toggleTriggersCollapsed
 	} from '../sources.svelte'
@@ -49,7 +49,7 @@
 	import type { ColorNameT } from '../engine/palette'
 	import { openGridMenu } from '../timelineMenus.svelte'
 	import { app, getAnalysis, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
-	import type { HitMoveT } from '../sources.svelte'
+	import type { ImpulseMoveT } from '../sources.svelte'
 	import {
 		MAX_DOCK_SHARE,
 		fitView,
@@ -68,7 +68,7 @@
 	import AutomationLane from './AutomationLane.svelte'
 	import AutomationPopover from './AutomationPopover.svelte'
 	import BandLane from './BandLane.svelte'
-	import HitLane from './HitLane.svelte'
+	import ImpulseLane from './ImpulseLane.svelte'
 	import TimelineLayer from './TimelineLayer.svelte'
 	import LayerClip from './LayerClip.svelte'
 	import OverviewBar from './OverviewBar.svelte'
@@ -346,11 +346,11 @@
 	}
 
 	const handleSelectAllKey = (event: KeyboardEvent) => {
-		const selectedTrackId = sources.hitSelection.trackId
-		const hasImpulses = selectedTrackId !== null && sources.hitSelection.hitIds.length > 0
+		const selectedTrackId = sources.impulseSelection.trackId
+		const hasImpulses = selectedTrackId !== null && sources.impulseSelection.impulseIds.length > 0
 		if (hasImpulses && selectedTrackId !== null) {
 			event.preventDefault()
-			return selectAllHits(selectedTrackId)
+			return selectAllImpulses(selectedTrackId)
 		}
 		const pointLaneId = automation.selectedPointLaneId
 		const hasPoints = pointLaneId !== null && automation.selectedPointIds.length > 0
@@ -391,18 +391,18 @@
 	}
 
 	const nudgeImpulses = (event: KeyboardEvent, direction: ArrowDirectionT): boolean => {
-		const trackId = sources.hitSelection.trackId
-		const hitIds = sources.hitSelection.hitIds
+		const trackId = sources.impulseSelection.trackId
+		const impulseIds = sources.impulseSelection.impulseIds
 		const track = sources.tracks.find((candidate) => candidate.id === trackId)
-		const hasImpulses = track !== undefined && hitIds.length > 0
+		const hasImpulses = track !== undefined && impulseIds.length > 0
 		if (!hasImpulses) return false
 		const timeDelta = direction.horizontal * getTimeNudge(event)
 		const strengthStep = event.shiftKey ? FINE_VALUE_STEP : POINT_VALUE_STEP
 		const strengthDelta = direction.vertical * strengthStep
-		const selected = track.hits.filter((hit) => hitIds.includes(hit.id))
-		const moves: HitMoveT[] = selected.map((hit) => ({ hitId: hit.id, time: hit.time + timeDelta, strength: hit.strength + strengthDelta }))
+		const selected = track.impulses.filter((impulse) => impulseIds.includes(impulse.id))
+		const moves: ImpulseMoveT[] = selected.map((impulse) => ({ impulseId: impulse.id, time: impulse.time + timeDelta, strength: impulse.strength + strengthDelta }))
 		recordHistoryCoalesced('nudge-impulses')
-		moveHits(track.id, moves)
+		moveImpulses(track.id, moves)
 		return true
 	}
 
@@ -663,7 +663,7 @@
 				{grid}
 				isCollapsed={isTriggersCollapsed}
 				canAddLane
-				addLabel="Add a hit track"
+				addLabel="Add an impulse track"
 				ontoggle={handleTriggersToggle}
 				onadd={handleAddTrack}
 >
@@ -673,7 +673,7 @@
 			</TimelineLayer>
 			{#if !isTriggersCollapsed && hasTriggers}
 				{#each sources.tracks as track (track.id)}
-					<HitLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} />
+					<ImpulseLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} />
 				{/each}
 				{#each sources.bands as band (band.id)}
 					<BandLane {band} compiled={findCompiledBand(band.id)} {grid} siblingTrackIds={trackIdsInOrder} />

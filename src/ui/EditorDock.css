@@ -71,7 +71,7 @@
 }
 
 .editor-row.isRuler {
-	height: var(--spacing-9);
+	height: 58px;
 	background: var(--paper);
 }
 

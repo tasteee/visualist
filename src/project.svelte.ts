@@ -6,13 +6,13 @@ import type { GridDivisionT, TimelineViewT } from './engine/timeline'
 import { inspector } from './inspector.svelte'
 import type { InspectorTabT } from './inspector.svelte'
 import { buildSongKey, sources } from './sources.svelte'
-import { app, loadAudioFile, seekTo, setStatus } from './store.svelte'
+import { app, loadAudioFile, seekTo, setLoopEnabled, setLoopRegion, setStatus } from './store.svelte'
 import { timeline } from './timeline.svelte'
 
 // Everything about the open project that is not already saved
 // by its own store: the song's place, tempo corrections, trim,
 // the marker, and how the editor was laid out. Settings,
-// layers, lanes, hit tracks and bands save themselves. The song
+// layers, lanes, impulse tracks and bands save themselves. The song
 // file is kept in IndexedDB.
 
 type SavedProjectT = {
@@ -27,6 +27,9 @@ type SavedProjectT = {
 	downbeatAnchor: number | null
 	trimStart: number
 	trimEnd: number
+	loopStart?: number
+	loopEnd?: number
+	isLoopEnabled?: boolean
 	playMarker: number
 	view: TimelineViewT
 	isSnapping: boolean
@@ -55,6 +58,9 @@ const buildSnapshot = (): SavedProjectT => ({
 	downbeatAnchor: app.downbeatAnchor,
 	trimStart: app.trimStart,
 	trimEnd: app.trimEnd,
+	loopStart: app.loopStart,
+	loopEnd: app.loopEnd,
+	isLoopEnabled: app.isLoopEnabled,
 	playMarker: app.playMarker,
 	view: { start: timeline.view.start, span: timeline.view.span },
 	isSnapping: timeline.isSnapping,
@@ -119,6 +125,9 @@ const applySongState = (project: SavedProjectT): void => {
 	app.downbeatAnchor = project.downbeatAnchor
 	app.trimStart = project.trimStart
 	app.trimEnd = project.trimEnd
+	const hasLoop = typeof project.loopStart === 'number' && typeof project.loopEnd === 'number'
+	if (hasLoop) setLoopRegion(project.loopStart as number, project.loopEnd as number)
+	setLoopEnabled(project.isLoopEnabled === true)
 }
 
 const applyEditorState = (project: SavedProjectT): void => {

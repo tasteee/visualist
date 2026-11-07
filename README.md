@@ -40,6 +40,32 @@ The build splits code that rarely changes into its own files (`zest`,
 3D stage), so after a deploy that only touches app code, returning
 browsers keep those cached.
 
+## Editor controls
+
+**Primary modifier** is Cmd on macOS and Ctrl elsewhere.
+
+- **Space** plays. Clicking a button, toggle or select never keeps
+  focus, so Space keeps playing. Tab to a control and Space presses it.
+- **Left / Right** step the playhead one visible grid division. With
+  impulses or points selected they nudge those instead. With a stage
+  layer selected they nudge its position, unless that channel is
+  automated.
+- **Escape** clears the selection, **Delete** removes it, **Shift-click**
+  selects a range inside one list, **primary-click** toggles.
+- **Loop (L)**: while on, the loop is the only legal playhead range.
+  Two bars sit on the ruler: export on top, loop under it. Click the
+  loop bar to switch it. Double-click the ruler and drag on the second
+  press to draw a loop (hold Alt to draw the export range).
+- **Right-click a row header**, or press its gear, for that row's
+  inspector: name, color and its controls.
+- **Pinch a header** to change the row's height. Drag a row border past
+  its minimum to fold it. Hold the primary modifier to apply it to every
+  sibling.
+- **Stage**: wheel or pinch zooms at the cursor, drag pans. Click a layer
+  to select it, then drag it, resize, rotate, or change its opacity.
+- **Undo (Cmd/Ctrl+Z)** and **redo (Shift+Cmd/Ctrl+Z or Ctrl+Y)** share
+  one stack. A drag or a rename is one step.
+
 ## Stack
 
 - **Svelte 5 + Vite**, no SvelteKit. State lives in runes (`src/store.svelte.ts`).

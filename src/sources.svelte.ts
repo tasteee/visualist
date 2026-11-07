@@ -1,8 +1,8 @@
 import { recordHistory, recordHistoryCoalesced } from './automation.svelte'
 import { BAND_PRESETS, buildBand, clampBandRange } from './engine/bands'
 import type { BandRangeT } from './engine/bands'
-import { DEFAULT_HIT_STRENGTH, buildHitTrack, convertDetectedHits, createHit, insertHit, replaceHitsInRange } from './engine/hits'
-import type { TempoT, TimeRangeT } from './engine/hits'
+import { DEFAULT_IMPULSE_STRENGTH, buildImpulseTrack, convertDetectedImpulses, createImpulse, insertImpulse, replaceImpulsesInRange } from './engine/impulses'
+import type { TempoT, TimeRangeT } from './engine/impulses'
 import { placeMidiNote } from './engine/midi'
 import type { MidiGroupT, MidiPlacementT } from './engine/midi'
 import { clamp } from './engine/settings'
@@ -14,57 +14,57 @@ import {
 	compileBand,
 	compileTrack,
 	getTrackSourceId,
-	sortHitsByTime
+	sortImpulsesByTime
 } from './engine/sources'
 import type {
 	BandOutputT,
 	BandSourceT,
 	CompiledBandT,
 	CompiledSourcesT,
-	HitRoleT,
-	HitShapeT,
-	HitT,
-	HitTrackT,
+	ImpulseRoleT,
+	ImpulseShapeT,
+	ImpulseT,
+	ImpulseTrackT,
 	SpectrumT,
-	TrackHitT
+	TrackImpulseT
 } from './engine/types'
 import { app, getDetectedAnalysis } from './store.svelte'
 
 type SourcesStateT = {
-	tracks: HitTrackT[]
+	tracks: ImpulseTrackT[]
 	bands: BandSourceT[]
-	// Hit tracks belong to one song. This names it.
+	// Impulse tracks belong to one song. This names it.
 	songKey: string
 	armedTrackId: string | null
 	isTapQuantized: boolean
-	// Selected hits, all on one track at a time.
-	hitSelection: HitSelectionT
+	// Selected impulses, all on one track at a time.
+	impulseSelection: ImpulseSelectionT
 	collapsedTrackIds: string[]
 	isTriggersCollapsed: boolean
 }
 
-export type HitSelectionT = {
+export type ImpulseSelectionT = {
 	trackId: string | null
-	hitIds: string[]
+	impulseIds: string[]
 }
 
-// Where a hit moves to, for moving several at once.
-export type HitMoveT = {
-	hitId: string
+// Where an impulse moves to, for moving several at once.
+export type ImpulseMoveT = {
+	impulseId: string
 	time: number
 	strength: number
 }
 
-export type RoleHitsT = {
-	kicks: HitT[] | null
-	snaps: HitT[] | null
+export type RoleImpulsesT = {
+	kicks: ImpulseT[] | null
+	snaps: ImpulseT[] | null
 }
 
 const TRACKS_KEY = 'vink.hitTracks.v1'
 const BANDS_KEY = 'vink.bands.v1'
 export const DEMO_SONG_KEY = 'demo'
 
-type StoredTracksT = Record<string, HitTrackT[]>
+type StoredTracksT = Record<string, ImpulseTrackT[]>
 
 const readStored = (key: string): unknown => {
 	try {
@@ -84,11 +84,18 @@ const writeStored = (key: string, value: unknown): void => {
 	}
 }
 
-const checkIsTrackShape = (track: Partial<HitTrackT>): boolean => {
+// Tracks saved before the rename kept their impulses in hits.
+const migrateStoredTrack = (track: Partial<ImpulseTrackT> & { hits?: unknown }): Partial<ImpulseTrackT> => {
+	const hasLegacyHits = Array.isArray(track.hits) && !Array.isArray(track.impulses)
+	if (!hasLegacyHits) return track
+	return { ...track, impulses: track.hits as ImpulseTrackT['impulses'] }
+}
+
+const checkIsTrackShape = (track: Partial<ImpulseTrackT>): boolean => {
 	const hasId = typeof track.id === 'string'
 	const hasName = typeof track.name === 'string'
-	const hasHits = Array.isArray(track.hits)
-	return hasId && hasName && hasHits
+	const hasImpulses = Array.isArray(track.impulses)
+	return hasId && hasName && hasImpulses
 }
 
 const checkIsBandShape = (band: Partial<BandSourceT>): boolean => {
@@ -104,14 +111,14 @@ const readStoredTracks = (): StoredTracksT => {
 	return parsed as StoredTracksT
 }
 
-const loadTracks = (songKey: string): HitTrackT[] => {
+const loadTracks = (songKey: string): ImpulseTrackT[] => {
 	const stored = readStoredTracks()[songKey]
 	const isList = Array.isArray(stored)
 	if (!isList) return []
-	return stored.filter(checkIsTrackShape)
+	return (stored as Partial<ImpulseTrackT>[]).map(migrateStoredTrack).filter(checkIsTrackShape) as ImpulseTrackT[]
 }
 
-const saveTracks = (songKey: string, tracks: HitTrackT[]): void => {
+const saveTracks = (songKey: string, tracks: ImpulseTrackT[]): void => {
 	const stored = readStoredTracks()
 	const hasTracks = tracks.length > 0
 	if (hasTracks) stored[songKey] = tracks
@@ -119,11 +126,19 @@ const saveTracks = (songKey: string, tracks: HitTrackT[]): void => {
 	writeStored(TRACKS_KEY, stored)
 }
 
+// Bands saved before the rename called their output hits.
+const migrateStoredBand = (band: Partial<BandSourceT> & { output?: unknown }): Partial<BandSourceT> => {
+	const isLegacyOutput = (band.output as unknown) === 'hits'
+	if (!isLegacyOutput) return band
+	return { ...band, output: 'impulses' }
+}
+
 const loadBands = (): BandSourceT[] => {
 	const parsed = readStored(BANDS_KEY)
 	const isList = Array.isArray(parsed)
 	if (!isList) return []
-	return (parsed as Partial<BandSourceT>[]).filter(checkIsBandShape) as BandSourceT[]
+	const bands = (parsed as Partial<BandSourceT>[]).map(migrateStoredBand)
+	return bands.filter(checkIsBandShape) as BandSourceT[]
 }
 
 export const sources = $state<SourcesStateT>({
@@ -132,7 +147,7 @@ export const sources = $state<SourcesStateT>({
 	songKey: DEMO_SONG_KEY,
 	armedTrackId: null,
 	isTapQuantized: true,
-	hitSelection: { trackId: null, hitIds: [] },
+	impulseSelection: { trackId: null, impulseIds: [] },
 	collapsedTrackIds: [],
 	isTriggersCollapsed: false
 })
@@ -177,19 +192,19 @@ const compiledSources = $derived<CompiledSourcesT>({ tracks: compiledTracks, ban
 
 export const getCompiledSources = (): CompiledSourcesT => compiledSources
 
-const findCompiledHits = (role: HitRoleT): HitT[] | null => {
+const findCompiledImpulses = (role: ImpulseRoleT): ImpulseT[] | null => {
 	const roleTracks = sources.tracks.filter((track) => track.role === role)
 	const hasRoleTrack = roleTracks.length > 0
 	if (!hasRoleTrack) return null
 	const roleIds = new Set(roleTracks.map((track) => getTrackSourceId(track.id)))
 	const matching = compiledTracks.filter((track) => roleIds.has(track.sourceId))
-	return sortHitsByTime(matching.flatMap((track) => track.hits))
+	return sortImpulsesByTime(matching.flatMap((track) => track.impulses))
 }
 
-const roleHits = $derived<RoleHitsT>({ kicks: findCompiledHits('kick'), snaps: findCompiledHits('snare') })
+const roleImpulses = $derived<RoleImpulsesT>({ kicks: findCompiledImpulses('kick'), snaps: findCompiledImpulses('snare') })
 
 // Tracks that stand in for the detected kicks and snares.
-export const getRoleHits = (): RoleHitsT => roleHits
+export const getRoleImpulses = (): RoleImpulsesT => roleImpulses
 
 // ---- Song switching ----------------------------------------
 
@@ -201,20 +216,20 @@ export const switchSong = (songKey: string): void => {
 	sources.songKey = songKey
 	sources.tracks = loadTracks(songKey)
 	sources.armedTrackId = null
-	clearHitSelection()
+	clearImpulseSelection()
 }
 
 // Undo snapshots carry the song they belong to, so undoing
-// after a song switch never pours old hits into the new song.
+// after a song switch never pours old impulses into the new song.
 export type TrackSnapshotT = {
 	songKey: string
-	tracks: HitTrackT[]
+	tracks: ImpulseTrackT[]
 	bands: BandSourceT[]
 }
 
 export const takeTrackSnapshot = (): TrackSnapshotT => ({
 	songKey: sources.songKey,
-	tracks: $state.snapshot(sources.tracks) as HitTrackT[],
+	tracks: $state.snapshot(sources.tracks) as ImpulseTrackT[],
 	bands: $state.snapshot(sources.bands) as BandSourceT[]
 })
 
@@ -223,12 +238,12 @@ export const restoreTrackSnapshot = (snapshot: TrackSnapshotT): void => {
 	if (isOtherSong) return
 	sources.tracks = snapshot.tracks
 	sources.bands = snapshot.bands
-	clearHitSelection()
+	clearImpulseSelection()
 }
 
 // ---- Tracks ------------------------------------------------
 
-export const findTrack = (trackId: string): HitTrackT | undefined => {
+export const findTrack = (trackId: string): ImpulseTrackT | undefined => {
 	return sources.tracks.find((track) => track.id === trackId)
 }
 
@@ -242,7 +257,7 @@ const buildUniqueName = (baseName: string): string => {
 }
 
 // One track per role, so a new owner takes it from the old.
-const releaseRole = (role: HitRoleT, keepTrackId: string): void => {
+const releaseRole = (role: ImpulseRoleT, keepTrackId: string): void => {
 	const isRole = role !== 'none'
 	if (!isRole) return
 	for (const track of sources.tracks) {
@@ -251,7 +266,7 @@ const releaseRole = (role: HitRoleT, keepTrackId: string): void => {
 	}
 }
 
-const pushTrack = (track: HitTrackT): string => {
+const pushTrack = (track: ImpulseTrackT): string => {
 	sources.tracks.push(track)
 	releaseRole(track.role, track.id)
 	sources.isTriggersCollapsed = false
@@ -260,7 +275,7 @@ const pushTrack = (track: HitTrackT): string => {
 
 export const addEmptyTrack = (): string => {
 	recordHistory()
-	const track = buildHitTrack({ name: buildUniqueName('Hits'), role: 'none', hits: [] })
+	const track = buildImpulseTrack({ name: buildUniqueName('Impulses'), role: 'none', impulses: [] })
 	return pushTrack(track)
 }
 
@@ -270,16 +285,16 @@ export const addTrackFromDetected = (role: 'kick' | 'snare'): string => {
 	recordHistory()
 	const analysis = getDetectedAnalysis()
 	const isKick = role === 'kick'
-	const detectedHits = isKick ? analysis.kicks : analysis.snaps
+	const detectedImpulses = isKick ? analysis.kicks : analysis.snaps
 	const baseName = isKick ? 'Kick' : 'Snare'
-	const track = buildHitTrack({ name: buildUniqueName(baseName), role, hits: convertDetectedHits(detectedHits) })
+	const track = buildImpulseTrack({ name: buildUniqueName(baseName), role, impulses: convertDetectedImpulses(detectedImpulses) })
 	return pushTrack(track)
 }
 
 export type MidiImportGroupT = {
 	group: MidiGroupT
 	name: string
-	role: HitRoleT
+	role: ImpulseRoleT
 }
 
 export const addTracksFromMidi = (imports: MidiImportGroupT[], placement: MidiPlacementT): number => {
@@ -289,9 +304,9 @@ export const addTracksFromMidi = (imports: MidiImportGroupT[], placement: MidiPl
 	for (const entry of imports) {
 		const placed = entry.group.notes.map((note) => placeMidiNote(note, placement))
 		const inSong = placed.filter((note) => note.time >= 0 && note.time <= app.duration)
-		const hits = inSong.map((note) => createHit(note.time, note.strength, note.length))
+		const impulses = inSong.map((note) => createImpulse(note.time, note.strength, note.length))
 		const name = buildUniqueName(entry.name.trim() === '' ? 'MIDI' : entry.name.trim())
-		pushTrack(buildHitTrack({ name, role: entry.role, hits }))
+		pushTrack(buildImpulseTrack({ name, role: entry.role, impulses }))
 	}
 	return imports.length
 }
@@ -311,7 +326,7 @@ export const renameTrack = (trackId: string, name: string): void => {
 	track.name = name.slice(0, 40)
 }
 
-export const setTrackRole = (trackId: string, role: HitRoleT): void => {
+export const setTrackRole = (trackId: string, role: ImpulseRoleT): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
 	recordHistory()
@@ -319,7 +334,7 @@ export const setTrackRole = (trackId: string, role: HitRoleT): void => {
 	releaseRole(role, trackId)
 }
 
-export const setTrackShape = (trackId: string, shape: HitShapeT): void => {
+export const setTrackShape = (trackId: string, shape: ImpulseShapeT): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
 	recordHistory()
@@ -348,116 +363,116 @@ export const toggleTriggersCollapsed = (): void => {
 	sources.isTriggersCollapsed = !sources.isTriggersCollapsed
 }
 
-// ---- Hits --------------------------------------------------
+// ---- Impulses --------------------------------------------------
 
-const findHit = (track: HitTrackT, hitId: string): TrackHitT | undefined => {
-	return track.hits.find((hit) => hit.id === hitId)
+const findImpulse = (track: ImpulseTrackT, impulseId: string): TrackImpulseT | undefined => {
+	return track.impulses.find((impulse) => impulse.id === impulseId)
 }
 
 const clampToSong = (time: number): number => clamp(time, 0, Math.max(0, app.duration))
 
-export const addHit = (trackId: string, time: number, strength: number, length: number): string | null => {
+export const addImpulse = (trackId: string, time: number, strength: number, length: number): string | null => {
 	const track = findTrack(trackId)
 	if (track === undefined) return null
 	recordHistory()
-	const hit = createHit(clampToSong(time), strength, length)
-	track.hits = insertHit(track.hits, hit)
-	selectHits(trackId, [hit.id])
-	return hit.id
+	const impulse = createImpulse(clampToSong(time), strength, length)
+	track.impulses = insertImpulse(track.impulses, impulse)
+	selectImpulses(trackId, [impulse.id])
+	return impulse.id
 }
 
-const MIN_HIT_STRENGTH = 0.05
+const MIN_IMPULSE_STRENGTH = 0.05
 
-export const moveHit = (trackId: string, hitId: string, time: number, strength: number): void => {
+export const moveImpulse = (trackId: string, impulseId: string, time: number, strength: number): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
-	const hit = findHit(track, hitId)
-	if (hit === undefined) return
-	hit.time = clampToSong(time)
-	hit.strength = clamp(strength, MIN_HIT_STRENGTH, 1)
+	const impulse = findImpulse(track, impulseId)
+	if (impulse === undefined) return
+	impulse.time = clampToSong(time)
+	impulse.strength = clamp(strength, MIN_IMPULSE_STRENGTH, 1)
 }
 
-export const moveHits = (trackId: string, moves: HitMoveT[]): void => {
-	for (const move of moves) moveHit(trackId, move.hitId, move.time, move.strength)
+export const moveImpulses = (trackId: string, moves: ImpulseMoveT[]): void => {
+	for (const move of moves) moveImpulse(trackId, move.impulseId, move.time, move.strength)
 }
 
-export const deleteHits = (trackId: string, hitIds: string[]): void => {
+export const deleteImpulses = (trackId: string, impulseIds: string[]): void => {
 	const track = findTrack(trackId)
-	const hasHits = hitIds.length > 0
-	if (track === undefined || !hasHits) return
+	const hasImpulses = impulseIds.length > 0
+	if (track === undefined || !hasImpulses) return
 	recordHistory()
-	const doomedIds = new Set(hitIds)
-	track.hits = track.hits.filter((hit) => !doomedIds.has(hit.id))
-	const remainingSelection = sources.hitSelection.hitIds.filter((hitId) => !doomedIds.has(hitId))
-	sources.hitSelection.hitIds = remainingSelection
+	const doomedIds = new Set(impulseIds)
+	track.impulses = track.impulses.filter((impulse) => !doomedIds.has(impulse.id))
+	const remainingSelection = sources.impulseSelection.impulseIds.filter((impulseId) => !doomedIds.has(impulseId))
+	sources.impulseSelection.impulseIds = remainingSelection
 }
 
-export const deleteHit = (trackId: string, hitId: string): void => deleteHits(trackId, [hitId])
+export const deleteImpulse = (trackId: string, impulseId: string): void => deleteImpulses(trackId, [impulseId])
 
-// ---- Hit selection -----------------------------------------
+// ---- Impulse selection -----------------------------------------
 
-export const clearHitSelection = (): void => {
-	sources.hitSelection = { trackId: null, hitIds: [] }
+export const clearImpulseSelection = (): void => {
+	sources.impulseSelection = { trackId: null, impulseIds: [] }
 }
 
-export const selectHits = (trackId: string, hitIds: string[]): void => {
-	sources.hitSelection = { trackId, hitIds }
+export const selectImpulses = (trackId: string, impulseIds: string[]): void => {
+	sources.impulseSelection = { trackId, impulseIds }
 }
 
-export const checkIsHitSelected = (trackId: string, hitId: string): boolean => {
-	const isTrack = sources.hitSelection.trackId === trackId
+export const checkIsImpulseSelected = (trackId: string, impulseId: string): boolean => {
+	const isTrack = sources.impulseSelection.trackId === trackId
 	if (!isTrack) return false
-	return sources.hitSelection.hitIds.includes(hitId)
+	return sources.impulseSelection.impulseIds.includes(impulseId)
 }
 
 // Selection stays on one track: picking on another track
 // starts over there.
-export const toggleHitSelected = (trackId: string, hitId: string): void => {
-	const isSameTrack = sources.hitSelection.trackId === trackId
-	const currentIds = isSameTrack ? sources.hitSelection.hitIds : []
-	const isSelected = currentIds.includes(hitId)
-	const nextIds = isSelected ? currentIds.filter((candidate) => candidate !== hitId) : [...currentIds, hitId]
-	selectHits(trackId, nextIds)
+export const toggleImpulseSelected = (trackId: string, impulseId: string): void => {
+	const isSameTrack = sources.impulseSelection.trackId === trackId
+	const currentIds = isSameTrack ? sources.impulseSelection.impulseIds : []
+	const isSelected = currentIds.includes(impulseId)
+	const nextIds = isSelected ? currentIds.filter((candidate) => candidate !== impulseId) : [...currentIds, impulseId]
+	selectImpulses(trackId, nextIds)
 }
 
-export const addHitsToSelection = (trackId: string, hitIds: string[]): void => {
-	const isSameTrack = sources.hitSelection.trackId === trackId
-	const currentIds = isSameTrack ? sources.hitSelection.hitIds : []
-	const merged = new Set([...currentIds, ...hitIds])
-	selectHits(trackId, Array.from(merged))
+export const addImpulsesToSelection = (trackId: string, impulseIds: string[]): void => {
+	const isSameTrack = sources.impulseSelection.trackId === trackId
+	const currentIds = isSameTrack ? sources.impulseSelection.impulseIds : []
+	const merged = new Set([...currentIds, ...impulseIds])
+	selectImpulses(trackId, Array.from(merged))
 }
 
-export const selectAllHits = (trackId: string): void => {
+export const selectAllImpulses = (trackId: string): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
-	selectHits(trackId, track.hits.map((hit) => hit.id))
+	selectImpulses(trackId, track.impulses.map((impulse) => impulse.id))
 }
 
-export const deleteSelectedHits = (): void => {
-	const trackId = sources.hitSelection.trackId
+export const deleteSelectedImpulses = (): void => {
+	const trackId = sources.impulseSelection.trackId
 	if (trackId === null) return
-	deleteHits(trackId, sources.hitSelection.hitIds)
-	clearHitSelection()
+	deleteImpulses(trackId, sources.impulseSelection.impulseIds)
+	clearImpulseSelection()
 }
 
-export const getSelectedHitCount = (trackId: string): number => {
-	const isTrack = sources.hitSelection.trackId === trackId
+export const getSelectedImpulseCount = (trackId: string): number => {
+	const isTrack = sources.impulseSelection.trackId === trackId
 	if (!isTrack) return 0
-	return sources.hitSelection.hitIds.length
+	return sources.impulseSelection.impulseIds.length
 }
 
 export const clearTrackRange = (trackId: string, range: TimeRangeT): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
 	recordHistory()
-	track.hits = replaceHitsInRange(track.hits, range, [])
+	track.impulses = replaceImpulsesInRange(track.impulses, range, [])
 }
 
-export const paintTrackRange = (trackId: string, range: TimeRangeT, hits: TrackHitT[]): void => {
+export const paintTrackRange = (trackId: string, range: TimeRangeT, impulses: TrackImpulseT[]): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
 	recordHistory()
-	track.hits = replaceHitsInRange(track.hits, range, hits)
+	track.impulses = replaceImpulsesInRange(track.impulses, range, impulses)
 }
 
 // ---- Tap recording -----------------------------------------
@@ -483,8 +498,8 @@ export const recordTap = (time: number, tempo: TempoT, snap: (time: number, temp
 	if (!hasTappedSinceArming) recordHistory()
 	hasTappedSinceArming = true
 	const placedTime = sources.isTapQuantized ? snap(time, tempo) : time
-	const hit = createHit(clampToSong(placedTime), DEFAULT_HIT_STRENGTH, 0)
-	track.hits = insertHit(track.hits, hit)
+	const impulse = createImpulse(clampToSong(placedTime), DEFAULT_IMPULSE_STRENGTH, 0)
+	track.impulses = insertImpulse(track.impulses, impulse)
 }
 
 // ---- Bands -------------------------------------------------
@@ -559,7 +574,7 @@ export const applyBandPreset = (bandId: string, presetValue: string): void => {
 export const startSourceWatchers = (): void => {
 	$effect.root(() => {
 		$effect(() => {
-			const snapshot = $state.snapshot(sources.tracks) as HitTrackT[]
+			const snapshot = $state.snapshot(sources.tracks) as ImpulseTrackT[]
 			saveTracks(sources.songKey, snapshot)
 		})
 

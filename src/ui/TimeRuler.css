@@ -1,5 +1,6 @@
 .time-ruler {
-	--ruler-strip-height: var(--spacing-3);
+	--ruler-bar-height: 14px;
+	--ruler-strip-height: calc(var(--ruler-bar-height) * 2 + 2px);
 	position: relative;
 	height: 100%;
 	min-width: 0;
@@ -36,7 +37,7 @@
 
 .time-ruler-label {
 	position: absolute;
-	top: 0;
+	top: var(--ruler-strip-height);
 	left: var(--spacing-1);
 	color: var(--muted);
 	font-size: var(--font-size-1);
@@ -54,75 +55,149 @@
 	font-weight: 500;
 }
 
-.time-ruler-range-strip {
+/* Two bars stacked above the ticks: export on top, loop under. */
+
+.time-ruler-bars {
 	position: absolute;
 	top: 0;
 	right: 0;
 	left: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 	height: var(--ruler-strip-height);
+	padding-top: 1px;
 	pointer-events: none;
 }
 
-.time-ruler-range {
-	position: absolute;
-	top: var(--spacing-1);
-	left: var(--ruler-x);
-	width: var(--ruler-width);
-	height: calc(var(--spacing-1) + 1px);
-	border-radius: var(--radius-sm);
-	background: color-mix(in oklab, var(--accent) 55%, transparent);
-	cursor: grab;
-	pointer-events: auto;
+.time-ruler-lane {
+	position: relative;
+	flex: none;
+	height: var(--ruler-bar-height);
 }
 
-.time-ruler-range:active {
+.time-ruler-bar {
+	--ruler-bar-tone: var(--warning);
+	position: absolute;
+	top: 0;
+	left: var(--ruler-x);
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+	width: var(--ruler-width);
+	height: 100%;
+	padding: 0 var(--spacing-2);
+	overflow: hidden;
+	border: 1px solid color-mix(in oklab, var(--ruler-bar-tone) 60%, transparent);
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--ruler-bar-tone) 22%, var(--paper));
+	color: var(--foreground);
+	cursor: grab;
+	pointer-events: auto;
+	transition:
+		background-color var(--motion-fast) ease,
+		border-color var(--motion-fast) ease,
+		opacity var(--motion-fast) ease;
+}
+
+.time-ruler-bar:active {
 	cursor: grabbing;
 }
 
-.time-ruler-range.isFull {
-	background: var(--color-neutral-3);
+.time-ruler-bar.isFull {
+	--ruler-bar-tone: var(--color-neutral-5);
 }
 
-.time-ruler-range.isDisabled {
+/* The loop is blue-accented while it is on, and dimmed when off. */
+.time-ruler-bar.isLoop {
+	--ruler-bar-tone: var(--color-neutral-5);
+	opacity: 0.7;
+	cursor: pointer;
+}
+
+.time-ruler-bar.isLoop.isOn {
+	--ruler-bar-tone: var(--accent);
+	background: color-mix(in oklab, var(--accent) 38%, var(--paper));
+	opacity: 1;
+}
+
+.time-ruler-bar.isDisabled {
 	pointer-events: none;
+}
+
+.time-ruler-bar:hover {
+	background: color-mix(in oklab, var(--ruler-bar-tone) 34%, var(--paper));
+	opacity: 1;
+}
+
+.time-ruler-bar-name,
+.time-ruler-bar-detail {
+	flex: none;
+	font-size: var(--font-size-0);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-weight-semibold);
+	line-height: 1;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.time-ruler-bar-detail {
+	color: var(--secondary);
+	font-weight: 500;
+	opacity: 0;
+	transition: opacity var(--motion-fast) ease;
+}
+
+.time-ruler-bar:hover .time-ruler-bar-detail {
+	opacity: 1;
 }
 
 .time-ruler-grip {
 	position: absolute;
-	top: 50%;
+	top: 0;
+	bottom: 0;
 	width: var(--spacing-2);
-	height: var(--spacing-3);
-	border: 2px solid var(--paper);
-	border-radius: var(--radius-sm);
-	background: var(--accent);
+	background: transparent;
 	cursor: ew-resize;
 	outline: none;
-	transform: translateY(-50%);
-	transition: transform var(--motion-fast) ease;
 }
 
-.time-ruler-range.isFull .time-ruler-grip {
-	background: var(--color-neutral-6);
+.time-ruler-grip::after {
+	position: absolute;
+	top: 3px;
+	bottom: 3px;
+	width: 2px;
+	border-radius: 1px;
+	background: var(--ruler-bar-tone);
+	content: '';
+	opacity: 0;
+	transition: opacity var(--motion-fast) ease;
 }
 
 .time-ruler-grip.isStart {
 	left: 0;
-	transform: translate(-50%, -50%);
+}
+
+.time-ruler-grip.isStart::after {
+	left: 1px;
 }
 
 .time-ruler-grip.isEnd {
 	right: 0;
-	transform: translate(50%, -50%);
 }
 
-.time-ruler-grip:hover,
-.time-ruler-grip:focus-visible {
-	background: var(--foreground);
+.time-ruler-grip.isEnd::after {
+	right: 1px;
+}
+
+.time-ruler-bar:hover .time-ruler-grip::after,
+.time-ruler-grip:focus-visible::after {
+	opacity: 1;
 }
 
 .time-ruler-grip:focus-visible {
 	outline: 2px solid var(--focus-ring);
-	outline-offset: 1px;
+	outline-offset: -2px;
 }
 
 .time-ruler-playhead {

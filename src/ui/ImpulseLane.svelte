@@ -7,15 +7,15 @@
 	import { getRowColor } from '../appearance.svelte'
 	import { recordHistory } from '../automation.svelte'
 	import { PATH_WIDTH } from '../engine/automation'
-	import { formatHitCount, getRoleLabel } from '../engine/hits'
+	import { formatImpulseCount, getRoleLabel } from '../engine/impulses'
 	import { getRoleColor } from '../engine/palette'
 	import { clamp } from '../engine/settings'
 	import { getTrackSourceId } from '../engine/sources'
 	import { checkIsTimeVisible, formatPreciseTime, getViewEnd, ratioToTime, snapToGrid, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
-	import type { HitTrackT, TrackHitT } from '../engine/types'
-	import { addHit, armTrack, checkIsHitSelected, deleteHits, getSelectedHitCount, moveHits, removeTrack, sources } from '../sources.svelte'
-	import type { HitMoveT } from '../sources.svelte'
+	import type { ImpulseTrackT, TrackImpulseT } from '../engine/types'
+	import { addImpulse, armTrack, checkIsImpulseSelected, deleteImpulses, getSelectedImpulseCount, moveImpulses, removeTrack, sources } from '../sources.svelte'
+	import type { ImpulseMoveT } from '../sources.svelte'
 	import { openRowInspector } from '../rowInspector.svelte'
 	import { checkIsRowFolded, getRowHeightCss, toggleRowFolded } from '../rowLayout.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
@@ -24,10 +24,10 @@
 	import { timeline } from '../timeline.svelte'
 	import RowResizer from './RowResizer.svelte'
 	import { rowHeader } from './rowHeader'
-	import './HitLane.css'
+	import './ImpulseLane.css'
 
-	type HitLanePropsT = {
-		track: HitTrackT
+	type ImpulseLanePropsT = {
+		track: ImpulseTrackT
 		grid: TimelineGridT
 		// The tracks in this lane's group, for the primary
 		// modifier gestures.
@@ -35,19 +35,19 @@
 		onpattern: (trackId: string, anchor: HTMLElement) => void
 	}
 
-	// Dragging moves every selected hit together: time by the
-	// grabbed hit's snapped move, strength by the vertical travel.
+	// Dragging moves every selected impulse together: time by the
+	// grabbed impulse's snapped move, strength by the vertical travel.
 	type GroupDragT = {
-		anchorHitId: string
+		anchorImpulseId: string
 		anchorStartTime: number
 		startX: number
 		startY: number
 		plotHeight: number
-		starts: Map<string, TrackHitT>
+		starts: Map<string, TrackImpulseT>
 		hasMoved: boolean
 	}
 
-	// A press on empty space: a click adds a hit, a drag draws a
+	// A press on empty space: a click adds an impulse, a drag draws a
 	// selection box.
 	type MarqueeT = {
 		startX: number
@@ -63,7 +63,7 @@
 		strength: number
 	}
 
-	const props: HitLanePropsT = $props()
+	const props: ImpulseLanePropsT = $props()
 
 	const FULL_STRENGTH = 1
 	const DRAG_THRESHOLD_PX = 3
@@ -71,11 +71,11 @@
 	let plot = $state<HTMLDivElement | undefined>(undefined)
 	let drag = $state<GroupDragT | null>(null)
 	let marquee = $state<MarqueeT | null>(null)
-	let hoveredHitId = $state<string | null>(null)
+	let hoveredImpulseId = $state<string | null>(null)
 
 	const view = $derived(timeline.view)
 	const duration = $derived(app.duration)
-	const hits = $derived(props.track.hits)
+	const impulses = $derived(props.track.impulses)
 	const row = $derived<RowRefT>({ kind: 'impulse', id: props.track.id })
 	const siblingRows = $derived(props.siblingTrackIds.filter((trackId) => trackId !== props.track.id).map((trackId): RowRefT => ({ kind: 'impulse', id: trackId })))
 	const isCollapsed = $derived(checkIsRowFolded(row))
@@ -83,17 +83,17 @@
 	const isGate = $derived(props.track.shape === 'gate')
 	const trackColor = $derived(getRowColor(props.track.id, getRoleColor(props.track.role)))
 	const customHeight = $derived(getRowHeightCss(row))
-	const hitCountLabel = $derived(formatHitCount(hits.length))
+	const impulseCountLabel = $derived(formatImpulseCount(impulses.length))
 	const roleLabel = $derived(getRoleLabel(props.track.role))
 	const hasRole = $derived(props.track.role !== 'none')
 	// The role shows as the lane's color, and in full on hover.
-	const metaTitle = $derived(hasRole ? `${hitCountLabel} · ${roleLabel}` : hitCountLabel)
-	const selectedCount = $derived(getSelectedHitCount(props.track.id))
+	const metaTitle = $derived(hasRole ? `${impulseCountLabel} · ${roleLabel}` : impulseCountLabel)
+	const selectedCount = $derived(getSelectedImpulseCount(props.track.id))
 	const hasSelection = $derived(selectedCount > 0)
-	const countLabel = $derived(hasSelection ? `${selectedCount} selected` : hitCountLabel)
+	const countLabel = $derived(hasSelection ? `${selectedCount} selected` : impulseCountLabel)
 	const collapseLabel = $derived(isCollapsed ? `Expand ${props.track.name}` : `Fold ${props.track.name}`)
 	const armLabel = $derived(isArmed ? 'Stop tapping' : 'Arm for tapping · press T while playing')
-	const isEmpty = $derived(hits.length === 0)
+	const isEmpty = $derived(impulses.length === 0)
 	const shouldShowHint = $derived(!isCollapsed && (isEmpty || isArmed || hasSelection))
 
 	const buildHint = (): string => {
@@ -117,16 +117,16 @@
 	const trimStartPercent = $derived(clamp(timeToPercent(app.trimStart, view), 0, 100))
 	const trimEndInset = $derived(clamp(100 - timeToPercent(app.trimEnd, view), 0, 100))
 
-	// Hits just outside the view stay rendered so a drag that
+	// Impulses just outside the view stay rendered so a drag that
 	// leaves the edge keeps its elements.
-	const visibleHits = $derived.by(() => {
+	const visibleImpulses = $derived.by(() => {
 		const margin = view.span * 0.02
 		const earliest = view.start - margin
 		const latest = getViewEnd(view) + margin
 		const draggingIds = drag === null ? null : drag.starts
-		return hits.filter((hit) => {
-			const isInWindow = hit.time + hit.length >= earliest && hit.time <= latest
-			const isDragging = draggingIds !== null && draggingIds.has(hit.id)
+		return impulses.filter((impulse) => {
+			const isInWindow = impulse.time + impulse.length >= earliest && impulse.time <= latest
+			const isDragging = draggingIds !== null && draggingIds.has(impulse.id)
 			return isInWindow || isDragging
 		})
 	})
@@ -137,29 +137,29 @@
 	const marqueeLeft = $derived(timeToPercent(marqueeStart, view))
 	const marqueeWidth = $derived(timeToPercent(marqueeEnd, view) - marqueeLeft)
 
-	const pillHitId = $derived(drag === null ? hoveredHitId : drag.anchorHitId)
-	const pillHit = $derived(hits.find((hit) => hit.id === pillHitId))
-	const pillLabel = $derived(pillHit === undefined ? '' : `${Math.round(pillHit.strength * 100)}% · ${formatPreciseTime(pillHit.time)}`)
+	const pillImpulseId = $derived(drag === null ? hoveredImpulseId : drag.anchorImpulseId)
+	const pillImpulse = $derived(impulses.find((impulse) => impulse.id === pillImpulseId))
+	const pillLabel = $derived(pillImpulse === undefined ? '' : `${Math.round(pillImpulse.strength * 100)}% · ${formatPreciseTime(pillImpulse.time)}`)
 
 	const getGridX = (line: GridLineT): number => timeToRatio(line.time, view) * PATH_WIDTH
 
-	const getHitX = (hit: TrackHitT): number => timeToPercent(hit.time, view)
+	const getImpulseX = (impulse: TrackImpulseT): number => timeToPercent(impulse.time, view)
 
-	const getHoldWidth = (hit: TrackHitT): number => (hit.length / view.span) * 100
+	const getHoldWidth = (impulse: TrackImpulseT): number => (impulse.length / view.span) * 100
 
-	const getHitHeight = (hit: TrackHitT): number => hit.strength * 100
+	const getImpulseHeight = (impulse: TrackImpulseT): number => impulse.strength * 100
 
-	const checkIsSelected = (hit: TrackHitT): boolean => checkIsHitSelected(props.track.id, hit.id)
+	const checkIsSelected = (impulse: TrackImpulseT): boolean => checkIsImpulseSelected(props.track.id, impulse.id)
 
-	const checkIsDragging = (hit: TrackHitT): boolean => drag !== null && drag.hasMoved && drag.starts.has(hit.id)
+	const checkIsDragging = (impulse: TrackImpulseT): boolean => drag !== null && drag.hasMoved && drag.starts.has(impulse.id)
 
-	// Only selected hits are in the tab order, so a dense track
+	// Only selected impulses are in the tab order, so a dense track
 	// is not hundreds of tab stops.
-	const getHitTabIndex = (hit: TrackHitT): number => (checkIsSelected(hit) ? 0 : -1)
+	const getImpulseTabIndex = (impulse: TrackImpulseT): number => (checkIsSelected(impulse) ? 0 : -1)
 
-	const describeHit = (hit: TrackHitT): string => {
-		const strength = Math.round(hit.strength * 100)
-		return `${props.track.name} impulse at ${formatPreciseTime(hit.time)}, strength ${strength}%`
+	const describeImpulse = (impulse: TrackImpulseT): string => {
+		const strength = Math.round(impulse.strength * 100)
+		return `${props.track.name} impulse at ${formatPreciseTime(impulse.time)}, strength ${strength}%`
 	}
 
 	const readRawTime = (clientX: number): number => {
@@ -177,41 +177,41 @@
 
 	const readSnappedTime = (event: PointerEvent): number => snapTime(readRawTime(event.clientX), event)
 
-	const readHitId = (target: EventTarget | null): string | null => {
+	const readImpulseId = (target: EventTarget | null): string | null => {
 		const isElement = target instanceof Element
 		if (!isElement) return null
-		const element = target.closest<HTMLElement>('[data-hit-id]')
+		const element = target.closest<HTMLElement>('[data-impulse-id]')
 		if (element === null) return null
-		return element.dataset.hitId ?? null
+		return element.dataset.impulseId ?? null
 	}
 
-	const findHit = (hitId: string): TrackHitT | undefined => hits.find((hit) => hit.id === hitId)
+	const findImpulse = (impulseId: string): TrackImpulseT | undefined => impulses.find((impulse) => impulse.id === impulseId)
 
 	const getSelectedIds = (): string[] => {
-		const isThisTrack = sources.hitSelection.trackId === props.track.id
+		const isThisTrack = sources.impulseSelection.trackId === props.track.id
 		if (!isThisTrack) return []
-		return sources.hitSelection.hitIds
+		return sources.impulseSelection.impulseIds
 	}
 
-	const captureStarts = (hitIds: string[]): Map<string, TrackHitT> => {
-		const starts = new Map<string, TrackHitT>()
-		for (const hitId of hitIds) {
-			const hit = findHit(hitId)
-			if (hit !== undefined) starts.set(hitId, { ...hit })
+	const captureStarts = (impulseIds: string[]): Map<string, TrackImpulseT> => {
+		const starts = new Map<string, TrackImpulseT>()
+		for (const impulseId of impulseIds) {
+			const impulse = findImpulse(impulseId)
+			if (impulse !== undefined) starts.set(impulseId, { ...impulse })
 		}
 		return starts
 	}
 
-	const startGroupDrag = (event: PointerEvent, hit: TrackHitT) => {
+	const startGroupDrag = (event: PointerEvent, impulse: TrackImpulseT) => {
 		if (plot === undefined) return
-		const isAlreadySelected = checkIsSelected(hit)
-		if (!isAlreadySelected) pickImpulse(props.track.id, hit.id, { isRange: false, isToggle: false })
+		const isAlreadySelected = checkIsSelected(impulse)
+		if (!isAlreadySelected) pickImpulse(props.track.id, impulse.id, { isRange: false, isToggle: false })
 		const track = event.currentTarget as HTMLElement
 		track.setPointerCapture(event.pointerId)
 		const bounds = plot.getBoundingClientRect()
 		drag = {
-			anchorHitId: hit.id,
-			anchorStartTime: hit.time,
+			anchorImpulseId: impulse.id,
+			anchorStartTime: impulse.time,
 			startX: event.clientX,
 			startY: event.clientY,
 			plotHeight: bounds.height,
@@ -222,20 +222,20 @@
 
 	// Alt-click and double-click take out the whole selection
 	// when the impulse is part of it, or just that impulse.
-	const deleteFromHit = (hitId: string) => {
-		const isInSelection = checkIsHitSelected(props.track.id, hitId)
-		const doomedIds = isInSelection ? getSelectedIds() : [hitId]
-		deleteHits(props.track.id, doomedIds)
+	const deleteFromImpulse = (impulseId: string) => {
+		const isInSelection = checkIsImpulseSelected(props.track.id, impulseId)
+		const doomedIds = isInSelection ? getSelectedIds() : [impulseId]
+		deleteImpulses(props.track.id, doomedIds)
 	}
 
-	const handleHitDown = (event: PointerEvent, hitId: string) => {
-		const hit = findHit(hitId)
-		if (hit === undefined) return
-		if (event.altKey) return deleteFromHit(hitId)
+	const handleImpulseDown = (event: PointerEvent, impulseId: string) => {
+		const impulse = findImpulse(impulseId)
+		if (impulse === undefined) return
+		if (event.altKey) return deleteFromImpulse(impulseId)
 		const modifiers = readModifiers(event)
 		const isPicking = modifiers.isRange || modifiers.isToggle
-		if (isPicking) return pickImpulse(props.track.id, hitId, modifiers)
-		startGroupDrag(event, hit)
+		if (isPicking) return pickImpulse(props.track.id, impulseId, modifiers)
+		startGroupDrag(event, impulse)
 	}
 
 	const startMarquee = (event: PointerEvent) => {
@@ -256,9 +256,9 @@
 		const isPrimaryButton = event.button === 0
 		const canEdit = duration > 0 && !isCollapsed
 		if (!isPrimaryButton || !canEdit) return
-		const hitId = readHitId(event.target)
-		const isOnHit = hitId !== null
-		if (isOnHit) return handleHitDown(event, hitId)
+		const impulseId = readImpulseId(event.target)
+		const isOnImpulse = impulseId !== null
+		if (isOnImpulse) return handleImpulseDown(event, impulseId)
 		startMarquee(event)
 	}
 
@@ -266,9 +266,9 @@
 		return Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX
 	}
 
-	const buildMoves = (activeDrag: GroupDragT, timeDelta: number, strengthDelta: number): HitMoveT[] => {
+	const buildMoves = (activeDrag: GroupDragT, timeDelta: number, strengthDelta: number): ImpulseMoveT[] => {
 		return Array.from(activeDrag.starts.values()).map((start) => ({
-			hitId: start.id,
+			impulseId: start.id,
 			time: start.time + timeDelta,
 			strength: start.strength + strengthDelta
 		}))
@@ -285,7 +285,7 @@
 		const snappedTime = readSnappedTime(event)
 		const timeDelta = snappedTime - activeDrag.anchorStartTime
 		const strengthDelta = -dy / activeDrag.plotHeight
-		moveHits(props.track.id, buildMoves(activeDrag, timeDelta, strengthDelta))
+		moveImpulses(props.track.id, buildMoves(activeDrag, timeDelta, strengthDelta))
 	}
 
 	const moveMarquee = (event: PointerEvent, activeMarquee: MarqueeT) => {
@@ -305,29 +305,29 @@
 	const finishMarquee = (activeMarquee: MarqueeT) => {
 		const startTime = Math.min(activeMarquee.startTime, activeMarquee.currentTime)
 		const endTime = Math.max(activeMarquee.startTime, activeMarquee.currentTime)
-		const boxedHits = hits.filter((hit) => hit.time >= startTime && hit.time <= endTime)
-		const boxedIds = boxedHits.map((hit) => hit.id)
+		const boxedImpulses = impulses.filter((impulse) => impulse.time >= startTime && impulse.time <= endTime)
+		const boxedIds = boxedImpulses.map((impulse) => impulse.id)
 		pickImpulsesInBox(props.track.id, boxedIds, activeMarquee.isAdditive)
 	}
 
 	// The strength of the impulse before the new one, or full
 	// strength when there is none. The pointer's height does not
 	// set it.
-	const getStrengthForNewHit = (time: number): number => {
-		const earlierHits = hits.filter((hit) => hit.time <= time)
-		const previous = earlierHits[earlierHits.length - 1]
+	const getStrengthForNewImpulse = (time: number): number => {
+		const earlierImpulses = impulses.filter((impulse) => impulse.time <= time)
+		const previous = earlierImpulses[earlierImpulses.length - 1]
 		const hasPrevious = previous !== undefined
 		return hasPrevious ? previous.strength : FULL_STRENGTH
 	}
 
 	// A click on empty space places an impulse on button-up.
-	const placeHit = (activeMarquee: MarqueeT) => {
+	const placeImpulse = (activeMarquee: MarqueeT) => {
 		const time = activeMarquee.clickPosition.time
-		const strength = getStrengthForNewHit(time)
+		const strength = getStrengthForNewImpulse(time)
 		const holdLength = isGate ? props.grid.snapStep : 0
-		const hitId = addHit(props.track.id, time, strength, holdLength)
-		if (hitId === null) return
-		selectPlacedImpulse(props.track.id, hitId)
+		const impulseId = addImpulse(props.track.id, time, strength, holdLength)
+		if (impulseId === null) return
+		selectPlacedImpulse(props.track.id, impulseId)
 	}
 
 	const handleTrackUp = () => {
@@ -335,11 +335,11 @@
 		const activeMarquee = marquee
 		drag = null
 		marquee = null
-		const wasClickOnHit = activeDrag !== null && !activeDrag.hasMoved
-		if (wasClickOnHit) return pickImpulse(props.track.id, activeDrag.anchorHitId, { isRange: false, isToggle: false })
+		const wasClickOnImpulse = activeDrag !== null && !activeDrag.hasMoved
+		if (wasClickOnImpulse) return pickImpulse(props.track.id, activeDrag.anchorImpulseId, { isRange: false, isToggle: false })
 		if (activeMarquee === null) return
 		if (activeMarquee.isActive) return finishMarquee(activeMarquee)
-		placeHit(activeMarquee)
+		placeImpulse(activeMarquee)
 	}
 
 	const handleTrackCancel = () => {
@@ -349,9 +349,9 @@
 
 	const handleTrackDoubleClick = (event: MouseEvent) => {
 		if (isCollapsed) return toggleRowFolded(row, [])
-		const hitId = readHitId(event.target)
-		if (hitId === null) return
-		deleteFromHit(hitId)
+		const impulseId = readImpulseId(event.target)
+		if (impulseId === null) return
+		deleteFromImpulse(impulseId)
 	}
 
 	let header: HTMLDivElement
@@ -392,35 +392,35 @@
 	})
 </script>
 
-<div class="hit-lane" class:isCollapsed class:isArmed class:hasSelection data-tone={trackColor} style:--hit-lane-custom-height={customHeight}>
-	<div class="hit-lane-header" role="presentation" bind:this={header} use:rowHeader={headerOptions}>
-		<div class="hit-lane-title">
-			<button class="hit-lane-caret" type="button" aria-expanded={!isCollapsed} aria-label={collapseLabel} onclick={handleToggle}>
+<div class="impulse-lane" class:isCollapsed class:isArmed class:hasSelection data-tone={trackColor} style:--impulse-lane-custom-height={customHeight}>
+	<div class="impulse-lane-header" role="presentation" bind:this={header} use:rowHeader={headerOptions}>
+		<div class="impulse-lane-title">
+			<button class="impulse-lane-caret" type="button" aria-expanded={!isCollapsed} aria-label={collapseLabel} onclick={handleToggle}>
 				<CaretRightIcon weight="bold" />
 			</button>
-			<span class="hit-lane-name">{props.track.name}</span>
+			<span class="impulse-lane-name">{props.track.name}</span>
 			{#if isCollapsed}
-				<span class="hit-lane-count isCompact">{hits.length}</span>
+				<span class="impulse-lane-count isCompact">{impulses.length}</span>
 			{/if}
 			{#if !isCollapsed}
-				<div class="hit-lane-actions">
+				<div class="impulse-lane-actions">
 					<z-tooltip content={armLabel} placement="top">
-						<button class="hit-lane-action isRecord" class:isOn={isArmed} type="button" aria-label={armLabel} aria-pressed={isArmed} onclick={handleArm}>
+						<button class="impulse-lane-action isRecord" class:isOn={isArmed} type="button" aria-label={armLabel} aria-pressed={isArmed} onclick={handleArm}>
 							<RecordIcon weight="fill" />
 						</button>
 					</z-tooltip>
 					<z-tooltip content="Paint a step pattern" placement="top">
-						<button class="hit-lane-action" type="button" aria-label="Paint a step pattern" onclick={handlePattern}>
+						<button class="impulse-lane-action" type="button" aria-label="Paint a step pattern" onclick={handlePattern}>
 							<GridFourIcon weight="bold" />
 						</button>
 					</z-tooltip>
 					<z-tooltip content="Lane settings" placement="top">
-						<button class="hit-lane-action" type="button" aria-label="Lane settings" onclick={handleSettings}>
+						<button class="impulse-lane-action" type="button" aria-label="Lane settings" onclick={handleSettings}>
 							<GearSixIcon weight="bold" />
 						</button>
 					</z-tooltip>
 					<z-tooltip content="Remove track" placement="top">
-						<button class="hit-lane-action isDanger" type="button" aria-label="Remove track" onclick={handleRemove}>
+						<button class="impulse-lane-action isDanger" type="button" aria-label="Remove track" onclick={handleRemove}>
 							<TrashIcon weight="bold" />
 						</button>
 					</z-tooltip>
@@ -429,17 +429,17 @@
 		</div>
 
 		{#if !isCollapsed}
-			<div class="hit-lane-meta">
-				<span class="hit-lane-meter" aria-hidden="true">
-					<span class="hit-lane-meter-fill" style:--hit-lane-level={liveStyle}></span>
+			<div class="impulse-lane-meta">
+				<span class="impulse-lane-meter" aria-hidden="true">
+					<span class="impulse-lane-meter-fill" style:--impulse-lane-level={liveStyle}></span>
 				</span>
-				<span class="hit-lane-count" class:isSelection={hasSelection} title={metaTitle}>{countLabel}</span>
+				<span class="impulse-lane-count" class:isSelection={hasSelection} title={metaTitle}>{countLabel}</span>
 			</div>
 		{/if}
 	</div>
 
 	<div
-		class="hit-lane-track"
+		class="impulse-lane-track"
 		data-track="lane"
 		role="group"
 		aria-label="{props.track.name} impulses"
@@ -449,10 +449,10 @@
 		onpointercancel={handleTrackCancel}
 		ondblclick={handleTrackDoubleClick}
 	>
-		<svg class="hit-lane-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+		<svg class="impulse-lane-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
 			{#each gridLines as line (line.time)}
 				<line
-					class="hit-lane-gridline"
+					class="impulse-lane-gridline"
 					class:isLabel={line.kind === 'label'}
 					class:isBar={line.kind === 'bar'}
 					class:isSub={line.kind === 'sub'}
@@ -464,54 +464,54 @@
 			{/each}
 		</svg>
 
-		<div class="hit-lane-plot" bind:this={plot}>
+		<div class="impulse-lane-plot" bind:this={plot}>
 			{#if isGate}
-				{#each visibleHits as hit (hit.id)}
-					<span class="hit-lane-hold" style:--hit-x="{getHitX(hit)}%" style:--hit-width="{getHoldWidth(hit)}%" style:--hit-height="{getHitHeight(hit)}%"></span>
+				{#each visibleImpulses as impulse (impulse.id)}
+					<span class="impulse-lane-hold" style:--impulse-x="{getImpulseX(impulse)}%" style:--impulse-width="{getHoldWidth(impulse)}%" style:--impulse-height="{getImpulseHeight(impulse)}%"></span>
 				{/each}
 			{/if}
 
-			{#each visibleHits as hit (hit.id)}
+			{#each visibleImpulses as impulse (impulse.id)}
 				<div
-					class="hit-lane-hit"
-					class:isSelected={checkIsSelected(hit)}
-					class:isDragging={checkIsDragging(hit)}
-					data-hit-id={hit.id}
-					style:--hit-x="{getHitX(hit)}%"
-					style:--hit-height="{getHitHeight(hit)}%"
+					class="impulse-lane-impulse"
+					class:isSelected={checkIsSelected(impulse)}
+					class:isDragging={checkIsDragging(impulse)}
+					data-impulse-id={impulse.id}
+					style:--impulse-x="{getImpulseX(impulse)}%"
+					style:--impulse-height="{getImpulseHeight(impulse)}%"
 					role="slider"
-					tabindex={getHitTabIndex(hit)}
-					aria-label={describeHit(hit)}
+					tabindex={getImpulseTabIndex(impulse)}
+					aria-label={describeImpulse(impulse)}
 					aria-orientation="vertical"
 					aria-valuemin={0}
 					aria-valuemax={1}
-					aria-valuenow={hit.strength}
-					onpointerenter={() => (hoveredHitId = hit.id)}
-					onpointerleave={() => (hoveredHitId = null)}
+					aria-valuenow={impulse.strength}
+					onpointerenter={() => (hoveredImpulseId = impulse.id)}
+					onpointerleave={() => (hoveredImpulseId = null)}
 				></div>
 			{/each}
 
 			{#if isMarqueeShown}
-				<span class="hit-lane-marquee" style:--hit-x="{marqueeLeft}%" style:--hit-width="{marqueeWidth}%"></span>
+				<span class="impulse-lane-marquee" style:--impulse-x="{marqueeLeft}%" style:--impulse-width="{marqueeWidth}%"></span>
 			{/if}
 
-			{#if pillHit !== undefined && !isCollapsed}
-				<span class="hit-lane-pill" style:--hit-x="{getHitX(pillHit)}%">{pillLabel}</span>
+			{#if pillImpulse !== undefined && !isCollapsed}
+				<span class="impulse-lane-pill" style:--impulse-x="{getImpulseX(pillImpulse)}%">{pillLabel}</span>
 			{/if}
 		</div>
 
-		<div class="hit-lane-shade isStart" style:--hit-lane-size="{trimStartPercent}%"></div>
-		<div class="hit-lane-shade isEnd" style:--hit-lane-size="{trimEndInset}%"></div>
+		<div class="impulse-lane-shade isStart" style:--impulse-lane-size="{trimStartPercent}%"></div>
+		<div class="impulse-lane-shade isEnd" style:--impulse-lane-size="{trimEndInset}%"></div>
 
 		{#if hasHover}
-			<div class="hit-lane-hover" style:--hit-x="{hoverPercent}%"></div>
+			<div class="impulse-lane-hover" style:--impulse-x="{hoverPercent}%"></div>
 		{/if}
 		{#if isPlayheadVisible}
-			<div class="hit-lane-playhead" style:--hit-x="{playheadPercent}%"></div>
+			<div class="impulse-lane-playhead" style:--impulse-x="{playheadPercent}%"></div>
 		{/if}
 
 		{#if shouldShowHint}
-			<span class="hit-lane-hint">{hintText}</span>
+			<span class="impulse-lane-hint">{hintText}</span>
 		{/if}
 	</div>
 

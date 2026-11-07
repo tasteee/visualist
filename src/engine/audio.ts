@@ -130,6 +130,23 @@ export const startPlayback = (
 	if (!hasClip) source.start(0, offset)
 }
 
+// Moves the loop under a playing source without restarting it.
+// The clock is re-anchored at the current position first, so
+// the playhead does not jump when the region changes.
+export const retargetLoop = (region: LoopRegionT | null): void => {
+	const source = currentSource
+	const position = getPlaybackTime()
+	offsetAtStart = position
+	startedAtContextTime = getAudioContext().currentTime
+	activeLoop = region
+	if (source === null) return
+	const isLooping = region !== null
+	source.loop = isLooping
+	if (region === null) return
+	source.loopStart = region.start
+	source.loopEnd = region.end
+}
+
 export const pausePlayback = (): number => {
 	const position = getPlaybackTime()
 	detachSource()

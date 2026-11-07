@@ -9,13 +9,13 @@ import {
 } from './automation.svelte'
 import { layerStore, removeLayers, selectLayers } from './layers.svelte'
 import {
-	addHitsToSelection,
-	clearHitSelection,
-	deleteSelectedHits,
+	addImpulsesToSelection,
+	clearImpulseSelection,
+	deleteSelectedImpulses,
 	findTrack,
-	selectHits,
+	selectImpulses,
 	sources,
-	toggleHitSelected
+	toggleImpulseSelected
 } from './sources.svelte'
 
 // One selection model everywhere. Click replaces. Shift-click
@@ -52,8 +52,8 @@ const clearLayerSelection = (): void => {
 	layerAnchorId = null
 }
 
-const clearImpulseSelection = (): void => {
-	clearHitSelection()
+const resetImpulseSelection = (): void => {
+	clearImpulseSelection()
 	impulseAnchorId = null
 }
 
@@ -64,7 +64,7 @@ const clearOtherKinds = (keep: SelectionKindT): void => {
 	if (keep !== 'layer') clearLayerSelection()
 	if (keep !== 'lane') clearLaneSelection()
 	if (keep !== 'point') clearPointSelection()
-	if (keep !== 'impulse') clearImpulseSelection()
+	if (keep !== 'impulse') resetImpulseSelection()
 }
 
 export const clearSelection = (): void => {
@@ -75,7 +75,7 @@ export const checkHasSelection = (): boolean => {
 	const hasLayers = layerStore.selectedLayerIds.length > 0
 	const hasLanes = selection.laneIds.length > 0
 	const hasPoints = automation.selectedPointIds.length > 0
-	const hasImpulses = sources.hitSelection.hitIds.length > 0
+	const hasImpulses = sources.impulseSelection.impulseIds.length > 0
 	return hasLayers || hasLanes || hasPoints || hasImpulses
 }
 
@@ -147,44 +147,44 @@ export const selectPlacedPoint = (laneId: string, pointId: string): void => {
 
 // ---- Impulses -----------------------------------------------
 
-export const pickImpulse = (trackId: string, hitId: string, modifiers: PickModifiersT): void => {
+export const pickImpulse = (trackId: string, impulseId: string, modifiers: PickModifiersT): void => {
 	const track = findTrack(trackId)
 	if (track === undefined) return
-	const orderedIds = track.hits.map((hit) => hit.id)
-	const isSameTrack = sources.hitSelection.trackId === trackId
-	const currentIds = isSameTrack ? [...sources.hitSelection.hitIds] : []
+	const orderedIds = track.impulses.map((impulse) => impulse.id)
+	const isSameTrack = sources.impulseSelection.trackId === trackId
+	const currentIds = isSameTrack ? [...sources.impulseSelection.impulseIds] : []
 	clearOtherKinds('impulse')
 	if (modifiers.isToggle) {
-		const isSelected = currentIds.includes(hitId)
-		const toggledIds = isSelected ? currentIds.filter((candidate) => candidate !== hitId) : [...currentIds, hitId]
-		return selectHits(trackId, toggledIds)
+		const isSelected = currentIds.includes(impulseId)
+		const toggledIds = isSelected ? currentIds.filter((candidate) => candidate !== impulseId) : [...currentIds, impulseId]
+		return selectImpulses(trackId, toggledIds)
 	}
-	const nextIds = pickFromList(currentIds, impulseAnchorId, hitId, orderedIds, modifiers)
-	if (!modifiers.isRange) impulseAnchorId = hitId
-	selectHits(trackId, nextIds)
+	const nextIds = pickFromList(currentIds, impulseAnchorId, impulseId, orderedIds, modifiers)
+	if (!modifiers.isRange) impulseAnchorId = impulseId
+	selectImpulses(trackId, nextIds)
 }
 
-export const pickImpulsesInBox = (trackId: string, hitIds: string[], isAdditive: boolean): void => {
-	const isSameTrack = sources.hitSelection.trackId === trackId
-	const currentIds = isAdditive && isSameTrack ? [...sources.hitSelection.hitIds] : []
+export const pickImpulsesInBox = (trackId: string, impulseIds: string[], isAdditive: boolean): void => {
+	const isSameTrack = sources.impulseSelection.trackId === trackId
+	const currentIds = isAdditive && isSameTrack ? [...sources.impulseSelection.impulseIds] : []
 	clearOtherKinds('impulse')
-	const merged = Array.from(new Set([...currentIds, ...hitIds]))
-	selectHits(trackId, merged)
+	const merged = Array.from(new Set([...currentIds, ...impulseIds]))
+	selectImpulses(trackId, merged)
 }
 
-export const selectPlacedImpulse = (trackId: string, hitId: string): void => {
+export const selectPlacedImpulse = (trackId: string, impulseId: string): void => {
 	clearOtherKinds('impulse')
-	impulseAnchorId = hitId
-	selectHits(trackId, [hitId])
+	impulseAnchorId = impulseId
+	selectImpulses(trackId, [impulseId])
 }
 
 // ---- Delete -------------------------------------------------
 
 // True when something was deleted. Each kind is one undo step.
 export const deleteSelection = (): boolean => {
-	const hasImpulses = sources.hitSelection.hitIds.length > 0
+	const hasImpulses = sources.impulseSelection.impulseIds.length > 0
 	if (hasImpulses) {
-		deleteSelectedHits()
+		deleteSelectedImpulses()
 		return true
 	}
 	const hasPoints = automation.selectedPointIds.length > 0

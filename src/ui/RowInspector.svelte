@@ -29,7 +29,7 @@
 	import { AUDIO_ROW_ID } from '../appearance.svelte'
 	import { focusShell } from './focus'
 	import BandControls from './BandControls.svelte'
-	import HitTrackControls from './HitTrackControls.svelte'
+	import ImpulseTrackControls from './ImpulseTrackControls.svelte'
 	import LayerEditor from './LayerEditor.svelte'
 	import RenameField from './RenameField.svelte'
 	import './RowInspector.css'
@@ -129,14 +129,16 @@
 	// Keeps the popover inside the window once it has a size.
 	$effect(() => {
 		void open
-		if (root === undefined) return
-		const bounds = root.getBoundingClientRect()
+		const element = root
+		const isMounted = element instanceof HTMLElement
+		if (!isMounted) return
+		const bounds = element.getBoundingClientRect()
 		const overflowBottom = bounds.bottom - (window.innerHeight - MARGIN)
 		const overflowRight = bounds.right - (window.innerWidth - MARGIN)
 		const shiftY = Math.max(0, overflowBottom)
 		const shiftX = Math.max(0, overflowRight)
-		root.style.setProperty('--inspector-shift-y', `${-shiftY}px`)
-		root.style.setProperty('--inspector-shift-x', `${-shiftX}px`)
+		element.style.setProperty('--inspector-shift-y', `${-shiftY}px`)
+		element.style.setProperty('--inspector-shift-x', `${-shiftX}px`)
 	})
 
 	$effect(() => {
@@ -269,7 +271,7 @@
 			{/if}
 
 			{#if track !== undefined}
-				<HitTrackControls {track} />
+				<ImpulseTrackControls {track} />
 			{/if}
 
 			{#if band !== undefined}

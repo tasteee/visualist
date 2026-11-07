@@ -103,13 +103,13 @@ type AppearanceSnapshotT = {
 }
 
 // One undo step: everything the user can change in the editor.
-// Lanes, the layer list with its params and effects, hit
+// Lanes, the layer list with its params and effects, impulse
 // tracks, row looks, loop and export range, and the base
 // controls. Drags record once, so one gesture is one step.
 type HistoryEntryT = {
 	lanes: AutomationLaneT[]
 	layers: LayerT[]
-	hitTracks: TrackSnapshotT
+	impulseTracks: TrackSnapshotT
 	settings: SettingsT
 	appearance: AppearanceSnapshotT
 	loop: RegionT
@@ -135,7 +135,7 @@ const takeAppearanceSnapshot = (): AppearanceSnapshotT => ({
 const takeSnapshot = (): HistoryEntryT => ({
 	lanes: $state.snapshot(automation.lanes) as AutomationLaneT[],
 	layers: $state.snapshot(layerStore.layers) as LayerT[],
-	hitTracks: takeTrackSnapshot(),
+	impulseTracks: takeTrackSnapshot(),
 	settings: $state.snapshot(app.settings) as SettingsT,
 	appearance: takeAppearanceSnapshot(),
 	loop: { start: app.loopStart, end: app.loopEnd },
@@ -203,7 +203,7 @@ const restoreEntry = (entry: HistoryEntryT): void => {
 	const isSelectionLive = entry.selectedLayerId === null || findLayer(entry.selectedLayerId) !== undefined
 	layerStore.selectedLayerId = isSelectionLive ? entry.selectedLayerId : null
 	restoreLanes(entry.lanes, entry.layers)
-	restoreTrackSnapshot(entry.hitTracks)
+	restoreTrackSnapshot(entry.impulseTracks)
 	Object.assign(app.settings, entry.settings)
 	restoreAppearance(entry.appearance)
 	app.trimStart = entry.exportRange.start

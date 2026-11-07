@@ -4,7 +4,7 @@ import type { ColorNameT } from './engine/palette'
 import type { AutomationLaneT, LayerT } from './engine/types'
 
 // How each timeline row looks: its color and its height. Rows
-// are keyed by id: a layer, lane, hit track or band id, or the
+// are keyed by id: a layer, lane, impulse track or band id, or the
 // fixed ids of the audio and scene rows.
 
 type AppearanceStateT = {

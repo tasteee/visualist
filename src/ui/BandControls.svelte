@@ -22,9 +22,9 @@
 	let presetKey = $state(0)
 
 	const spectrum = $derived(getDetectedAnalysis().spectrum)
-	const isHits = $derived(props.band.output === 'hits')
-	const releaseLabel = $derived(isHits ? 'Fade' : 'Release')
-	const releaseHint = $derived(isHits ? 'How long each impulse keeps pushing.' : 'How slowly the level falls back.')
+	const isImpulses = $derived(props.band.output === 'impulses')
+	const releaseLabel = $derived(isImpulses ? 'Fade' : 'Release')
+	const releaseHint = $derived(isImpulses ? 'How long each impulse keeps pushing.' : 'How slowly the level falls back.')
 
 	const handleRangeChange = (range: BandRangeT) => setBandRange(props.band.id, range)
 
@@ -49,6 +49,6 @@
 {/key}
 <Segmented label="Output" options={BAND_OUTPUT_OPTIONS} value={props.band.output} onchange={handleOutputChange} />
 <SettingSlider label={releaseLabel} hint={releaseHint} value={props.band.release} min={MIN_BAND_RELEASE} max={MAX_BAND_RELEASE} step={0.01} suffix=" s" onchange={handleReleaseChange} />
-{#if isHits}
+{#if isImpulses}
 	<SettingSlider label="Sensitivity" hint="Higher catches quieter impulses." value={props.band.sensitivity} min={0} max={1} step={0.01} onchange={handleSensitivityChange} />
 {/if}

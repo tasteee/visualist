@@ -6,23 +6,21 @@
 	import { openMidiFile } from '../midiImport.svelte'
 	import { addBand, addEmptyTrack, addTrackFromDetected, sources } from '../sources.svelte'
 	import { app } from '../store.svelte'
-	import BandCard from './BandCard.svelte'
-	import HitTrackCard from './HitTrackCard.svelte'
 	import Section from './Section.svelte'
 	import { openMidiPicker } from './filePicker'
 	import './SourcesPanel.css'
 
 	const PRESET_OPTIONS = BAND_PRESETS.map((preset) => ({ value: preset.value, label: preset.label }))
 
-	const HITS_DESCRIPTION = 'Hits you place by hand, for exact sync. Edit them under the audio layer in the timeline. A track can drive Kick or Snare, so echoes and glitches follow it too.'
-	const BANDS_DESCRIPTION = 'Follow any slice of the spectrum. Start from a preset, then drag the range over the song’s spectrum.'
+	const IMPULSES_DESCRIPTION = 'Impulses you place by hand, for exact sync. They live under the audio layer in the timeline. Right-click a track’s header, or press its gear, to rename it or give it a role like Kick or Snare.'
+	const BANDS_DESCRIPTION = 'Follow any slice of the spectrum. Pick a preset, then open the band’s gear in the timeline to drag its range over the song’s spectrum.'
 
 	let addBandKey = $state(0)
 
-	const canEditHits = $derived(app.hasAudio && !app.isAnalyzing && !app.isRecording)
+	const canEditImpulses = $derived(app.hasAudio && !app.isAnalyzing && !app.isRecording)
 	const hasTracks = $derived(sources.tracks.length > 0)
 	const hasBands = $derived(sources.bands.length > 0)
-	const tracksEmptyText = $derived(app.hasAudio ? 'No hit tracks yet.' : 'Load a song to add hit tracks.')
+	const tracksEmptyText = $derived(app.hasAudio ? 'No impulse tracks yet.' : 'Load a song to add impulse tracks.')
 
 	const handleFromKicks = () => addTrackFromDetected('kick')
 
@@ -41,31 +39,28 @@
 	}
 </script>
 
-<Section title="Hit tracks" description={HITS_DESCRIPTION}>
+<Section title="Impulse tracks" description={IMPULSES_DESCRIPTION}>
 	<div class="sources-panel-actions">
-		<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canEditHits} onclick={handleFromKicks}>
+		<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canEditImpulses} onclick={handleFromKicks}>
 			<WaveformIcon weight="bold" />
 			From kicks
 		</z-button>
-		<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canEditHits} onclick={handleFromSnares}>
+		<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canEditImpulses} onclick={handleFromSnares}>
 			<WaveformIcon weight="bold" />
 			From snares
 		</z-button>
-		<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canEditHits} onclick={handleImportMidi}>
+		<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canEditImpulses} onclick={handleImportMidi}>
 			<FileArrowUpIcon weight="bold" />
 			Import MIDI
 		</z-button>
-		<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canEditHits} onclick={handleEmptyTrack}>
+		<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canEditImpulses} onclick={handleEmptyTrack}>
 			<PlusIcon weight="bold" />
 			Empty track
 		</z-button>
 	</div>
 
-	{#each sources.tracks as track (track.id)}
-		<HitTrackCard {track} />
-	{/each}
 	{#if !hasTracks}
-		<p class="sources-panel-empty">{tracksEmptyText} Detected hits are a quick start: fix the misses in the timeline. Or drop a MIDI file anywhere.</p>
+		<p class="sources-panel-empty">{tracksEmptyText} Detected impulses are a quick start: fix the misses in the timeline. Or drop a MIDI file anywhere.</p>
 	{/if}
 </Section>
 
@@ -74,9 +69,6 @@
 		<z-select value="" placeholder="Add a band" options={PRESET_OPTIONS} aria-label="Add a band" onchange={handleAddBand}></z-select>
 	{/key}
 
-	{#each sources.bands as band (band.id)}
-		<BandCard {band} />
-	{/each}
 	{#if !hasBands}
 		<p class="sources-panel-empty">No bands yet. Each band becomes a source in every Follow menu.</p>
 	{/if}

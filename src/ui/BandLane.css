@@ -156,7 +156,7 @@
 	vector-effect: non-scaling-stroke;
 }
 
-.band-lane-hit {
+.band-lane-impulse {
 	position: absolute;
 	top: 0;
 	left: var(--band-x);

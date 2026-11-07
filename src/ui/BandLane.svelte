@@ -6,7 +6,7 @@
 	import { getBandSignal, getBandSourceId } from '../engine/sources'
 	import { checkIsTimeVisible, getViewEnd, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
-	import type { BandSourceT, CompiledBandT, HitT } from '../engine/types'
+	import type { BandSourceT, CompiledBandT, ImpulseT } from '../engine/types'
 	import { app, getLiveSignals } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import { openRowInspector } from '../rowInspector.svelte'
@@ -40,8 +40,8 @@
 	const siblingRows = $derived(props.siblingTrackIds.filter((trackId) => trackId !== props.band.id).map((trackId): RowRefT => ({ kind: 'impulse', id: trackId })))
 	const customHeight = $derived(getRowHeightCss(row))
 	const rangeLabel = $derived(formatBandRange(props.band))
-	const isHits = $derived(props.band.output === 'hits')
-	const outputLabel = $derived(isHits ? 'Hits' : 'Level')
+	const isImpulses = $derived(props.band.output === 'impulses')
+	const outputLabel = $derived(isImpulses ? 'Impulses' : 'Level')
 	const metaLabel = $derived(`${rangeLabel} · ${outputLabel}`)
 	const sourceId = $derived(getBandSourceId(props.band.id))
 	const liveLevel = $derived(getLiveSignals()[sourceId] ?? 0)
@@ -88,14 +88,14 @@
 	const curvePath = $derived(buildCurvePath(props.compiled))
 	const areaPath = $derived(buildAreaPath(curvePath))
 
-	const visibleHits = $derived.by((): HitT[] => {
+	const visibleImpulses = $derived.by((): ImpulseT[] => {
 		const compiled = props.compiled
-		if (compiled === undefined || !isHits) return []
+		if (compiled === undefined || !isImpulses) return []
 		const end = getViewEnd(view)
-		return compiled.hits.filter((hit) => hit.time >= view.start && hit.time <= end)
+		return compiled.impulses.filter((impulse) => impulse.time >= view.start && impulse.time <= end)
 	})
 
-	const getHitX = (hit: HitT): number => timeToPercent(hit.time, view)
+	const getImpulseX = (impulse: ImpulseT): number => timeToPercent(impulse.time, view)
 </script>
 
 <div class="band-lane" data-tone={bandColor} style:--band-lane-custom-height={customHeight}>
@@ -125,8 +125,8 @@
 			<path class="band-lane-line" d={curvePath} />
 		</svg>
 
-		{#each visibleHits as hit (hit.time)}
-			<span class="band-lane-hit" style:--band-x="{getHitX(hit)}%"></span>
+		{#each visibleImpulses as impulse (impulse.time)}
+			<span class="band-lane-impulse" style:--band-x="{getImpulseX(impulse)}%"></span>
 		{/each}
 
 		{#if isPlayheadVisible}

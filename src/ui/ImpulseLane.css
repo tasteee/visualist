@@ -1,22 +1,22 @@
-.hit-lane {
-	--hit-lane-height: 72px;
-	--hit-lane-tone: var(--tone, var(--success));
+.impulse-lane {
+	--impulse-lane-height: 72px;
+	--impulse-lane-tone: var(--tone, var(--success));
 	position: relative;
-	--hit-lane-indent: calc(var(--spacing-5) + var(--spacing-2) + var(--spacing-2) + var(--spacing-2));
+	--impulse-lane-indent: calc(var(--spacing-5) + var(--spacing-2) + var(--spacing-2) + var(--spacing-2));
 	display: grid;
 	grid-template-columns: var(--editor-header-width) minmax(0, 1fr);
-	height: var(--hit-lane-custom-height, var(--hit-lane-height));
+	height: var(--impulse-lane-custom-height, var(--impulse-lane-height));
 	border-bottom: 1px solid var(--border);
 }
 
 /* Folded rows ignore a stored height, then get it back. */
-.hit-lane.isCollapsed {
+.impulse-lane.isCollapsed {
 	height: 28px;
 }
 
 /* Header column */
 
-.hit-lane-header {
+.impulse-lane-header {
 	position: relative;
 	display: flex;
 	flex-direction: column;
@@ -29,7 +29,7 @@
 }
 
 /* The guide line that ties the lane to the audio layer. */
-.hit-lane-header::before {
+.impulse-lane-header::before {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -39,18 +39,18 @@
 	content: '';
 }
 
-.hit-lane.isArmed .hit-lane-header {
+.impulse-lane.isArmed .impulse-lane-header {
 	background: color-mix(in oklab, var(--destructive) 7%, var(--paper));
 }
 
-.hit-lane-title {
+.impulse-lane-title {
 	display: flex;
 	align-items: center;
 	gap: var(--spacing-2);
 	min-width: 0;
 }
 
-.hit-lane-caret {
+.impulse-lane-caret {
 	display: inline-flex;
 	flex: none;
 	align-items: center;
@@ -69,27 +69,27 @@
 		color var(--motion-fast) ease;
 }
 
-.hit-lane-caret svg {
+.impulse-lane-caret svg {
 	transform: rotate(90deg);
 	transition: transform var(--motion-base) var(--ease-move);
 }
 
-.hit-lane.isCollapsed .hit-lane-caret svg {
+.impulse-lane.isCollapsed .impulse-lane-caret svg {
 	transform: rotate(0deg);
 }
 
-.hit-lane-caret:hover {
+.impulse-lane-caret:hover {
 	background: var(--paper-soft);
 	color: var(--foreground);
 }
 
-.hit-lane-caret:focus-visible {
+.impulse-lane-caret:focus-visible {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 1px;
 }
 
 
-.hit-lane-name {
+.impulse-lane-name {
 	flex: 1;
 	min-width: 0;
 	overflow: hidden;
@@ -102,19 +102,19 @@
 	user-select: none;
 }
 
-.hit-lane.isCollapsed .hit-lane-header {
+.impulse-lane.isCollapsed .impulse-lane-header {
 	padding-top: 2px;
 }
 
-.hit-lane-meta {
+.impulse-lane-meta {
 	display: flex;
 	align-items: center;
 	gap: var(--spacing-2);
 	min-width: 0;
-	padding-left: var(--hit-lane-indent);
+	padding-left: var(--impulse-lane-indent);
 }
 
-.hit-lane-meter {
+.impulse-lane-meter {
 	position: relative;
 	flex: none;
 	width: var(--spacing-6);
@@ -124,14 +124,14 @@
 	background: var(--paper-soft);
 }
 
-.hit-lane-meter-fill {
+.impulse-lane-meter-fill {
 	position: absolute;
 	inset: 0 auto 0 0;
-	width: var(--hit-lane-level);
-	background: var(--hit-lane-tone);
+	width: var(--impulse-lane-level);
+	background: var(--impulse-lane-tone);
 }
 
-.hit-lane-count {
+.impulse-lane-count {
 	overflow: hidden;
 	color: var(--secondary);
 	font-size: var(--font-size-1);
@@ -140,18 +140,18 @@
 	white-space: nowrap;
 }
 
-.hit-lane-count.isSelection {
-	color: var(--hit-lane-tone);
+.impulse-lane-count.isSelection {
+	color: var(--impulse-lane-tone);
 	font-weight: var(--font-weight-semibold);
 }
 
-.hit-lane-count.isCompact {
+.impulse-lane-count.isCompact {
 	flex: none;
 	color: var(--muted);
 	font-weight: var(--font-weight-semibold);
 }
 
-.hit-lane-actions {
+.impulse-lane-actions {
 	display: flex;
 	flex: none;
 	align-items: center;
@@ -161,13 +161,13 @@
 	transition: opacity var(--motion-fast) ease;
 }
 
-.hit-lane:hover .hit-lane-actions,
-.hit-lane.isArmed .hit-lane-actions,
-.hit-lane-actions:focus-within {
+.impulse-lane:hover .impulse-lane-actions,
+.impulse-lane.isArmed .impulse-lane-actions,
+.impulse-lane-actions:focus-within {
 	opacity: 1;
 }
 
-.hit-lane-action {
+.impulse-lane-action {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -185,29 +185,29 @@
 		color var(--motion-fast) ease;
 }
 
-.hit-lane-action:hover {
+.impulse-lane-action:hover {
 	background: var(--paper-soft);
 	color: var(--foreground);
 }
 
-.hit-lane-action.isRecord.isOn {
+.impulse-lane-action.isRecord.isOn {
 	background: color-mix(in oklab, var(--destructive) 14%, transparent);
 	color: var(--destructive);
 }
 
-.hit-lane-action.isDanger:hover {
+.impulse-lane-action.isDanger:hover {
 	background: color-mix(in oklab, var(--destructive) 16%, transparent);
 	color: var(--destructive);
 }
 
-.hit-lane-action:focus-visible {
+.impulse-lane-action:focus-visible {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 1px;
 }
 
 /* Track column */
 
-.hit-lane-track {
+.impulse-lane-track {
 	position: relative;
 	min-width: 0;
 	overflow: hidden;
@@ -217,11 +217,11 @@
 	user-select: none;
 }
 
-.hit-lane.isCollapsed .hit-lane-track {
+.impulse-lane.isCollapsed .impulse-lane-track {
 	cursor: default;
 }
 
-.hit-lane-grid {
+.impulse-lane-grid {
 	position: absolute;
 	inset: 0;
 	width: 100%;
@@ -229,67 +229,67 @@
 	pointer-events: none;
 }
 
-.hit-lane-gridline {
+.impulse-lane-gridline {
 	stroke: var(--color-neutral-1);
 	stroke-width: 1;
 	vector-effect: non-scaling-stroke;
 }
 
-.hit-lane-gridline.isSub {
+.impulse-lane-gridline.isSub {
 	stroke: color-mix(in oklab, var(--color-neutral-1) 55%, transparent);
 }
 
-.hit-lane-gridline.isBar {
+.impulse-lane-gridline.isBar {
 	stroke: var(--color-neutral-2);
 }
 
-.hit-lane-gridline.isLabel {
+.impulse-lane-gridline.isLabel {
 	stroke: var(--color-neutral-3);
 }
 
-.hit-lane-plot {
+.impulse-lane-plot {
 	position: absolute;
 	inset: var(--spacing-3) 0 var(--spacing-1);
 }
 
-.hit-lane.isCollapsed .hit-lane-plot {
+.impulse-lane.isCollapsed .impulse-lane-plot {
 	inset: var(--spacing-1) 0;
 }
 
-/* Hits: a stem as tall as the strength, capped with a dot. The
+/* Impulses: a stem as tall as the strength, capped with a dot. The
    element is wider than the stem so it is easy to grab. */
 
-.hit-lane-hit {
+.impulse-lane-impulse {
 	position: absolute;
 	bottom: 0;
-	left: var(--hit-x);
+	left: var(--impulse-x);
 	z-index: 1;
 	width: var(--spacing-3);
-	height: max(var(--hit-height), var(--spacing-2));
+	height: max(var(--impulse-height), var(--spacing-2));
 	cursor: grab;
 	outline: none;
 	transform: translateX(-50%);
 }
 
-.hit-lane-hit::before {
+.impulse-lane-impulse::before {
 	position: absolute;
 	top: 0;
 	bottom: 0;
 	left: 50%;
 	width: 2px;
 	border-radius: var(--radius-sm);
-	background: var(--hit-lane-tone);
+	background: var(--impulse-lane-tone);
 	content: '';
 	transform: translateX(-50%);
 }
 
-.hit-lane-hit::after {
+.impulse-lane-impulse::after {
 	position: absolute;
 	top: 0;
 	left: 50%;
 	width: 6px;
 	height: 6px;
-	border: 1.5px solid var(--hit-lane-tone);
+	border: 1.5px solid var(--impulse-lane-tone);
 	border-radius: 50%;
 	background: var(--bg);
 	content: '';
@@ -299,73 +299,73 @@
 		transform var(--motion-fast) ease;
 }
 
-.hit-lane.isCollapsed .hit-lane-hit {
+.impulse-lane.isCollapsed .impulse-lane-impulse {
 	cursor: default;
 }
 
-.hit-lane.isCollapsed .hit-lane-hit::after {
+.impulse-lane.isCollapsed .impulse-lane-impulse::after {
 	display: none;
 }
 
-.hit-lane-hit:hover::after {
-	background: var(--hit-lane-tone);
+.impulse-lane-impulse:hover::after {
+	background: var(--impulse-lane-tone);
 	transform: translate(-50%, -50%) scale(1.2);
 }
 
-.hit-lane-hit.isSelected::after,
-.hit-lane-hit.isDragging::after {
-	background: var(--hit-lane-tone);
+.impulse-lane-impulse.isSelected::after,
+.impulse-lane-impulse.isDragging::after {
+	background: var(--impulse-lane-tone);
 }
 
-.hit-lane-hit.isDragging {
+.impulse-lane-impulse.isDragging {
 	cursor: grabbing;
 }
 
-.hit-lane-hit:focus-visible::after {
+.impulse-lane-impulse:focus-visible::after {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 2px;
 }
 
 /* With a selection, the rest step back so it reads clearly. */
-.hit-lane.hasSelection .hit-lane-hit:not(.isSelected) {
+.impulse-lane.hasSelection .impulse-lane-impulse:not(.isSelected) {
 	opacity: 0.4;
 }
 
-/* Selected hits get a halo along their whole stem. */
-.hit-lane-hit.isSelected::before {
+/* Selected impulses get a halo along their whole stem. */
+.impulse-lane-impulse.isSelected::before {
 	width: 3px;
-	background: var(--hit-lane-tone);
-	outline: 2px solid color-mix(in oklab, var(--hit-lane-tone) 28%, transparent);
+	background: var(--impulse-lane-tone);
+	outline: 2px solid color-mix(in oklab, var(--impulse-lane-tone) 28%, transparent);
 }
 
-.hit-lane-marquee {
+.impulse-lane-marquee {
 	position: absolute;
 	top: calc(-1 * var(--spacing-2));
 	bottom: 0;
-	left: var(--hit-x);
+	left: var(--impulse-x);
 	z-index: 2;
-	width: var(--hit-width);
-	border: 1px solid color-mix(in oklab, var(--hit-lane-tone) 70%, transparent);
+	width: var(--impulse-width);
+	border: 1px solid color-mix(in oklab, var(--impulse-lane-tone) 70%, transparent);
 	border-radius: var(--radius-sm);
-	background: color-mix(in oklab, var(--hit-lane-tone) 12%, transparent);
+	background: color-mix(in oklab, var(--impulse-lane-tone) 12%, transparent);
 	pointer-events: none;
 }
 
-.hit-lane-hold {
+.impulse-lane-hold {
 	position: absolute;
 	bottom: 0;
-	left: var(--hit-x);
-	width: var(--hit-width);
-	height: var(--hit-height);
-	border-top: 1px solid color-mix(in oklab, var(--hit-lane-tone) 50%, transparent);
-	background: color-mix(in oklab, var(--hit-lane-tone) 12%, transparent);
+	left: var(--impulse-x);
+	width: var(--impulse-width);
+	height: var(--impulse-height);
+	border-top: 1px solid color-mix(in oklab, var(--impulse-lane-tone) 50%, transparent);
+	background: color-mix(in oklab, var(--impulse-lane-tone) 12%, transparent);
 	pointer-events: none;
 }
 
-.hit-lane-pill {
+.impulse-lane-pill {
 	position: absolute;
 	top: 0;
-	left: var(--hit-x);
+	left: var(--impulse-x);
 	z-index: 2;
 	padding: 0 var(--spacing-2);
 	border-radius: var(--radius-sm);
@@ -382,43 +382,43 @@
 
 /* Overlays */
 
-.hit-lane-shade {
+.impulse-lane-shade {
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	width: var(--hit-lane-size);
+	width: var(--impulse-lane-size);
 	background: var(--bg);
 	opacity: 0.6;
 	pointer-events: none;
 }
 
-.hit-lane-shade.isStart {
+.impulse-lane-shade.isStart {
 	left: 0;
 }
 
-.hit-lane-shade.isEnd {
+.impulse-lane-shade.isEnd {
 	right: 0;
 }
 
-.hit-lane-playhead,
-.hit-lane-hover {
+.impulse-lane-playhead,
+.impulse-lane-hover {
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: var(--hit-x);
+	left: var(--impulse-x);
 	width: 1px;
 	pointer-events: none;
 }
 
-.hit-lane-playhead {
+.impulse-lane-playhead {
 	background: var(--foreground);
 }
 
-.hit-lane-hover {
+.impulse-lane-hover {
 	background: var(--color-neutral-4);
 }
 
-.hit-lane-hint {
+.impulse-lane-hint {
 	position: absolute;
 	top: var(--spacing-1);
 	right: var(--spacing-3);
@@ -431,6 +431,6 @@
 	pointer-events: none;
 }
 
-.hit-lane.isArmed .hit-lane-hint {
+.impulse-lane.isArmed .impulse-lane-hint {
 	color: var(--destructive);
 }

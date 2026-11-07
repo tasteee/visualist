@@ -54,7 +54,7 @@
 	// MIDI lands on the song's timeline, so it needs a song.
 	const handleMidiDrop = (file: File) => {
 		if (!app.hasAudio) {
-			toaster.show({ title: 'Load a song first', description: 'MIDI hits are placed on the song’s timeline.', tone: 'warning' })
+			toaster.show({ title: 'Load a song first', description: 'MIDI impulses are placed on the song’s timeline.', tone: 'warning' })
 			return
 		}
 		void openMidiFile(file)
@@ -97,7 +97,7 @@
 	{#if app.isDraggingFile}
 		<div class="app-drop-overlay">
 			<span class="app-drop-title">Drop a song or a MIDI file</span>
-			<span class="app-drop-hint">Songs are analyzed in a few seconds. MIDI becomes hit tracks.</span>
+			<span class="app-drop-hint">Songs are analyzed in a few seconds. MIDI becomes impulse tracks.</span>
 		</div>
 	{/if}
 </main>
