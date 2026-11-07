@@ -11,7 +11,7 @@ import {
 import { automation, clampLanesToDuration, startAutomationWatchers } from './automation.svelte'
 import { applyAutomation, applyLayerAutomation } from './engine/automation'
 import { applySettingsModulation, computeSignals } from './engine/modulation'
-import { applyPostEffects, getPostAmounts } from './engine/post'
+import { checkHasPost, getPostAmounts } from './engine/post'
 import { startAppearanceWatchers } from './appearance.svelte'
 import { layerStore, restoreLayerAssets, startLayerWatchers } from './layers.svelte'
 import { buildSongKey, getCompiledSources, getRoleHits, startSourceWatchers, switchSong } from './sources.svelte'
@@ -205,37 +205,42 @@ const buildFrameInput = (time: number): FrameInputT => {
 export const getLiveSignals = (): SignalsT => computeSignals(getAnalysis(), app.currentTime, getCompiledSources())
 
 // The 3D stage (and three.js with it) loads the first time a
-// project uses depth or moves the camera. Until it is ready, and
-// on devices without WebGL, frames are drawn flat.
-type Stage3dT = typeof import('./engine/scene3d')
-let stage3d: Stage3dT | null = null
-let isStage3dRequested = false
+// project uses depth, moves the camera, or turns on Lens or Film.
+// Until it is ready, and on devices without WebGL 2, frames are
+// drawn flat.
+type StageModuleT = typeof import('./engine/scene3d')
+let stageModule: StageModuleT | null = null
+let isStageRequested = false
 
-const requestStage3d = (): void => {
-	if (isStage3dRequested) return
-	isStage3dRequested = true
+const requestStage = (): void => {
+	if (isStageRequested) return
+	isStageRequested = true
 	import('./engine/scene3d')
 		.then((module) => {
-			stage3d = module
+			stageModule = module
 			markDirty()
 		})
 		.catch(() => {
-			setStatus('The 3D stage failed to load. Depth and camera are drawn flat.', 'warning')
+			setStatus('The 3D stage failed to load. Depth, camera, Lens and Film are off.', 'warning')
 		})
 }
 
-const drawDeepFrame = (context: CanvasRenderingContext2D, input: FrameInputT, logoLayers: LogoLayersT, width: number, height: number): boolean => {
-	requestStage3d()
-	if (stage3d === null) return false
-	return stage3d.drawFrame3d(context, input, logoLayers, width, height)
+const checkNeedsStage = (input: FrameInputT): boolean => {
+	const hasPost = checkHasPost(getPostAmounts(input.settings))
+	return hasPost || checkNeedsDepth(input)
+}
+
+const drawStageFrame = (context: CanvasRenderingContext2D, input: FrameInputT, logoLayers: LogoLayersT, width: number, height: number, time: number): boolean => {
+	requestStage()
+	if (stageModule === null) return false
+	return stageModule.drawStageFrame(context, input, logoLayers, width, height, time)
 }
 
 const renderFrame = (context: CanvasRenderingContext2D, time: number, logoLayers: LogoLayersT, width: number, height: number): void => {
 	const input = buildFrameInput(time)
-	const needsDepth = checkNeedsDepth(input)
-	const didDrawDeep = needsDepth && drawDeepFrame(context, input, logoLayers, width, height)
-	if (!didDrawDeep) drawFrame(context, input, logoLayers, width, height)
-	applyPostEffects(context, getPostAmounts(input.settings), time)
+	const needsStage = checkNeedsStage(input)
+	const didDrawStage = needsStage && drawStageFrame(context, input, logoLayers, width, height, time)
+	if (!didDrawStage) drawFrame(context, input, logoLayers, width, height)
 }
 
 const titleFromFileName = (fileName: string): string => {

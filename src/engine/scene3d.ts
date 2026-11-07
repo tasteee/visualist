@@ -23,14 +23,16 @@ import type { DepthSliceT } from './depth'
 import { getFrameLayout } from './formats'
 import type { FrameLayoutT } from './formats'
 import type { LogoLayersT } from './logoLayers'
+import { getPostAmounts } from './post'
+import { renderWithPost } from './postPasses'
 import { drawFrameSlice } from './render'
 import type { BlendModeT, FrameInputT, SettingsT } from './types'
 
 // The 3D stage. Every depth slice of the layer stack is drawn by
 // the regular 2D renderer onto its own transparent sheet, and the
-// sheets hang in front of a perspective camera. With the camera
-// at rest and every layer at depth 0, the picture is identical to
-// the flat render.
+// sheets hang in front of a perspective camera. Lens and Film run
+// as the last passes. With the camera at rest and every layer at
+// depth 0, the sheets alone are identical to the flat render.
 //
 // Colors stay in sRGB end to end, like a 2D canvas, so the base
 // sheet matches the flat render pixel for pixel.
@@ -201,15 +203,16 @@ const drawSheet = (
 	applySheetBlend(sheet.material, getSliceBlend(slice))
 }
 
-// Draws one frame through the 3D stage onto the output canvas.
-// False when WebGL is not available, so the caller can fall back
-// to the flat render.
-export const drawFrame3d = (
+// Draws one frame through the 3D stage, Lens and Film included,
+// onto the output canvas. False when WebGL is not available, so
+// the caller can fall back to the flat render.
+export const drawStageFrame = (
 	output: CanvasRenderingContext2D,
 	input: FrameInputT,
 	logoLayers: LogoLayersT,
 	width: number,
-	height: number
+	height: number,
+	time: number
 ): boolean => {
 	const target = getStage()
 	if (target === null) return false
@@ -228,7 +231,7 @@ export const drawFrame3d = (
 	// Past the edges of the tilted frame, the background color.
 	target.renderer.setClearColor(input.palette.background, 1)
 	placeCamera(target.camera, frame, input.settings)
-	target.renderer.render(target.scene, target.camera)
+	renderWithPost(target.renderer, target.scene, target.camera, getPostAmounts(input.settings), time)
 
 	output.save()
 	output.setTransform(1, 0, 0, 1, 0, 0)
