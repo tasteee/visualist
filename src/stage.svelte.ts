@@ -17,9 +17,7 @@ type StageViewT = {
 export const MIN_STAGE_ZOOM = 0.25
 export const MAX_STAGE_ZOOM = 12
 
-// The stage starts a little above center, clear of the editor
-// at its usual height. After that only the user moves it.
-const DEFAULT_PAN_Y = -110
+const DEFAULT_PAN_Y = 0
 
 export const stageView = $state<StageViewT>({ zoom: 1, panX: 0, panY: DEFAULT_PAN_Y })
 
@@ -43,6 +41,13 @@ export const zoomStageAt = (factor: number, anchorX: number, anchorY: number): v
 	stageView.panX = anchorX - (anchorX - stageView.panX) * appliedFactor
 	stageView.panY = anchorY - (anchorY - stageView.panY) * appliedFactor
 	stageView.zoom = nextZoom
+}
+
+// Sets the zoom from the view's center, as the Fit and percent
+// menu does.
+export const setStageZoom = (zoom: number): void => {
+	const clamped = clamp(zoom, MIN_STAGE_ZOOM, MAX_STAGE_ZOOM)
+	zoomStageAt(clamped / stageView.zoom, 0, 0)
 }
 
 export const panStageBy = (deltaX: number, deltaY: number): void => {

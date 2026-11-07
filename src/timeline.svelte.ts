@@ -11,8 +11,6 @@ type TimelineStateT = {
 	isTriplet: boolean
 	hoverTime: number | null
 	dockHeight: number
-	// null means the dock fills the window's width.
-	dockWidth: number | null
 	headerWidth: number
 	trackWidth: number
 }
@@ -21,8 +19,6 @@ const HEADER_WIDTH_KEY = 'vink.headerWidth'
 export const DEFAULT_HEADER_WIDTH = 216
 export const MIN_HEADER_WIDTH = 160
 export const MAX_HEADER_WIDTH = 360
-const DOCK_WIDTH_KEY = 'vink.dockWidth'
-export const MIN_DOCK_WIDTH = 560
 const DOCK_HEIGHT_KEY = 'vink.dockHeight'
 const DEFAULT_DOCK_HEIGHT = 384
 export const MIN_DOCK_HEIGHT = 216
@@ -53,16 +49,6 @@ const readStoredHeaderWidth = (): number => {
 	}
 }
 
-const readStoredDockWidth = (): number | null => {
-	try {
-		const stored = Number(localStorage.getItem(DOCK_WIDTH_KEY))
-		const isUsable = Number.isFinite(stored) && stored >= MIN_DOCK_WIDTH
-		return isUsable ? stored : null
-	} catch {
-		return null
-	}
-}
-
 export const timeline = $state<TimelineStateT>({
 	view: { start: 0, span: 1 },
 	isFollowing: true,
@@ -71,7 +57,6 @@ export const timeline = $state<TimelineStateT>({
 	isTriplet: false,
 	hoverTime: null,
 	dockHeight: readStoredDockHeight(),
-	dockWidth: readStoredDockWidth(),
 	headerWidth: readStoredHeaderWidth(),
 	trackWidth: 0
 })
@@ -193,23 +178,3 @@ export const setHeaderWidth = (width: number): void => {
 }
 
 export const resetHeaderWidth = (): void => setHeaderWidth(DEFAULT_HEADER_WIDTH)
-
-export const setDockWidth = (width: number, maxWidth: number): void => {
-	const upperBound = Math.max(MIN_DOCK_WIDTH, maxWidth)
-	timeline.dockWidth = clamp(Math.round(width), MIN_DOCK_WIDTH, upperBound)
-	try {
-		localStorage.setItem(DOCK_WIDTH_KEY, String(timeline.dockWidth))
-	} catch {
-		return
-	}
-}
-
-// Back to filling the window.
-export const resetDockWidth = (): void => {
-	timeline.dockWidth = null
-	try {
-		localStorage.removeItem(DOCK_WIDTH_KEY)
-	} catch {
-		return
-	}
-}

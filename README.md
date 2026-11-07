@@ -57,8 +57,10 @@ browsers keep those cached.
   loop bar to switch it. Double-click the ruler and drag on the second
   press to draw a loop (hold Alt to draw the export range).
 - **Tilde (`~`)** shows the stage over everything at 75vw. **Backslash
-  (`\`)** hides every panel. The editor dock floats over the
-  workspace, so resizing it never moves the stage.
+  (`\`)** hides every panel. The window is a strict vertical
+  split: the workspace on top, the editor flush below it. Drag the
+  divider and the stage shrinks to fit the space left, never covered.
+  Use the Fit / percent menu on the stage to zoom inside it.
 - **Headers** share one width: drag the border at their right edge
   (up to 360px), click it to open or close them all.
 - **Audio**: the first file is the song and sets the project length.
