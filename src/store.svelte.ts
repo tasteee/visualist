@@ -22,6 +22,7 @@ import type { LogoLayersT } from './engine/logoLayers'
 import { startRecorder, pickRecorderFormat } from './engine/recorder'
 import type { ActiveRecordingT, RecorderFormatT } from './engine/recorder'
 import { drawFrame } from './engine/render'
+import { checkNeedsDepth } from './engine/depth'
 import { saveSongFile } from './engine/assets'
 import { getFadeLevel } from './engine/fades'
 import { getSizeForShortSide } from './engine/formats'
@@ -203,9 +204,37 @@ const buildFrameInput = (time: number): FrameInputT => {
 // The live mod sources at the playhead, for meters in the UI.
 export const getLiveSignals = (): SignalsT => computeSignals(getAnalysis(), app.currentTime, getCompiledSources())
 
+// The 3D stage (and three.js with it) loads the first time a
+// project uses depth or moves the camera. Until it is ready, and
+// on devices without WebGL, frames are drawn flat.
+type Stage3dT = typeof import('./engine/scene3d')
+let stage3d: Stage3dT | null = null
+let isStage3dRequested = false
+
+const requestStage3d = (): void => {
+	if (isStage3dRequested) return
+	isStage3dRequested = true
+	import('./engine/scene3d')
+		.then((module) => {
+			stage3d = module
+			markDirty()
+		})
+		.catch(() => {
+			setStatus('The 3D stage failed to load. Depth and camera are drawn flat.', 'warning')
+		})
+}
+
+const drawDeepFrame = (context: CanvasRenderingContext2D, input: FrameInputT, logoLayers: LogoLayersT, width: number, height: number): boolean => {
+	requestStage3d()
+	if (stage3d === null) return false
+	return stage3d.drawFrame3d(context, input, logoLayers, width, height)
+}
+
 const renderFrame = (context: CanvasRenderingContext2D, time: number, logoLayers: LogoLayersT, width: number, height: number): void => {
 	const input = buildFrameInput(time)
-	drawFrame(context, input, logoLayers, width, height)
+	const needsDepth = checkNeedsDepth(input)
+	const didDrawDeep = needsDepth && drawDeepFrame(context, input, logoLayers, width, height)
+	if (!didDrawDeep) drawFrame(context, input, logoLayers, width, height)
 	applyPostEffects(context, getPostAmounts(input.settings), time)
 }
 

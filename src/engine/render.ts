@@ -8,7 +8,7 @@ import { FRAME_HEIGHT, FRAME_WIDTH, LOGO_CENTER_X, LOGO_CENTER_Y, getLayerHeight
 import type { LayerT, LogoLayersT } from './logoLayers'
 import { createRandom } from './rng'
 import { FLICKER_RATE, clamp } from './settings'
-import type { FrameInputT } from './types'
+import type { FrameInputT, LayerT as StackLayerT } from './types'
 
 const STRIP_COUNT = 16
 const MAX_STRIP_SHIFT = 38
@@ -404,12 +404,19 @@ const drawLogoGroup = (context: CanvasRenderingContext2D, layers: LogoLayersT, s
 
 // One full frame, back to front: the background, then every
 // layer in the stack, the logo group among them.
-const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT): void => {
+type SceneOptionsT = {
+	// Only these layers are drawn. Defaults to the whole stack.
+	layers?: StackLayerT[]
+	withBackground?: boolean
+}
+
+const drawScene = (context: CanvasRenderingContext2D, layers: LogoLayersT, state: FrameStateT, options: SceneOptionsT = {}): void => {
 	const palette = getScenePalette(state.input)
-	drawBackground(context, layers, palette, state.frame)
+	const withBackground = options.withBackground ?? true
+	if (withBackground) drawBackground(context, layers, palette, state.frame)
 
 	drawLayerStack(context, {
-		layers: state.input.layers,
+		layers: options.layers ?? state.input.layers,
 		time: state.input.time,
 		signals: state.input.signals,
 		palette: state.input.palette,
@@ -434,4 +441,24 @@ export const drawFrame = (
 	context.globalAlpha = 1
 	context.globalCompositeOperation = 'source-over'
 	drawScene(context, layers, state)
+}
+
+// One depth slice of a frame: the same drawing as drawFrame, but
+// only some layers, and the background only on the base slice.
+// The 3D stage puts each slice on its own sheet.
+export const drawFrameSlice = (
+	context: CanvasRenderingContext2D,
+	input: FrameInputT,
+	layers: LogoLayersT,
+	outputWidth: number,
+	outputHeight: number,
+	slice: { layers: StackLayerT[]; withBackground: boolean }
+): void => {
+	const state = buildFrameState(input, layers)
+	const scaleX = outputWidth / state.frame.width
+	const scaleY = outputHeight / state.frame.height
+	context.setTransform(scaleX, 0, 0, scaleY, 0, 0)
+	context.globalAlpha = 1
+	context.globalCompositeOperation = 'source-over'
+	drawScene(context, layers, state, slice)
 }

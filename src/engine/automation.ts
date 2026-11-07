@@ -34,7 +34,10 @@ export const AUTOMATION_CONTROLS: AutomationControlT[] = [
 	{ key: 'warpAmount', label: 'Warp', min: 0, max: 2, step: 0.05 },
 	{ key: 'scanlineAmount', label: 'Scanlines', min: 0, max: 1, step: 0.05 },
 	{ key: 'noiseAmount', label: 'Film noise', min: 0, max: 1, step: 0.05 },
-	{ key: 'vignetteAmount', label: 'Vignette', min: 0, max: 1, step: 0.05 }
+	{ key: 'vignetteAmount', label: 'Vignette', min: 0, max: 1, step: 0.05 },
+	{ key: 'cameraOrbit', label: 'Camera orbit', min: -60, max: 60, step: 1 },
+	{ key: 'cameraTilt', label: 'Camera tilt', min: -45, max: 45, step: 1 },
+	{ key: 'cameraDistance', label: 'Camera distance', min: 0.5, max: 2, step: 0.01 }
 ]
 
 export const findControl = (key: AutomatableKeyT | null): AutomationControlT | null => {

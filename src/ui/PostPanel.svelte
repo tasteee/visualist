@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { checkIsPostAvailable } from '../engine/post'
+	import CameraPanel from './CameraPanel.svelte'
 	import ControlSlider from './ControlSlider.svelte'
 	import Section from './Section.svelte'
 
@@ -12,6 +13,8 @@
 
 	const lensDescription = $derived(isAvailable ? 'Runs on the GPU over the whole frame, layers included.' : 'Off on this device: WebGL is not available.')
 </script>
+
+<CameraPanel />
 
 <Section title="Lens" description={lensDescription}>
 	<ControlSlider controlKey="bloomAmount" label="Bloom" hint="Accents glow. In dark mode, bright areas glow too." isDisabled={!isAvailable} />

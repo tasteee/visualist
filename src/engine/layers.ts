@@ -43,7 +43,8 @@ export const LAYER_PARAMS: LayerParamSpecT[] = [
 	{ key: 'y', label: 'Position Y', min: -60, max: 60, step: 0.5, suffix: '%' },
 	{ key: 'scale', label: 'Scale', min: 0.05, max: 3, step: 0.01, suffix: '×' },
 	{ key: 'rotation', label: 'Rotation', min: -180, max: 180, step: 1, suffix: '°' },
-	{ key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, suffix: '' }
+	{ key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, suffix: '' },
+	{ key: 'depth', label: 'Depth', min: 0, max: 100, step: 1, suffix: '%' }
 ]
 
 export const FX_SPECS: FxSpecT[] = [
@@ -104,7 +105,7 @@ export const findLayerParam = (key: LayerParamKeyT): LayerParamSpecT => {
 	return spec
 }
 
-const createIdentityTransform = (): LayerTransformT => ({ x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 })
+const createIdentityTransform = (): LayerTransformT => ({ x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, depth: 0 })
 
 const createBaseLayer = (kind: LayerKindT, name: string): LayerT => ({
 	id: crypto.randomUUID(),
