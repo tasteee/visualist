@@ -24,10 +24,13 @@
 	const control = $derived(lane === undefined ? null : getTargetControl(lane.target, layerStore.layers as LayerT[]))
 	const isReady = $derived(lane !== undefined && point !== undefined && control !== null)
 
-	const controlValue = $derived(control === null || point === undefined ? 0 : Number(toControlValue(control, point.value).toFixed(2)))
+	const controlValue = $derived(control === null || point === undefined ? 0 : Number(toControlValue(control, point.value).toFixed(3)))
 	const title = $derived(control === null ? 'Point' : control.label)
 	const valueMin = $derived(control === null ? 0 : control.min)
 	const valueMax = $derived(control === null ? 1 : control.max)
+	// Each control steps by its own amount: scale by 0.1, opacity by
+	// 0.01, position by 1.
+	const valueStep = $derived(control === null ? 0.01 : control.step)
 
 	$effect(() => {
 		if (!isReady) props.onclose()
@@ -86,7 +89,7 @@
 
 		<div class="automation-popover-fields">
 			<z-field label="Value">
-				<z-number-input value={controlValue} min={valueMin} max={valueMax} step={0.01} isFullWidth onchange={handleValueChange}></z-number-input>
+				<z-number-input value={controlValue} min={valueMin} max={valueMax} step={valueStep} isFullWidth onchange={handleValueChange}></z-number-input>
 			</z-field>
 			<z-field label="Time (s)">
 				<z-number-input value={Number(point.time.toFixed(2))} min={0} max={app.duration} step={0.1} isFullWidth onchange={handleTimeChange}></z-number-input>

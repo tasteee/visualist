@@ -408,35 +408,10 @@
 	position: absolute;
 	top: var(--lane-y);
 	left: var(--lane-x);
-	z-index: 2;
-	padding: 0 var(--spacing-2);
-	border-radius: var(--radius-sm);
-	background: var(--foreground);
-	color: var(--bg);
-	font-size: var(--font-size-0);
-	font-variant-numeric: tabular-nums;
-	font-weight: 600;
-	line-height: 1.6;
-	white-space: nowrap;
-	pointer-events: none;
+	z-index: 3;
 	transform: translate(-50%, calc(-100% - var(--spacing-3)));
 }
 
 .automation-lane-pill.isBelow {
 	transform: translate(-50%, var(--spacing-3));
-}
-
-/* Selection box */
-
-.automation-lane-marquee {
-	position: absolute;
-	top: var(--lane-y);
-	left: var(--lane-x);
-	z-index: 1;
-	width: var(--marquee-width);
-	height: var(--marquee-height);
-	border: 1px solid var(--lane-tone);
-	border-radius: var(--radius-sm);
-	background: color-mix(in oklab, var(--lane-tone) 12%, transparent);
-	pointer-events: none;
 }

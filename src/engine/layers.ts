@@ -39,9 +39,11 @@ export type OptionT<ValueT extends string> = {
 export const LOGO_LAYER_ID = 'logo'
 
 export const LAYER_PARAMS: LayerParamSpecT[] = [
-	{ key: 'x', label: 'Position X', min: -60, max: 60, step: 0.5, suffix: '%' },
-	{ key: 'y', label: 'Position Y', min: -60, max: 60, step: 0.5, suffix: '%' },
-	{ key: 'scale', label: 'Scale', min: 0.05, max: 3, step: 0.01, suffix: '×' },
+	// Position is a percent of the frame from its center: 0 is centered,
+	// 100 puts the layer's center one whole frame away.
+	{ key: 'x', label: 'Position X', min: -100, max: 100, step: 1, suffix: '%' },
+	{ key: 'y', label: 'Position Y', min: -100, max: 100, step: 1, suffix: '%' },
+	{ key: 'scale', label: 'Scale', min: 0.05, max: 3, step: 0.1, suffix: '×' },
 	{ key: 'rotation', label: 'Rotation', min: -180, max: 180, step: 1, suffix: '°' },
 	{ key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, suffix: '' },
 	{ key: 'depth', label: 'Depth', min: 0, max: 100, step: 1, suffix: '%' },
@@ -123,7 +125,8 @@ const createBaseLayer = (kind: LayerKindT, name: string): LayerT => ({
 	text: null,
 	assetId: null,
 	svgColor: 'original',
-	volume: 1
+	volume: 1,
+	audioOffset: 0
 })
 
 export const createLogoLayer = (): LayerT => {

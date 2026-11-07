@@ -41,12 +41,14 @@
 	import { getRowHeightCss, toggleRowFolded, checkIsRowFolded } from '../rowLayout.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
 	import { checkIsLaneSelected, pickLane, pickPoint, pickPointsInBox, readModifiers, selectPlacedPoint } from '../selection.svelte'
-	import { app } from '../store.svelte'
+	import type { PickModifiersT } from '../selection.svelte'
+	import { app, seekTo } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import { checkIsPrimaryModifierHeld } from './focus'
 	import RowResizer from './RowResizer.svelte'
 	import { rowHeader } from './rowHeader'
 	import './AutomationLane.css'
+	import './ValuePill.css'
 
 	type AutomationLanePropsT = {
 		lane: AutomationLaneT
@@ -72,9 +74,15 @@
 		plotHeight: number
 		starts: Map<string, PlotPositionT>
 		hasMoved: boolean
+		// Shift, Cmd or Ctrl on the press picks on button-up, when
+		// the press turns out to be a click and not a drag.
+		pendingPick: PickModifiersT | null
+		// The value change last applied, and the one Cmd or Ctrl holds.
+		lastValueDelta: number
+		heldValueDelta: number | null
 	}
 
-	// A press on empty plot. A click places a point when the
+	// A press on empty plot. A click sets the playhead there when the
 	// button comes up. A drag draws a selection box instead.
 	type MarqueeT = {
 		startX: number
@@ -194,10 +202,11 @@
 	const pillPointId = $derived(pointDrag === null ? hoveredPointId : pointDrag.anchorPointId)
 	const pillPoint = $derived(points.find((point) => point.id === pillPointId))
 
-	const pillLabel = $derived.by(() => {
+	const pillTimeLabel = $derived(pillPoint === undefined ? '' : formatPreciseTime(pillPoint.time))
+
+	const pillValueLabel = $derived.by(() => {
 		if (pillPoint === undefined || control === null) return ''
-		const value = formatControlValue(toControlValue(control, pillPoint.value))
-		return `${value} · ${formatPreciseTime(pillPoint.time)}`
+		return formatControlValue(toControlValue(control, pillPoint.value))
 	})
 
 	const isPillBelow = $derived(pillPoint !== undefined && pillPoint.value > PILL_FLIP_VALUE)
@@ -247,6 +256,15 @@
 	const readSnappedPosition = (event: PointerEvent): PlotPositionT => {
 		const raw = readRawPosition(event.clientX, event.clientY)
 		return { time: snapTime(raw.time, event), value: raw.value }
+	}
+
+	// While a point is dragged, Shift locks its value, so it does not
+	// also free the time from the grid.
+	const readDragPosition = (event: PointerEvent): PlotPositionT => {
+		const raw = readRawPosition(event.clientX, event.clientY)
+		const shouldSnap = timeline.isSnapping
+		const time = shouldSnap ? clamp(snapToGrid(raw.time, props.grid), 0, duration) : raw.time
+		return { time, value: raw.value }
 	}
 
 	const readPointId = (target: EventTarget | null): string | null => {
@@ -305,21 +323,26 @@
 
 	// ---- Plot ----------------------------------------------
 
-	const startPointDrag = (event: PointerEvent, point: AutomationPointT) => {
+	const startPointDrag = (event: PointerEvent, point: AutomationPointT, pendingPick: PickModifiersT | null) => {
 		if (plot === undefined) return
 		const isAlreadySelected = checkIsSelectedPoint(point)
-		if (!isAlreadySelected) pickPoint(props.lane.id, point.id, { isRange: false, isToggle: false })
+		const isPlainPress = pendingPick === null
+		if (isPlainPress && !isAlreadySelected) pickPoint(props.lane.id, point.id, { isRange: false, isToggle: false })
 		const track = event.currentTarget as HTMLElement
 		track.setPointerCapture(event.pointerId)
 		const bounds = plot.getBoundingClientRect()
+		const movingIds = isAlreadySelected || isPlainPress ? getSelectedIds() : [point.id]
 		pointDrag = {
 			anchorPointId: point.id,
 			anchorStartTime: point.time,
 			startX: event.clientX,
 			startY: event.clientY,
 			plotHeight: bounds.height,
-			starts: captureStarts(getSelectedIds()),
-			hasMoved: false
+			starts: captureStarts(movingIds),
+			hasMoved: false,
+			pendingPick,
+			lastValueDelta: 0,
+			heldValueDelta: null
 		}
 	}
 
@@ -328,8 +351,7 @@
 		if (point === undefined) return
 		const modifiers = readModifiers(event)
 		const isPicking = modifiers.isRange || modifiers.isToggle
-		if (isPicking) return pickPoint(props.lane.id, pointId, modifiers)
-		startPointDrag(event, point)
+		startPointDrag(event, point, isPicking ? modifiers : null)
 	}
 
 	const startBend = (event: PointerEvent) => {
@@ -387,6 +409,21 @@
 		}))
 	}
 
+	// Shift locks the value to what it was when the drag began, so the
+	// point only moves in time. Cmd or Ctrl locks it to what it is when
+	// the key goes down, so it can be placed in time at a chosen height.
+	const resolveValueDelta = (event: PointerEvent, activeDrag: PointDragT, freeDelta: number): number => {
+		const isShift = event.shiftKey
+		const isControl = event.ctrlKey || event.metaKey
+		if (isShift) return 0
+		if (!isControl) {
+			activeDrag.heldValueDelta = null
+			return freeDelta
+		}
+		if (activeDrag.heldValueDelta === null) activeDrag.heldValueDelta = activeDrag.lastValueDelta
+		return activeDrag.heldValueDelta
+	}
+
 	const moveGroup = (event: PointerEvent, activeDrag: PointDragT) => {
 		const dx = event.clientX - activeDrag.startX
 		const dy = event.clientY - activeDrag.startY
@@ -394,9 +431,11 @@
 		if (!hasStartedMoving) return
 		if (!activeDrag.hasMoved) recordHistory()
 		activeDrag.hasMoved = true
-		const position = readSnappedPosition(event)
+		const position = readDragPosition(event)
 		const timeDelta = position.time - activeDrag.anchorStartTime
-		const valueDelta = -dy / activeDrag.plotHeight
+		const freeDelta = -dy / activeDrag.plotHeight
+		const valueDelta = resolveValueDelta(event, activeDrag, freeDelta)
+		activeDrag.lastValueDelta = valueDelta
 		const moves = buildMoves(activeDrag, timeDelta, valueDelta)
 		const isMovingLater = timeDelta > 0
 		const orderedMoves = isMovingLater ? [...moves].reverse() : moves
@@ -446,11 +485,20 @@
 		pickPointsInBox(props.lane.id, boxedIds, activeMarquee.isAdditive)
 	}
 
-	// A click on empty plot places a point on button-up, level
-	// with the one before it. The pointer's height does not set
-	// the value.
-	const placePoint = (activeMarquee: MarqueeT) => {
-		const time = activeMarquee.clickPosition.time
+	// A click on empty plot sets the playhead there.
+	const seekToClick = (activeMarquee: MarqueeT) => {
+		seekTo(activeMarquee.clickPosition.time)
+	}
+
+	// A double-click on empty plot places a point, level with the one
+	// before it. The pointer's height does not set the value.
+	const placePointAt = (event: MouseEvent) => {
+		if (plot === undefined) return
+		const bounds = plot.getBoundingClientRect()
+		const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
+		const rawTime = clamp(ratioToTime(ratio, view), 0, duration)
+		const shouldSnap = timeline.isSnapping && !event.shiftKey
+		const time = shouldSnap ? clamp(snapToGrid(rawTime, props.grid), 0, duration) : rawTime
 		const value = getValueForNewPoint(props.lane.id, time)
 		const pointId = addPoint(props.lane.id, time, value)
 		if (pointId === null) return
@@ -472,13 +520,14 @@
 		marquee = null
 		if (activeDrag !== null) {
 			const wasClick = !activeDrag.hasMoved
-			if (wasClick) pickPoint(props.lane.id, activeDrag.anchorPointId, { isRange: false, isToggle: false })
+			const clickModifiers = activeDrag.pendingPick ?? { isRange: false, isToggle: false }
+			if (wasClick) pickPoint(props.lane.id, activeDrag.anchorPointId, clickModifiers)
 			return
 		}
 		if (activeBend !== null) return commitBend(activeBend)
 		if (activeMarquee === null) return
 		if (activeMarquee.isActive) return finishMarquee(activeMarquee)
-		placePoint(activeMarquee)
+		seekToClick(activeMarquee)
 	}
 
 	const handleTrackCancel = () => {
@@ -489,9 +538,13 @@
 
 	const handleTrackDoubleClick = (event: MouseEvent) => {
 		if (isFolded) return toggleRowFolded(row, [])
-		const pointId = readPointId(event.target)
+		// The track captured the pointer, so the event's target is the
+		// track. What is under the cursor says whether a point is hit.
+		const pointId = readPointId(document.elementFromPoint(event.clientX, event.clientY))
 		const isOnPoint = pointId !== null
 		if (isOnPoint) return deletePoint(props.lane.id, pointId)
+		const canEdit = hasControl && duration > 0
+		if (!event.altKey && canEdit) return placePointAt(event)
 		if (!event.altKey || plot === undefined) return
 		const bounds = plot.getBoundingClientRect()
 		const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
@@ -617,7 +670,10 @@
 				{/if}
 
 				{#if pillPoint !== undefined}
-					<span class="automation-lane-pill" class:isBelow={isPillBelow} style:--lane-x="{getPointX(pillPoint)}%" style:--lane-y="{getPointY(pillPoint)}%">{pillLabel}</span>
+					<span class="value-pill automation-lane-pill" class:isBelow={isPillBelow} style:--lane-x="{getPointX(pillPoint)}%" style:--lane-y="{getPointY(pillPoint)}%">
+						<span class="value-pill-time">{pillTimeLabel}</span>
+						<span class="value-pill-value">{pillValueLabel}</span>
+					</span>
 				{/if}
 			{/if}
 		</div>
@@ -633,7 +689,7 @@
 		{/if}
 
 		{#if shouldShowHint}
-			<span class="automation-lane-hint">Click to place · Drag to select · Alt-drag a segment to curve · Right-click the row for settings</span>
+			<span class="automation-lane-hint">Double-click to place a point · Click to set the playhead · Drag to select · Alt-drag a segment to curve</span>
 		{/if}
 		{#if !hasControl}
 			<span class="automation-lane-empty">Choose a control in the lane settings</span>

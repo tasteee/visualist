@@ -1,0 +1,34 @@
+/* The readout above a point or impulse: a fully rounded pill, time
+   on the left, value on the right, a different shade on each side
+   with a divider between them. */
+.value-pill {
+	display: inline-flex;
+	align-items: stretch;
+	overflow: hidden;
+	border: 1px solid var(--color-neutral-5);
+	border-radius: 999px;
+	background: var(--popover);
+	color: var(--popover-foreground);
+	font-size: var(--font-size-1);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-weight-semibold);
+	line-height: 1;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.value-pill-time,
+.value-pill-value {
+	padding: var(--spacing-1) var(--spacing-3);
+}
+
+.value-pill-time {
+	background: var(--color-neutral-3);
+	color: var(--muted);
+}
+
+.value-pill-value {
+	border-left: 1px solid var(--color-neutral-5);
+	background: var(--color-neutral-1);
+	color: var(--foreground);
+}

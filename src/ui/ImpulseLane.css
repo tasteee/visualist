@@ -326,20 +326,10 @@
 
 .impulse-lane-pill {
 	position: absolute;
-	top: 0;
+	top: var(--spacing-1);
 	left: var(--impulse-x);
-	z-index: 2;
-	padding: 0 var(--spacing-2);
-	border-radius: var(--radius-sm);
-	background: var(--foreground);
-	color: var(--bg);
-	font-size: var(--font-size-0);
-	font-variant-numeric: tabular-nums;
-	font-weight: var(--font-weight-semibold);
-	line-height: 1.6;
-	white-space: nowrap;
-	pointer-events: none;
-	transform: translate(var(--spacing-2), calc(-1 * var(--spacing-2)));
+	z-index: 3;
+	transform: translateX(-50%);
 }
 
 /* Overlays */

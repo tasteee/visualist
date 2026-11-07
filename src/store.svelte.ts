@@ -438,6 +438,42 @@ const audioLayerBuffers = new Map<string, AudioBuffer>()
 
 export const getAudioLayerBuffer = (layerId: string): AudioBuffer | undefined => audioLayerBuffers.get(layerId)
 
+// A duplicate shares its original's decoded audio.
+export const shareAudioLayerBuffer = (fromLayerId: string, toLayerId: string): void => {
+	const buffer = audioLayerBuffers.get(fromLayerId)
+	if (buffer !== undefined) audioLayerBuffers.set(toLayerId, buffer)
+}
+
+// A coarse picture of a buffer for drawing: the loudest sample in
+// each slice. Built once per buffer.
+export type BufferPeaksT = {
+	values: Float32Array
+	perSecond: number
+}
+
+const PEAKS_PER_SECOND = 100
+const peaksByBuffer = new WeakMap<AudioBuffer, BufferPeaksT>()
+
+export const getAudioLayerPeaks = (layerId: string): BufferPeaksT | undefined => {
+	const buffer = audioLayerBuffers.get(layerId)
+	if (buffer === undefined) return undefined
+	const cached = peaksByBuffer.get(buffer)
+	if (cached !== undefined) return cached
+	const samples = buffer.getChannelData(0)
+	const sliceLength = Math.max(1, Math.floor(buffer.sampleRate / PEAKS_PER_SECOND))
+	const values = new Float32Array(Math.ceil(samples.length / sliceLength))
+	for (let index = 0; index < values.length; index++) {
+		const start = index * sliceLength
+		const end = Math.min(samples.length, start + sliceLength)
+		let peak = 0
+		for (let sample = start; sample < end; sample++) peak = Math.max(peak, Math.abs(samples[sample]))
+		values[index] = peak
+	}
+	const peaks = { values, perSecond: buffer.sampleRate / sliceLength }
+	peaksByBuffer.set(buffer, peaks)
+	return peaks
+}
+
 // A hidden audio layer is muted.
 const syncExtraTracks = (): void => {
 	const tracks = []
@@ -445,7 +481,7 @@ const syncExtraTracks = (): void => {
 		const isAudio = layer.kind === 'audio'
 		const buffer = isAudio ? audioLayerBuffers.get(layer.id) : undefined
 		if (!isAudio || buffer === undefined || !layer.isVisible) continue
-		tracks.push({ buffer, startTime: layer.startTime, endTime: layer.endTime, volume: layer.volume })
+		tracks.push({ buffer, startTime: layer.startTime, endTime: layer.endTime, volume: layer.volume, offset: layer.audioOffset })
 	}
 	setExtraTracks(tracks)
 }
@@ -793,7 +829,7 @@ const startWatchers = (): void => {
 		// from where it is, so the change is heard at once.
 		$effect(() => {
 			const audioLayers = layerStore.layers.filter((layer) => layer.kind === 'audio')
-			const mixKey = audioLayers.map((layer) => [layer.id, layer.startTime, layer.endTime, layer.volume, layer.isVisible].join(':')).join('|')
+			const mixKey = audioLayers.map((layer) => [layer.id, layer.startTime, layer.endTime, layer.volume, layer.audioOffset, layer.isVisible].join(':')).join('|')
 			void mixKey
 			untrack(restartMixIfPlaying)
 		})

@@ -56,6 +56,8 @@ export type ExtraTrackT = {
 	startTime: number
 	endTime: number | null
 	volume: number
+	// Where in the file the clip begins.
+	offset: number
 }
 
 let extraTracks: ExtraTrackT[] = []
@@ -80,7 +82,7 @@ const stopExtras = (): void => {
 }
 
 const startExtraTrack = (context: AudioContext, track: ExtraTrackT, position: number): void => {
-	const naturalEnd = track.startTime + track.buffer.duration
+	const naturalEnd = track.startTime + (track.buffer.duration - track.offset)
 	const trackEnd = Math.min(track.endTime ?? Number.POSITIVE_INFINITY, naturalEnd)
 	const isOver = position >= trackEnd
 	if (isOver) return
@@ -92,7 +94,7 @@ const startExtraTrack = (context: AudioContext, track: ExtraTrackT, position: nu
 	gain.connect(context.destination)
 	if (extraTap !== null) connectTapWithFades(context, gain, extraTap, extraClip)
 	const delay = Math.max(0, track.startTime - position)
-	const bufferOffset = Math.max(0, position - track.startTime)
+	const bufferOffset = Math.max(0, position - track.startTime) + track.offset
 	const playLength = trackEnd - Math.max(track.startTime, position)
 	source.start(context.currentTime + delay, bufferOffset, playLength)
 	extraSources.push(source)

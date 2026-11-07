@@ -67,6 +67,14 @@ browsers keep those cached.
   Audio added after that becomes a layer, mixed in, with its own
   start, end and volume. Any audio can find its tempo from its
   settings, and the project only takes it if you say so.
+- **Plots**: click sets the playhead, double-click places a point or
+  impulse, double-click on one deletes it. Shift while dragging locks
+  the value (time only). Cmd/Ctrl locks the value it has when the key
+  goes down. Right-click a point or impulse to type its time and value.
+  Up and down step the selected values by each control's own step.
+- **Audio clips**: drag the bar on top to move a clip or select it,
+  drag the left or right edge to trim. With a clip selected, **0**
+  deactivates it, Cmd/Ctrl+C, V and D copy, paste and duplicate it.
 - **Right-click a row header**, or press its gear, for that row's
   inspector: name, color and its controls.
 - **Pinch a header** to change the row's height. Drag a row border past

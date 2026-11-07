@@ -9,7 +9,9 @@
 	import { checkIsTimeVisible, timeToPercent, timeToRatio } from '../engine/timeline'
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
 	import type { LayerKindT } from '../engine/types'
-	import { app } from '../store.svelte'
+	import { clamp } from '../engine/settings'
+	import { ratioToTime, snapToGrid } from '../engine/timeline'
+	import { app, seekTo } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
 	import { openRowInspector } from '../rowInspector.svelte'
@@ -75,6 +77,21 @@
 	const isDropBefore = $derived(props.dropEdge === 'before')
 	const isDropAfter = $derived(props.dropEdge === 'after')
 
+	// A click on empty space in a layer's row sets the playhead there.
+	// Clips and their handles keep their own clicks.
+	const handleTrackClick = (event: MouseEvent) => {
+		const isSong = props.kind === 'song'
+		const target = event.target as Element
+		const isOnClip = target.closest('.layer-clip, [data-clip-control]') !== null
+		if (isSong || isOnClip) return
+		const bounds = event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : null
+		if (bounds === null) return
+		const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
+		const rawTime = clamp(ratioToTime(ratio, view), 0, app.duration)
+		const shouldSnap = timeline.isSnapping && !event.shiftKey
+		seekTo(shouldSnap ? snapToGrid(rawTime, props.grid) : rawTime)
+	}
+
 	const handleInspect = (anchor: HTMLElement) => openRowInspector(inspectorKind, props.rowId, anchor)
 
 	const handleReorder = (event: PointerEvent) => props.onreorderstart?.(event)
@@ -139,7 +156,7 @@
 		</z-tooltip>
 	</div>
 
-	<div class="timeline-layer-track" data-track="layer">
+	<div class="timeline-layer-track" data-track="layer" role="presentation" onclick={handleTrackClick}>
 		{#if hasOverlay}
 			<svg class="timeline-layer-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
 				{#each barLines as line (line.time)}

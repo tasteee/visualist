@@ -21,7 +21,7 @@
 		toggleAllCollapsed,
 		undo
 	} from '../automation.svelte'
-	import { GLOBAL_GROUP_ID } from '../engine/automation'
+	import { GLOBAL_GROUP_ID, getTargetControl } from '../engine/automation'
 	import { getOutputLatency, getPlaybackTime } from '../engine/audio'
 	import { snapToStep } from '../engine/impulses'
 	import { getBandSourceId } from '../engine/sources'
@@ -34,6 +34,7 @@
 	import { toggleRowFolded } from '../rowLayout.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
 	import { checkHasSelection, clearSelection, deleteSelection, pickLayer, readModifiers } from '../selection.svelte'
+	import { copySelectedLayers, duplicateSelectedLayers, pasteLayers, toggleSelectedLayersActive } from '../layerEdit.svelte'
 	import { nudgeSelectedLayers } from '../stage.svelte'
 	import {
 		addEmptyTrack,
@@ -48,7 +49,7 @@
 	import { pickColorForId } from '../engine/palette'
 	import type { ColorNameT } from '../engine/palette'
 	import { openGridMenu } from '../timelineMenus.svelte'
-	import { app, getAnalysis, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
+	import { app, getAnalysis, getAudioLayerBuffer, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
 	import type { ImpulseMoveT } from '../sources.svelte'
 	import {
 			DEFAULT_HEADER_WIDTH,
@@ -68,10 +69,12 @@
 		zoomIn,
 		zoomOut
 	} from '../timeline.svelte'
+	import AudioClip from './AudioClip.svelte'
 	import AutomationLane from './AutomationLane.svelte'
 	import AutomationPopover from './AutomationPopover.svelte'
 	import BandLane from './BandLane.svelte'
 	import ImpulseLane from './ImpulseLane.svelte'
+	import ImpulsePopover from './ImpulsePopover.svelte'
 	import TimelineLayer from './TimelineLayer.svelte'
 	import LayerClip from './LayerClip.svelte'
 	import OverviewBar from './OverviewBar.svelte'
@@ -87,6 +90,13 @@
 	type PointEditorT = {
 		laneId: string
 		pointId: string
+		anchorX: number
+		anchorY: number
+	}
+
+	type ImpulseEditorT = {
+		trackId: string
+		impulseId: string
 		anchorX: number
 		anchorY: number
 	}
@@ -125,6 +135,7 @@
 	let dock: HTMLDivElement
 	let frame: HTMLDivElement
 	let editor = $state<PointEditorT | null>(null)
+	let impulseEditor = $state<ImpulseEditorT | null>(null)
 	let patternEditor = $state<PatternEditorT | null>(null)
 	let resizeDrag: ResizeDragT | null = null
 	let reorder = $state<ReorderDragT | null>(null)
@@ -353,11 +364,15 @@
 		if (isDeleteKey) return handleDeleteKey(event)
 		const isSelectAll = isCommand && key === 'a'
 		if (isSelectAll) return handleSelectAllKey(event)
+		if (isCommand && !event.shiftKey && !event.altKey) {
+			const didHandle = handleClipboardKey(event, key)
+			if (didHandle) return
+		}
 		if (key.startsWith('arrow')) return handleArrowKey(event, key)
 		if (isCommand || event.altKey) return
 		if (key === '=' || key === '+') return zoomIn()
 		if (key === '-' || key === '_') return zoomOut()
-		if (key === '0') return fitView()
+		if (key === '0') return handleZeroKey(event)
 		if (key === 'f') return toggleFollowing()
 		if (key === 's') return toggleSnapping()
 		if (key === 'l') return toggleLoop()
@@ -373,6 +388,36 @@
 		if (!hadSelection) return
 		event.preventDefault()
 		clearSelection()
+	}
+
+	// Cmd/Ctrl with C, V or D acts on the selected layers.
+	const handleClipboardKey = (event: KeyboardEvent, key: string): boolean => {
+		if (key === 'c') {
+			const didCopy = copySelectedLayers()
+			if (didCopy) event.preventDefault()
+			return didCopy
+		}
+		if (key === 'v') {
+			const didPaste = pasteLayers(app.currentTime)
+			if (didPaste) event.preventDefault()
+			return didPaste
+		}
+		if (key === 'd') {
+			const didDuplicate = duplicateSelectedLayers(getFileLength)
+			if (didDuplicate) event.preventDefault()
+			return didDuplicate
+		}
+		return false
+	}
+
+	const getFileLength = (layerId: string): number => getAudioLayerBuffer(layerId)?.duration ?? 0
+
+	// Zero deactivates the selected layers, like Ableton. With nothing
+	// selected it fits the timeline.
+	const handleZeroKey = (event: KeyboardEvent) => {
+		const didToggle = toggleSelectedLayersActive()
+		if (didToggle) return event.preventDefault()
+		fitView()
 	}
 
 	const handleDeleteKey = (event: KeyboardEvent) => {
@@ -402,6 +447,8 @@
 	// and Right step the playhead by one visible grid division.
 
 	const POINT_VALUE_STEP = 0.05
+	const IMPULSE_STEP = 0.01
+	const IMPULSE_FINE_STEP = 0.001
 	const FINE_VALUE_STEP = 0.01
 	const FINE_TIME_STEP = 0.01
 	const LAYER_STEP_PERCENT = 1
@@ -432,7 +479,7 @@
 		const hasImpulses = track !== undefined && impulseIds.length > 0
 		if (!hasImpulses) return false
 		const timeDelta = direction.horizontal * getTimeNudge(event)
-		const strengthStep = event.shiftKey ? FINE_VALUE_STEP : POINT_VALUE_STEP
+		const strengthStep = event.shiftKey ? IMPULSE_FINE_STEP : IMPULSE_STEP
 		const strengthDelta = direction.vertical * strengthStep
 		const selected = track.impulses.filter((impulse) => impulseIds.includes(impulse.id))
 		const moves: ImpulseMoveT[] = selected.map((impulse) => ({ impulseId: impulse.id, time: impulse.time + timeDelta, strength: impulse.strength + strengthDelta }))
@@ -448,7 +495,10 @@
 		const hasPoints = lane !== undefined && pointIds.length > 0
 		if (!hasPoints) return false
 		const timeDelta = direction.horizontal * getTimeNudge(event)
-		const valueStep = event.shiftKey ? FINE_VALUE_STEP : POINT_VALUE_STEP
+		// A point steps by its control's own step, in the control's units.
+		const control = getTargetControl(lane.target, layerStore.layers as LayerT[])
+		const controlStep = control === null ? POINT_VALUE_STEP : control.step / (control.max - control.min)
+		const valueStep = event.shiftKey ? controlStep / 10 : controlStep
 		const valueDelta = direction.vertical * valueStep
 		const selected = lane.points.filter((point) => pointIds.includes(point.id))
 		const moves = selected.map((point) => ({ pointId: point.id, time: point.time + timeDelta, value: point.value + valueDelta }))
@@ -547,6 +597,18 @@
 
 	const closeEditor = () => {
 		editor = null
+	}
+
+	const openImpulseEditor = (trackId: string, impulseId: string, anchor: HTMLElement) => {
+		const dockBounds = dock.getBoundingClientRect()
+		const anchorBounds = anchor.getBoundingClientRect()
+		const anchorX = anchorBounds.left + anchorBounds.width / 2 - dockBounds.left
+		const anchorY = anchorBounds.top - dockBounds.top
+		impulseEditor = { trackId, impulseId, anchorX, anchorY }
+	}
+
+	const closeImpulseEditor = () => {
+		impulseEditor = null
 	}
 
 	const handleAddSettingLane = () => {
@@ -715,7 +777,7 @@
 			</TimelineLayer>
 			{#if !isTriggersCollapsed && hasTriggers}
 				{#each sources.tracks as track (track.id)}
-					<ImpulseLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} />
+					<ImpulseLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} onedit={openImpulseEditor} />
 				{/each}
 				{#each sources.bands as band (band.id)}
 					<BandLane {band} compiled={findCompiledBand(band.id)} {grid} siblingTrackIds={trackIdsInOrder} />
@@ -764,7 +826,11 @@
 					onreorderkey={(direction) => moveLayer(layer.id, direction)}
 				>
 					{#snippet track()}
-						<LayerClip {layer} {grid} {isSelected} />
+						{#if layer.kind === 'audio'}
+							<AudioClip {layer} {grid} {isSelected} />
+						{:else}
+							<LayerClip {layer} {grid} {isSelected} />
+						{/if}
 					{/snippet}
 				</TimelineLayer>
 				{#if !isCollapsed}
@@ -800,6 +866,10 @@
 	{/if}
 
 	<RowInspector />
+
+	{#if impulseEditor !== null}
+		<ImpulsePopover trackId={impulseEditor.trackId} impulseId={impulseEditor.impulseId} anchorX={impulseEditor.anchorX} anchorY={impulseEditor.anchorY} onclose={closeImpulseEditor} />
+	{/if}
 
 	{#if editor !== null}
 		<AutomationPopover laneId={editor.laneId} pointId={editor.pointId} anchorX={editor.anchorX} anchorY={editor.anchorY} onclose={closeEditor} />

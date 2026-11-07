@@ -318,6 +318,8 @@ export type LayerT = {
 	text: TextContentT | null
 	assetId: string | null
 	svgColor: SvgColorT
-	// Audio layers only: how loud the layer is in the mix.
+	// Audio layers only: how loud the layer is in the mix, and how far
+	// into the file the clip begins (trimming its start moves this).
 	volume: number
+	audioOffset: number
 }

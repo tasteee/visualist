@@ -38,7 +38,8 @@ type AutomationStateT = {
 }
 
 const HISTORY_LIMIT = 120
-const STORAGE_KEY = 'vink.automation.v1'
+const STORAGE_KEY = 'vink.automation.v2'
+const LEGACY_STORAGE_KEY = 'vink.automation.v1'
 
 const checkIsTargetShape = (target: unknown): target is LaneTargetT => {
 	const isObject = typeof target === 'object' && target !== null
@@ -55,10 +56,34 @@ const checkIsLaneShape = (lane: Partial<AutomationLaneT>): boolean => {
 
 // Lanes are saved with the layers, so layer lanes come back
 // with the layers they drive.
+// Position used to run from -60 to 60 and now runs from -100 to 100.
+// Saved lanes keep the same positions by rescaling their points.
+const OLD_POSITION_LIMIT = 60
+const NEW_POSITION_LIMIT = 100
+
+const migratePositionLane = (lane: AutomationLaneT): AutomationLaneT => {
+	const target = lane.target
+	const isPosition = target.kind === 'layer' && (target.param === 'x' || target.param === 'y')
+	if (!isPosition) return lane
+	const points = lane.points.map((point) => {
+		const oldValue = (point.value * 2 - 1) * OLD_POSITION_LIMIT
+		return { ...point, value: (oldValue / NEW_POSITION_LIMIT + 1) / 2 }
+	})
+	return { ...lane, points }
+}
+
+const readLegacyLanes = (): AutomationLaneT[] | null => {
+	const stored = window.localStorage.getItem(LEGACY_STORAGE_KEY)
+	if (stored === null) return null
+	const parsed = JSON.parse(stored) as Partial<AutomationLaneT>[]
+	if (!Array.isArray(parsed)) return null
+	return (parsed.filter(checkIsLaneShape) as AutomationLaneT[]).map(migratePositionLane)
+}
+
 const loadLanes = (): AutomationLaneT[] => {
 	try {
 		const stored = window.localStorage.getItem(STORAGE_KEY)
-		if (stored === null) return []
+		if (stored === null) return readLegacyLanes() ?? []
 		const parsed = JSON.parse(stored) as Partial<AutomationLaneT>[]
 		const isList = Array.isArray(parsed)
 		if (!isList) return []
