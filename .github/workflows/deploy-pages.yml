@@ -1,8 +1,13 @@
 name: Deploy to GitHub Pages
 
+# Every merge to main builds the app and publishes it to
+# https://tasteee.github.io/visualist/. Docs-only changes skip it.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
   workflow_dispatch:
 
 permissions:
@@ -10,9 +15,11 @@ permissions:
   pages: write
   id-token: write
 
+# One deploy at a time. A newer push waits for the running deploy
+# instead of cancelling it halfway through publishing.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -31,9 +38,25 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # Installs the built @tasteee/zest from the zest repo's build branch.
+      - run: pnpm install --frozen-lockfile --prefer-offline
 
+      # svelte-check, then a production vite build into dist/.
       - run: pnpm build
+
+      - name: Report bundle sizes
+        run: |
+          {
+            echo "### Bundle (base: $VITE_BASE_PATH)"
+            echo
+            echo "| File | Size | Gzip |"
+            echo "| --- | ---: | ---: |"
+            for file in dist/assets/*.js dist/assets/*.css; do
+              size=$(stat -c %s "$file")
+              gzipped=$(gzip -9 -c "$file" | wc -c)
+              echo "| $(basename "$file") | $((size / 1024)) KB | $((gzipped / 1024)) KB |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/configure-pages@v5
 

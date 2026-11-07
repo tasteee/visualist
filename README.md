@@ -19,8 +19,26 @@ pnpm build        # svelte-check + vite build to dist/
 `pnpm update @tasteee/zest` to pick up a newer build. Once it's published,
 swap the specifier in `package.json` for a version range.
 
-Pushes to `main` deploy to GitHub Pages at `/visualist/`
-(override with the `PAGES_BASE_PATH` repository variable).
+## Deploys
+
+Every merge to `main` builds the app and publishes it to
+[tasteee.github.io/visualist](https://tasteee.github.io/visualist/)
+(`.github/workflows/deploy-pages.yml`). Changes to Markdown files only
+skip the deploy. The run summary lists every bundle file with its gzip
+size. To serve from another path (a custom domain, say), set the
+`PAGES_BASE_PATH` repository variable, e.g. `/`.
+
+To check a production build exactly as Pages serves it:
+
+```sh
+VITE_BASE_PATH=/visualist/ pnpm build
+VITE_BASE_PATH=/visualist/ pnpm preview   # http://localhost:4173/visualist/
+```
+
+The build splits code that rarely changes into its own files (`zest`,
+`svelte`, `icons`, `logo-paths`, and `three`, which only loads with the
+3D stage), so after a deploy that only touches app code, returning
+browsers keep those cached.
 
 ## Stack
 
