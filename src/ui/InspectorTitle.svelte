@@ -121,7 +121,7 @@
 		color: var(--inspector-title-color, var(--foreground));
 		font-family: var(--font-heading, inherit);
 		font-variation-settings: var(--font-heading-settings, normal);
-		font-weight: var(--font-heading-weight, 700);
+		font-weight: var(--font-heading-weight, 1000);
 		text-overflow: ellipsis;
 		outline: none;
 		cursor: default;

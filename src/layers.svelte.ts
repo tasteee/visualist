@@ -2,10 +2,16 @@ import { toaster } from '@tasteee/zest'
 import { recordHistory, removeLanesForFx, removeLanesForLayer } from './automation.svelte'
 import { importAssetFile, restoreAssets } from './engine/assets'
 import type { AssetRequestT } from './engine/assets'
-import { LOGO_LAYER_ID, createAssetLayer, createClip, createDefaultLayers, createFx, createLogoLayer, createShapeLayer, createTextLayer, createVideoLayer } from './engine/layers'
+import { LOGO_LAYER_ID, createAssetLayer, createClip, createDefaultLayers, createFx, createLogoLayer, createShapeLayer, createTextLayer, createVideoLayer, getClipNeighborBounds } from './engine/layers'
 import { MIN_CLIP_SECONDS } from './engine/settings'
 import { importVideoFile, restoreVideos } from './engine/video'
 import type { ClipT, FxKindT, LayerFxT, LayerT, ShapeT, TextContentT } from './engine/types'
+import { removeMappingsForClip, removeMappingsForFx, removeMappingsForLayer } from './mappings.svelte'
+
+export type SelectedClipRefT = {
+	layerId: string
+	clipId: string
+}
 
 type LayerStoreT = {
 	layers: LayerT[]
@@ -13,8 +19,10 @@ type LayerStoreT = {
 	// in the current selection. The first is always one of them.
 	selectedLayerId: string | null
 	selectedLayerIds: string[]
-	// A clip picked on its own. It never selects its layer.
-	selectedClip: { layerId: string; clipId: string } | null
+	// A clip picked on its own (null when 0 or >1 clips are selected).
+	selectedClip: SelectedClipRefT | null
+	// One or more clips selected on the timeline.
+	selectedClips: SelectedClipRefT[]
 	// Bumps when a decoded file arrives, so the frame redraws.
 	assetVersion: number
 	isImporting: boolean
@@ -56,11 +64,13 @@ type LegacyClipFieldsT = {
 const normalizeClips = (stored: Partial<LayerT>): ClipT[] => {
 	// Saves from before text moved to the clips kept it on the layer.
 	const legacyText = (stored.text as { text?: string } | null | undefined)?.text ?? ''
+	const layerKind = stored.kind ?? 'text'
 	const hasClips = Array.isArray(stored.clips) && stored.clips.length > 0
-	if (hasClips) return (stored.clips as Partial<ClipT>[]).map((clip) => createClip({ text: legacyText, ...clip }))
+	if (hasClips) return (stored.clips as Partial<ClipT>[]).map((clip) => createClip({ text: legacyText, ...clip, kind: layerKind }))
 	const legacy = stored as LegacyClipFieldsT
 	return [
 		createClip({
+			kind: layerKind,
 			startTime: legacy.startTime ?? 0,
 			endTime: legacy.endTime ?? null,
 			sourceOffset: legacy.sourceOffset ?? legacy.audioOffset ?? 0,
@@ -129,6 +139,7 @@ export const layerStore = $state<LayerStoreT>({
 	selectedLayerId: null,
 	selectedLayerIds: [],
 	selectedClip: null,
+	selectedClips: [],
 	assetVersion: 0,
 	isImporting: false
 })
@@ -138,37 +149,100 @@ export const findLayer = (layerId: string | null): LayerT | undefined => {
 	return layerStore.layers.find((layer) => layer.id === layerId)
 }
 
-export const getSelectedLayer = (): LayerT | undefined => findLayer(layerStore.selectedLayerId)
+export const getSelectedLayer = (): LayerT | undefined => {
+	if (layerStore.selectedLayerIds.length !== 1) return undefined
+	return findLayer(layerStore.selectedLayerId)
+}
 
 export const selectLayers = (layerIds: string[], primaryId: string | null): void => {
 	layerStore.selectedLayerIds = layerIds
 	layerStore.selectedLayerId = primaryId
 	layerStore.selectedClip = null
+	layerStore.selectedClips = []
+}
+
+export const selectClips = (clips: SelectedClipRefT[]): void => {
+	layerStore.selectedLayerIds = []
+	layerStore.selectedLayerId = null
+	const unique: SelectedClipRefT[] = []
+	const seen = new Set<string>()
+	for (const entry of clips) {
+		const key = `${entry.layerId}:${entry.clipId}`
+		if (seen.has(key)) continue
+		seen.add(key)
+		unique.push({ layerId: entry.layerId, clipId: entry.clipId })
+	}
+	layerStore.selectedClips = unique
+	layerStore.selectedClip = unique.length === 1 ? unique[0] : null
 }
 
 // Picking a clip leaves every layer unselected.
 export const selectClip = (layerId: string, clipId: string): void => {
-	selectLayers([], null)
-	layerStore.selectedClip = { layerId, clipId }
+	selectClips([{ layerId, clipId }])
+}
+
+export const checkIsClipInSelection = (layerId: string, clipId: string): boolean => {
+	return layerStore.selectedClips.some((entry) => entry.layerId === layerId && entry.clipId === clipId)
+}
+
+export const getSelectedClips = (): { layer: LayerT; clip: ClipT }[] => {
+	const results: { layer: LayerT; clip: ClipT }[] = []
+	for (const entry of layerStore.selectedClips) {
+		const layer = findLayer(entry.layerId)
+		const clip = layer?.clips.find((candidate) => candidate.id === entry.clipId)
+		if (layer === undefined || clip === undefined) continue
+		results.push({ layer, clip })
+	}
+	return results
 }
 
 export const getSelectedClip = (): { layer: LayerT; clip: ClipT } | undefined => {
-	const picked = layerStore.selectedClip
-	if (picked === null) return undefined
+	if (layerStore.selectedClips.length !== 1) return undefined
+	const picked = layerStore.selectedClips[0]
 	const layer = findLayer(picked.layerId)
 	const clip = layer?.clips.find((candidate) => candidate.id === picked.clipId)
 	if (layer === undefined || clip === undefined) return undefined
 	return { layer, clip }
 }
 
-// Removing a layer's only clip removes the layer.
-export const removeClip = (layerId: string, clipId: string): void => {
-	const layer = findLayer(layerId)
-	if (layer === undefined) return
-	if (layer.clips.length <= 1) return removeLayers([layerId])
+// Removing every clip on a layer removes the layer itself.
+export const removeClips = (targets: SelectedClipRefT[]): void => {
+	if (targets.length === 0) return
+	const byLayer = new Map<string, Set<string>>()
+	for (const target of targets) {
+		const existing = byLayer.get(target.layerId) ?? new Set<string>()
+		existing.add(target.clipId)
+		byLayer.set(target.layerId, existing)
+	}
+	const validLayerIds = Array.from(byLayer.keys()).filter((layerId) => findLayer(layerId) !== undefined)
+	if (validLayerIds.length === 0) return
 	recordHistory()
-	layer.clips = layer.clips.filter((clip) => clip.id !== clipId)
-	layerStore.selectedClip = null
+	const layersToRemove: string[] = []
+	for (const layerId of validLayerIds) {
+		const layer = findLayer(layerId)
+		const doomedClipIds = byLayer.get(layerId)
+		if (layer === undefined || doomedClipIds === undefined) continue
+		const remainingClips = layer.clips.filter((clip) => !doomedClipIds.has(clip.id))
+		if (remainingClips.length === 0) {
+			layersToRemove.push(layerId)
+			continue
+		}
+		layer.clips = remainingClips
+		for (const clipId of doomedClipIds) removeMappingsForClip(clipId)
+	}
+	if (layersToRemove.length > 0) {
+		const doomedLayerSet = new Set(layersToRemove)
+		layerStore.layers = layerStore.layers.filter((candidate) => !doomedLayerSet.has(candidate.id))
+		for (const layerId of layersToRemove) {
+			removeLanesForLayer(layerId)
+			removeMappingsForLayer(layerId)
+		}
+	}
+	selectClips([])
+}
+
+export const removeClip = (layerId: string, clipId: string): void => {
+	removeClips([{ layerId, clipId }])
 }
 
 export const selectLayer = (layerId: string | null): void => {
@@ -206,10 +280,12 @@ export type LayerTimeRangeT = {
 export const setLayerTimeRange = (layerId: string, clipId: string, startTime: number, endTime: number, songLength: number): void => {
 	const layer = findLayer(layerId)
 	const clip = layer?.clips.find((candidate) => candidate.id === clipId)
-	if (clip === undefined) return
-	const safeStart = Math.max(0, Math.min(startTime, songLength - MIN_CLIP_SECONDS))
-	const safeEnd = Math.max(safeStart + MIN_CLIP_SECONDS, endTime)
-	const isAtSongEnd = safeEnd >= songLength - 0.005
+	if (layer === undefined || clip === undefined) return
+	const bounds = getClipNeighborBounds(layer.clips, clipId, (candidate) => candidate.endTime ?? songLength, songLength)
+	const maxAllowedEnd = Math.min(songLength, bounds.maxEnd)
+	const safeStart = Math.max(bounds.minStart, Math.min(startTime, maxAllowedEnd - MIN_CLIP_SECONDS))
+	const safeEnd = Math.min(maxAllowedEnd, Math.max(safeStart + MIN_CLIP_SECONDS, endTime))
+	const isAtSongEnd = safeEnd >= songLength - 0.005 && bounds.maxEnd >= songLength - 0.005
 	clip.startTime = safeStart
 	clip.endTime = isAtSongEnd ? null : safeEnd
 }
@@ -309,7 +385,10 @@ export const removeLayers = (layerIds: string[]): void => {
 	const remainingIds = layerStore.selectedLayerIds.filter((candidate) => !doomedIds.has(candidate))
 	const primaryId = remainingIds[remainingIds.length - 1] ?? null
 	selectLayers(remainingIds, primaryId)
-	for (const layerId of removableIds) removeLanesForLayer(layerId)
+	for (const layerId of removableIds) {
+		removeLanesForLayer(layerId)
+		removeMappingsForLayer(layerId)
+	}
 }
 
 export const removeLayer = (layerId: string): void => removeLayers([layerId])
@@ -375,6 +454,7 @@ export const removeLayerFx = (layerId: string, fxId: string): void => {
 	recordHistory()
 	layer.fx = layer.fx.filter((fx: LayerFxT) => fx.id !== fxId)
 	removeLanesForFx(fxId)
+	removeMappingsForFx(fxId)
 }
 
 const collectAssetRequests = (): AssetRequestT[] => {

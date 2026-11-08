@@ -4,10 +4,17 @@
 
 export type AssetKindT = 'image' | 'svg'
 
+export type GifFrameT = {
+	canvas: HTMLCanvasElement
+	durationSeconds: number
+}
+
 export type AssetT = {
 	id: string
 	kind: AssetKindT
 	canvas: HTMLCanvasElement
+	frames?: GifFrameT[]
+	totalDuration?: number
 }
 
 const DATABASE_NAME = 'vink-assets'
@@ -22,6 +29,26 @@ const decodedAssets = new Map<string, AssetT>()
 export const getAsset = (assetId: string | null): AssetT | null => {
 	if (assetId === null) return null
 	return decodedAssets.get(assetId) ?? null
+}
+
+export const checkIsAnimatedAsset = (assetId: string | null): boolean => {
+	const asset = getAsset(assetId)
+	if (asset === null || asset.frames === undefined) return false
+	return asset.frames.length > 1 && (asset.totalDuration ?? 0) > 0
+}
+
+export const getAssetCanvasAt = (asset: AssetT, elapsedSeconds: number): HTMLCanvasElement => {
+	const frames = asset.frames
+	const totalDuration = asset.totalDuration ?? 0
+	const isAnimated = frames !== undefined && frames.length > 1 && totalDuration > 0
+	if (!isAnimated) return asset.canvas
+	const wrapped = ((elapsedSeconds % totalDuration) + totalDuration) % totalDuration
+	let accumulated = 0
+	for (const frame of frames) {
+		accumulated += frame.durationSeconds
+		if (wrapped < accumulated) return frame.canvas
+	}
+	return frames[frames.length - 1]?.canvas ?? asset.canvas
 }
 
 export const checkIsSvgFile = (file: File): boolean => {
@@ -97,6 +124,53 @@ const getRasterSize = (image: HTMLImageElement, kind: AssetKindT): RasterSizeT =
 	return { width, height }
 }
 
+const MAX_ANIMATED_FRAMES = 240
+const DEFAULT_FRAME_SECONDS = 0.08
+
+const decodeAnimatedFrames = async (file: Blob, size: RasterSizeT): Promise<{ frames: GifFrameT[]; totalDuration: number } | null> => {
+	const hasImageDecoder = typeof window !== 'undefined' && 'ImageDecoder' in window
+	const mimeType = file.type || 'image/gif'
+	const isAnimatableMime = mimeType === 'image/gif' || mimeType === 'image/webp' || mimeType === 'image/png'
+	if (!hasImageDecoder || !isAnimatableMime) return null
+	try {
+		const DecoderConstructor = (window as unknown as {
+			ImageDecoder: new (init: { data: BufferSource; type: string }) => {
+				tracks: { ready: Promise<void>; selectedTrack: { frameCount: number } | null }
+				decode: (options: { frameIndex: number }) => Promise<{ image: CanvasImageSource & { duration?: number | null; close: () => void } }>
+				close: () => void
+			}
+		}).ImageDecoder
+		const bytes = await file.arrayBuffer()
+		const decoder = new DecoderConstructor({ data: bytes, type: mimeType })
+		try {
+			await decoder.tracks.ready
+			const frameCount = Math.min(MAX_ANIMATED_FRAMES, decoder.tracks.selectedTrack?.frameCount ?? 0)
+			if (frameCount <= 1) return null
+			const frames: GifFrameT[] = []
+			let totalDuration = 0
+			const frameIndices = Array.from({ length: frameCount }, (_, frameIndex) => frameIndex)
+			for (const frameIndex of frameIndices) {
+				const decoded = await decoder.decode({ frameIndex })
+				const rawDurationUs = decoded.image.duration ?? 0
+				const durationSeconds = rawDurationUs > 0 ? Math.max(0.02, rawDurationUs / 1_000_000) : DEFAULT_FRAME_SECONDS
+				const frameCanvas = document.createElement('canvas')
+				frameCanvas.width = size.width
+				frameCanvas.height = size.height
+				const frameContext = frameCanvas.getContext('2d')
+				if (frameContext !== null) frameContext.drawImage(decoded.image, 0, 0, size.width, size.height)
+				decoded.image.close()
+				frames.push({ canvas: frameCanvas, durationSeconds })
+				totalDuration += durationSeconds
+			}
+			return { frames, totalDuration }
+		} finally {
+			decoder.close()
+		}
+	} catch {
+		return null
+	}
+}
+
 const decodeFile = async (assetId: string, kind: AssetKindT, file: Blob): Promise<AssetT> => {
 	const url = URL.createObjectURL(file)
 	try {
@@ -108,6 +182,8 @@ const decodeFile = async (assetId: string, kind: AssetKindT, file: Blob): Promis
 		const context = canvas.getContext('2d')
 		if (context === null) throw new Error('2D canvas is not available')
 		context.drawImage(image, 0, 0, size.width, size.height)
+		const animated = kind === 'image' ? await decodeAnimatedFrames(file, size) : null
+		if (animated !== null) return { id: assetId, kind, canvas, frames: animated.frames, totalDuration: animated.totalDuration }
 		return { id: assetId, kind, canvas }
 	} finally {
 		URL.revokeObjectURL(url)

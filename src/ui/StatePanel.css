@@ -1,0 +1,44 @@
+.state-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 500px;
+	max-width: calc(100vw - 32px);
+}
+
+.state-panel-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+}
+
+.state-panel-sections {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.state-panel-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.state-panel-code {
+	margin: 0;
+	padding: 10px 12px;
+	max-height: min(62vh, 520px);
+	overflow: auto;
+	border-radius: 6px;
+	border: 1px solid var(--color-neutral-3);
+	background: var(--color-neutral-0);
+	color: var(--color-neutral-9);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 11px;
+	line-height: 1.45;
+	white-space: pre;
+	tab-size: 2;
+	user-select: text;
+}

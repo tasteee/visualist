@@ -19,7 +19,8 @@
 	import { openRowInspector } from '../rowInspector.svelte'
 	import { checkIsRowFolded, getRowHeightCss, toggleRowFolded } from '../rowLayout.svelte'
 	import type { RowRefT } from '../rowLayout.svelte'
-	import { clearSelection as clearAllSelection, pickImpulse, pickImpulsesInBox, readModifiers, selectPlacedImpulse } from '../selection.svelte'
+	import { mappingsStore } from '../mappings.svelte'
+	import { pickEmitterTrack, pickImpulse, pickImpulsesInBox, readModifiers, selectPlacedImpulse } from '../selection.svelte'
 	import type { PickModifiersT } from '../selection.svelte'
 	import { app, getLiveSignals, seekTo } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
@@ -97,6 +98,7 @@
 	})
 	const latestLabel = $derived(latestImpulse === undefined ? '—' : latestImpulse.strength.toFixed(2))
 	const isArmed = $derived(sources.armedTrackId === props.track.id)
+	const isRowSelected = $derived(mappingsStore.selectedModulator?.kind === 'emitter' && mappingsStore.selectedModulator.trackId === props.track.id)
 	const isGate = $derived(props.track.shape === 'gate')
 	const trackColor = $derived(getRowColor(props.track.id, getRoleColor(props.track.role)))
 	const customHeight = $derived(getRowHeightCss(row))
@@ -437,9 +439,7 @@
 	const handleRemove = () => removeTrack(props.track.id)
 
 	const handleSelectRow = () => {
-		// An impulse lane is a row, not a selectable item, so a
-		// click on its header only drops other selections.
-		clearAllSelection()
+		pickEmitterTrack(props.track.id)
 	}
 
 	const handleInspect = (anchor: HTMLElement) => openRowInspector('impulse', props.track.id, anchor)
@@ -454,7 +454,7 @@
 	})
 </script>
 
-<div class="impulse-lane" class:isCollapsed class:isArmed class:hasSelection data-tone={trackColor} style:--impulse-lane-custom-height={customHeight}>
+<div class="impulse-lane" class:isCollapsed class:isArmed class:isSelected={isRowSelected} class:hasSelection data-tone={trackColor} style:--impulse-lane-custom-height={customHeight}>
 	<div class="impulse-lane-header" role="presentation" bind:this={header} use:rowHeader={headerOptions}>
 		<div class="impulse-lane-title">
 			<button class="impulse-lane-caret" type="button" aria-expanded={!isCollapsed} aria-label={collapseLabel} onclick={handleToggle}>

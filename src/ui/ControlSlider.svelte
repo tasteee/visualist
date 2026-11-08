@@ -1,14 +1,19 @@
 <script lang="ts">
-	import { getLaneColor } from '../appearance.svelte'
+	import { getLaneColor, getRowColor } from '../appearance.svelte'
 	import { automateTarget, automation, revealLane } from '../automation.svelte'
 	import { checkIsLaneDriving, findControl, findLaneForTarget, getLiveLaneValue } from '../engine/automation'
+	import { evaluateMappedValue } from '../engine/mappings'
 	import { applyModulation } from '../engine/modulation'
+	import { getRoleColor } from '../engine/palette'
+	import type { ColorNameT } from '../engine/palette'
+	import { getMappingsForTarget } from '../mappings.svelte'
+	import { pickEmitterTrack, pickLane } from '../selection.svelte'
+	import { findTrack, sources } from '../sources.svelte'
 	import { app, getLiveSignals } from '../store.svelte'
-	import type { AutomatableKeyT, LaneTargetT, ModulationT } from '../engine/types'
+	import { setEditorMode } from '../timeline.svelte'
+	import type { AutomatableKeyT, LaneTargetT, MappingTargetT, ModulationT } from '../engine/types'
 	import SettingSlider from './SettingSlider.svelte'
 
-	// One global setting, wired to its automation lane and its
-	// modulation, so every panel treats controls the same way.
 	type ControlSliderPropsT = {
 		controlKey: AutomatableKeyT
 		label: string
@@ -19,31 +24,60 @@
 	const props: ControlSliderPropsT = $props()
 
 	const target = $derived<LaneTargetT>({ kind: 'setting', key: props.controlKey })
+	const mappingTarget = $derived<MappingTargetT>({ kind: 'setting', key: props.controlKey })
 	const control = $derived(findControl(props.controlKey))
 	const min = $derived(control === null ? 0 : control.min)
 	const max = $derived(control === null ? 1 : control.max)
 	const step = $derived(control === null ? 0.01 : control.step)
 	const lane = $derived(findLaneForTarget(automation.lanes, target))
-	const isAutomated = $derived(lane !== undefined && checkIsLaneDriving(lane))
-	const automationColor = $derived(isAutomated && lane !== undefined ? getLaneColor(lane, []) : null)
-	const modulation = $derived(app.settings.modulations[props.controlKey] ?? null)
+	const activeMappings = $derived(getMappingsForTarget(mappingTarget).filter((mapping) => !mapping.isBypassed))
+	const firstMapping = $derived(activeMappings[0])
 
-	// Automated sliders follow the playhead and lock until the
-	// lane's points are removed.
-	const getBaseValue = (): number => {
-		const baseSetting = app.settings[props.controlKey]
-		if (!isAutomated || lane === undefined) return baseSetting
-		const laneValue = getLiveLaneValue(lane, app.settings, [], app.currentTime)
-		return laneValue ?? baseSetting
+	const resolveBadgeColor = (): ColorNameT | null => {
+		if (firstMapping !== undefined) {
+			if (firstMapping.modulator.kind === 'emitter') {
+				const track = findTrack(firstMapping.modulator.trackId)
+				return track === undefined ? 'amber' : getRowColor(track.id, getRoleColor(track.role))
+			}
+			const laneId = firstMapping.modulator.kind === 'lane' ? firstMapping.modulator.laneId : ''
+			const modLane = automation.lanes.find((candidate) => candidate.id === laneId)
+			return modLane === undefined ? 'lavender' : getLaneColor(modLane, [])
+		}
+		if (lane !== undefined && checkIsLaneDriving(lane)) return getLaneColor(lane, [])
+		return null
 	}
 
-	const baseValue = $derived(getBaseValue())
+	const resolveBadgeLabel = (): string => {
+		if (firstMapping !== undefined) {
+			if (firstMapping.modulator.kind === 'emitter') {
+				const track = findTrack(firstMapping.modulator.trackId)
+				return track?.name ?? 'Emitter'
+			}
+			const laneId = firstMapping.modulator.kind === 'lane' ? firstMapping.modulator.laneId : ''
+			const modLane = automation.lanes.find((candidate) => candidate.id === laneId)
+			return modLane?.name ?? 'Automation'
+		}
+		return 'Automated'
+	}
 
-	// Only modulated sliders follow the live signals, so idle
-	// ones do not redraw on every frame.
+	const automationColor = $derived(resolveBadgeColor())
+	const automationBadgeLabel = $derived(resolveBadgeLabel())
+	const modulation = $derived(app.settings.modulations[props.controlKey] ?? null)
+	const baseValue = $derived(app.settings[props.controlKey])
+
 	const getLiveValue = (): number => {
-		if (modulation === null) return baseValue
-		return applyModulation(baseValue, { min, max }, modulation, getLiveSignals())
+		let value = baseValue
+		if (lane !== undefined && checkIsLaneDriving(lane)) {
+			value = getLiveLaneValue(lane, app.settings, [], app.currentTime) ?? value
+		}
+		if (activeMappings.length > 0) {
+			const modContext = { tracks: sources.tracks, lanes: automation.lanes }
+			value = evaluateMappedValue(value, min, max, mappingTarget, activeMappings, modContext, undefined, app.currentTime)
+		}
+		if (modulation !== null) {
+			value = applyModulation(value, { min, max }, modulation, getLiveSignals())
+		}
+		return value
 	}
 
 	const liveValue = $derived(getLiveValue())
@@ -53,6 +87,13 @@
 	}
 
 	const handleReveal = () => {
+		if (firstMapping !== undefined) {
+			setEditorMode('modulation')
+			if (firstMapping.modulator.kind === 'emitter') return pickEmitterTrack(firstMapping.modulator.trackId)
+			pickLane(firstMapping.modulator.laneId, [firstMapping.modulator.laneId], { isRange: false, isToggle: false })
+			revealLane(firstMapping.modulator.laneId)
+			return
+		}
 		if (lane === undefined) return
 		revealLane(lane.id)
 	}
@@ -78,6 +119,7 @@
 	{step}
 	isDisabled={props.isDisabled}
 	{automationColor}
+	{automationBadgeLabel}
 	onreveal={handleReveal}
 	onautomate={app.hasAudio ? handleAutomate : undefined}
 	{modulation}

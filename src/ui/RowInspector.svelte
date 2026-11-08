@@ -2,14 +2,7 @@
 	import EraserIcon from 'phosphor-svelte/lib/EraserIcon'
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import { getRowColor, setRowColor } from '../appearance.svelte'
-	import {
-		automation,
-		recordHistory,
-		removeLane,
-		renameLane,
-		resetLane,
-		setLaneTarget
-	} from '../automation.svelte'
+	import { automation, recordHistory, removeLane, renameLane, resetLane, setLaneTarget } from '../automation.svelte'
 	import {
 		checkIsSettingGroup,
 		checkIsSameTarget,
@@ -31,6 +24,7 @@
 	import BandControls from './BandControls.svelte'
 	import ImpulseTrackControls from './ImpulseTrackControls.svelte'
 	import LayerEditor from './LayerEditor.svelte'
+	import ModulatorMappings from './ModulatorMappings.svelte'
 	import RenameField from './RenameField.svelte'
 	import './RowInspector.css'
 
@@ -46,7 +40,9 @@
 	const layers = $derived(layerStore.layers as LayerT[])
 
 	const layer = $derived(open !== null && open.kind === 'layer' ? findLayer(open.rowId) : undefined)
-	const lane = $derived(open !== null && open.kind === 'lane' ? automation.lanes.find((candidate) => candidate.id === open.rowId) : undefined)
+	const lane = $derived(
+		open !== null && open.kind === 'lane' ? automation.lanes.find((candidate) => candidate.id === open.rowId) : undefined
+	)
 	const track = $derived(open !== null && open.kind === 'impulse' ? findTrack(open.rowId) : undefined)
 	const band = $derived(open !== null && open.kind === 'band' ? findBand(open.rowId) : undefined)
 
@@ -111,7 +107,11 @@
 		return groupTargets.map((target) => {
 			const targetControl = getTargetControl(target, layers)
 			const isUsed = otherLanes.some((candidate) => checkIsSameTarget(candidate.target, target))
-			return { value: getTargetId(target), label: targetControl === null ? 'Missing' : targetControl.label, isDisabled: isUsed }
+			return {
+				value: getTargetId(target),
+				label: targetControl === null ? 'Missing' : targetControl.label,
+				isDisabled: isUsed
+			}
 		})
 	})
 
@@ -230,17 +230,24 @@
 		close()
 	}
 
-	const canRemove = $derived(layer !== undefined ? layer.kind !== 'logo' : lane !== undefined || track !== undefined || band !== undefined)
+	const canRemove = $derived.by(() => {
+		const hasLayer = layer !== undefined
+
+		if (hasLayer) {
+			const isRemovableLayer = layer.kind !== 'logo'
+			return isRemovableLayer
+		}
+
+		const hasLane = lane !== undefined
+		const hasTrack = track !== undefined
+		const hasBand = band !== undefined
+
+		return hasLane || hasTrack || hasBand
+	})
 </script>
 
 {#if open !== null && !isRowMissing}
-	<div
-		class="row-inspector"
-		bind:this={root}
-		role="dialog"
-		aria-label="{eyebrow} settings"
-		data-tone={currentColor}
-	>
+	<div class="row-inspector" bind:this={root} role="dialog" aria-label="{eyebrow} settings" data-tone={currentColor}>
 		<header class="row-inspector-header">
 			<span class="row-inspector-eyebrow">{eyebrow}</span>
 			{#if canRename}
@@ -272,9 +279,19 @@
 			{/if}
 
 			{#if lane !== undefined}
-				<z-field label="Controls">
-					<z-select size="sm" value={targetValue} options={targetOptions} placeholder="Choose control" aria-label="Automated control" onchange={handleTargetChange}></z-select>
-				</z-field>
+				{#if targetOptions.length > 0}
+					<z-field label="Controls">
+						<z-select
+							size="sm"
+							value={targetValue}
+							options={targetOptions}
+							placeholder="Choose control"
+							aria-label="Automated control"
+							onchange={handleTargetChange}
+						></z-select>
+					</z-field>
+				{/if}
+				<ModulatorMappings modulator={{ kind: 'lane', laneId: lane.id }} />
 				<div class="row-inspector-actions">
 					<z-button size="sm" kind="outline" tone="neutral" isDisabled={pointCount <= 1} onclick={handleResetLane}>
 						<EraserIcon weight="bold" />
@@ -284,6 +301,7 @@
 			{/if}
 
 			{#if track !== undefined}
+				<ModulatorMappings modulator={{ kind: 'emitter', trackId: track.id }} />
 				<ImpulseTrackControls {track} />
 			{/if}
 

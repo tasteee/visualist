@@ -6,7 +6,7 @@ import type { GridDivisionT, TimelineViewT } from './engine/timeline'
 import type { InspectorTabT } from './inspector.svelte'
 import { buildSongKey, sources } from './sources.svelte'
 import { layerStore } from './layers.svelte'
-import { addAudioFile, app, seekTo, setLoopEnabled, setLoopRegion, setStatus } from './store.svelte'
+import { DEFAULT_PROJECT_SECONDS, addAudioFile, app, seekTo, setLoopEnabled, setLoopRegion, setProjectDuration, setStatus } from './store.svelte'
 import { timeline } from './timeline.svelte'
 
 // Everything about the open project that is not already saved
@@ -21,6 +21,8 @@ type SavedProjectT = {
 	title?: string
 	projectName?: string
 	isProjectNameEdited?: boolean
+	projectDuration?: number
+	isMetronomeEnabled?: boolean
 	bpm: number
 	beatOffset: number
 	downbeatAnchor: number | null
@@ -49,6 +51,8 @@ const buildSnapshot = (): SavedProjectT => ({
 	fileName: app.fileName,
 	projectName: app.projectName,
 	isProjectNameEdited: app.isProjectNameEdited,
+	projectDuration: app.projectDuration,
+	isMetronomeEnabled: app.isMetronomeEnabled,
 	bpm: app.bpm,
 	beatOffset: app.beatOffset,
 	downbeatAnchor: app.downbeatAnchor,
@@ -108,6 +112,8 @@ const pickGridDivision = (value: unknown): GridDivisionT => {
 const applySongState = (project: SavedProjectT): void => {
 	app.projectName = project.projectName ?? app.projectName
 	app.isProjectNameEdited = project.isProjectNameEdited === true
+	if (typeof project.projectDuration === 'number') setProjectDuration(project.projectDuration)
+	if (typeof project.isMetronomeEnabled === 'boolean') app.isMetronomeEnabled = project.isMetronomeEnabled
 	app.bpm = project.bpm
 	app.beatOffset = project.beatOffset
 	app.downbeatAnchor = project.downbeatAnchor
@@ -156,7 +162,7 @@ export const restoreProject = async (): Promise<void> => {
 	const project = readSavedProject()
 	if (project === null) return
 	await migrateLegacySong(project)
-	if (!app.hasSong || app.isAnalyzing) return
+	if (!app.hasAudio || app.isAnalyzing) return
 	applySongState(project)
 	applyEditorState(project)
 	await applyViewState(project)
@@ -168,7 +174,7 @@ export const startProjectWatchers = (): void => {
 	$effect.root(() => {
 		$effect(() => {
 			const snapshot = buildSnapshot()
-			if (!app.hasSong || app.isAnalyzing) return
+			if (!app.hasAudio || app.isAnalyzing) return
 			writeSavedProject(snapshot)
 		})
 	})

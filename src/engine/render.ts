@@ -373,6 +373,7 @@ const getStackInput = (layers: LogoLayersT, state: FrameStateT, stackLayers: Sta
 	signals: state.input.signals,
 	palette: state.input.palette,
 	frame: state.frame,
+	songLength: state.input.analysis.duration,
 	drawLogo: (target) => drawLogoGroup(target, layers, state)
 })
 

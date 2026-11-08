@@ -139,8 +139,20 @@ const findLayerFx = (layers: LayerT[], layerId: string, fxId: string): LayerFxT 
 
 // null when the target no longer exists, such as a lane whose
 // layer or effect was removed.
+export const MODULATION_GROUP_ID = 'modulation'
+
+export const STANDALONE_LANE_CONTROL: LaneControlT = {
+	label: 'Automation',
+	min: 0,
+	max: 100,
+	step: 1
+}
+
 export const getTargetControl = (target: LaneTargetT, layers: LayerT[]): LaneControlT | null => {
-	if (target.kind === 'unset') return null
+	if (target.kind === 'unset') {
+		if (target.groupId === MODULATION_GROUP_ID) return STANDALONE_LANE_CONTROL
+		return null
+	}
 	if (target.kind === 'setting') return findControl(target.key)
 	if (target.kind === 'layer') {
 		const layer = findLayer(layers, target.layerId)
@@ -156,7 +168,10 @@ export const getTargetControl = (target: LaneTargetT, layers: LayerT[]): LaneCon
 
 // The value the control holds when no lane drives it.
 export const getTargetBase = (target: LaneTargetT, settings: SettingsT, layers: LayerT[]): number | null => {
-	if (target.kind === 'unset') return null
+	if (target.kind === 'unset') {
+		if (target.groupId === MODULATION_GROUP_ID) return 0
+		return null
+	}
 	if (target.kind === 'setting') return settings[target.key]
 	if (target.kind === 'layer') {
 		const layer = findLayer(layers, target.layerId)
@@ -170,7 +185,7 @@ export const getTargetBase = (target: LaneTargetT, settings: SettingsT, layers: 
 
 // An unset lane lives as long as its group does.
 const checkIsGroupLive = (groupId: string, layers: LayerT[]): boolean => {
-	const isSettingGroup = checkIsSettingGroup(groupId) || groupId === LEGACY_GLOBAL_GROUP_ID
+	const isSettingGroup = checkIsSettingGroup(groupId) || groupId === LEGACY_GLOBAL_GROUP_ID || groupId === MODULATION_GROUP_ID
 	if (isSettingGroup) return true
 	return findLayer(layers, groupId) !== undefined
 }
@@ -236,10 +251,11 @@ const applyLaneToLayer = (layer: LayerT, lane: AutomationLaneT, value: number): 
 }
 
 // Frame-time layers: copies with every automated param and
-// effect amount replaced by its lane value. Untouched layers
+// effect amount replaced by its lane value, before clip
+// transforms and mappings are combined. Untouched layers
 // are passed through as they are.
-export const applyLayerAutomation = (layers: LayerT[], settings: SettingsT, lanes: AutomationLaneT[], time: number): LayerT[] => {
-	const layerLanes = lanes.filter((lane) => lane.target.kind !== 'setting' && checkHasPoints(lane))
+export const applyLayerAutomationOnly = (layers: LayerT[], settings: SettingsT, lanes: AutomationLaneT[], time: number): LayerT[] => {
+	const layerLanes = lanes.filter((lane) => lane.target.kind !== 'setting' && lane.target.kind !== 'unset' && checkHasPoints(lane))
 	return layers.map((layer) => {
 		const ownLanes = layerLanes.filter((lane) => getTargetGroupId(lane.target) === layer.id)
 		let live = layer
@@ -248,8 +264,12 @@ export const applyLayerAutomation = (layers: LayerT[], settings: SettingsT, lane
 			if (value === null) continue
 			live = applyLaneToLayer(live, lane, value)
 		}
-		return applyClipToLayer(live, time)
+		return live
 	})
+}
+
+export const applyLayerAutomation = (layers: LayerT[], settings: SettingsT, lanes: AutomationLaneT[], time: number): LayerT[] => {
+	return applyLayerAutomationOnly(layers, settings, lanes, time).map((layer) => applyClipToLayer(layer, time))
 }
 
 // Every target a layer offers, in menu order: its transform,

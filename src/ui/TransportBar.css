@@ -167,3 +167,26 @@
 		display: none;
 	}
 }
+
+.transport-bar-cell.isBpm {
+	cursor: text;
+}
+
+.transport-bar-bpm-input {
+	width: 3.75rem;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--foreground);
+	font: inherit;
+	font-size: var(--font-size-3);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 1.15;
+	outline: none;
+}
+
+.transport-bar-bpm-input:focus-visible {
+	color: var(--accent);
+}

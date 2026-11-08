@@ -71,20 +71,19 @@
 }
 
 .editor-row.isRuler {
-	height: 54px;
+	height: 38px;
 	background: var(--paper);
 }
 
-
-
 .editor-row.isOverview {
-	height: var(--spacing-10);
+	height: calc(var(--spacing-10) + 15px);
 	border-top: 1px solid var(--border);
 	border-bottom: 0;
 	background: var(--paper);
 }
 
 .editor-lanes {
+	position: relative;
 	display: flex;
 	flex: 1;
 	flex-direction: column;
@@ -93,6 +92,16 @@
 	overscroll-behavior: contain;
 	scrollbar-gutter: stable;
 	background: var(--paper);
+	user-select: none;
+}
+
+.editor-marquee {
+	position: absolute;
+	z-index: 25;
+	border: 1px solid var(--accent);
+	border-radius: 2px;
+	background: color-mix(in oklab, var(--accent) 18%, transparent);
+	pointer-events: none;
 }
 
 /* Lanes keep their own height and the list scrolls, instead of
@@ -115,7 +124,7 @@
 .editor-corner {
 	justify-content: flex-start;
 	gap: var(--spacing-1);
-	height: 54px;
+	height: 38px;
 	padding: 0 var(--spacing-2) 0 var(--spacing-3);
 }
 
@@ -172,10 +181,6 @@
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 1px;
 }
-
-
-
-
 
 /* Add lane row, which also fills the space under the lanes */
 

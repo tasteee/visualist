@@ -18,9 +18,10 @@
 		hint?: string
 		suffix?: string
 		isDisabled?: boolean
-		// The lane's color when an automation lane drives this
+		// The lane's color when an automation lane or mapping drives this
 		// control. null or missing when it is free.
 		automationColor?: ColorNameT | null
+		automationBadgeLabel?: string
 		onreveal?: () => void
 		// Passing onautomate shows an Automate button on hover
 		// while the control has no lane.
@@ -36,11 +37,12 @@
 
 	const props: SettingSliderPropsT = $props()
 
-	const AUTOMATED_TOOLTIP = 'Managed by automation. Click to open its lane, or remove the lane to unlock.'
+	const AUTOMATED_TOOLTIP = 'Driven by modulation. Click to inspect its modulator, or adjust the base value freely.'
 
 	const automationColor = $derived(props.automationColor ?? null)
+	const badgeLabel = $derived(props.automationBadgeLabel ?? 'Automated')
 	const isAutomated = $derived(automationColor !== null)
-	const isLocked = $derived(isAutomated || (props.isDisabled ?? false))
+	const isLocked = $derived(props.isDisabled ?? false)
 	const hasHint = $derived(props.hint !== undefined && !isAutomated)
 	const tooltipText = $derived(props.hint ?? '')
 	const valueLabel = $derived(`${Number(props.value.toFixed(2))}${props.suffix ?? ''}`)
@@ -49,7 +51,8 @@
 
 	const modulation = $derived(props.modulation ?? null)
 	const canModulate = $derived(props.onmodulationchange !== undefined)
-	const isModulated = $derived(modulation !== null)
+	const hasLiveDelta = $derived(props.liveValue !== undefined && Math.abs(props.liveValue - props.value) > 0.0001)
+	const isModulated = $derived(modulation !== null || hasLiveDelta)
 	const modLabel = $derived(modulation === null ? 'Modulate' : formatModulation(modulation, getCompiledSources()))
 	const modAriaLabel = $derived(isModulated ? `${props.label}: ${modLabel}. Edit modulation.` : `Modulate ${props.label}`)
 	const range = $derived(props.max - props.min)
@@ -85,9 +88,9 @@
 		<span class="setting-slider-label">{props.label}</span>
 		{#if isAutomated}
 			<z-tooltip content={AUTOMATED_TOOLTIP} placement="left" openDelay={200}>
-				<button class="setting-slider-badge" data-tone={automationColor} type="button" aria-label="{props.label} is automated. Open its lane." onclick={handleReveal}>
+				<button class="setting-slider-badge" data-tone={automationColor} type="button" aria-label="{props.label}: {badgeLabel}. Click to inspect." onclick={handleReveal}>
 					<LightningIcon weight="fill" />
-					Automated
+					{badgeLabel}
 				</button>
 			</z-tooltip>
 		{/if}
@@ -99,9 +102,9 @@
 			</z-tooltip>
 		{/if}
 		{#if canModulate}
-			<button class="setting-slider-mod" class:isActive={isModulated} class:isOpen={isModOpen} type="button" aria-label={modAriaLabel} aria-expanded={isModOpen} onclick={handleModToggle}>
+			<button class="setting-slider-mod" class:isActive={modulation !== null} class:isOpen={isModOpen} type="button" aria-label={modAriaLabel} aria-expanded={isModOpen} onclick={handleModToggle}>
 				<WaveSineIcon weight="bold" />
-				{#if isModulated}
+				{#if modulation !== null}
 					<span class="setting-slider-mod-label">{modLabel}</span>
 				{/if}
 			</button>

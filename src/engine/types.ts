@@ -268,7 +268,7 @@ export type PaletteSlotT = string
 export type SvgColorT = string
 
 // Any CSS weight. DM Sans ships 400 to 900, so others snap to those.
-export type TextWeightT = number
+export type TextWeightT = string
 
 // x and y are percent of the frame from its center. scale 1 is
 // the layer's natural size. rotation is in degrees. depth is how
@@ -302,6 +302,7 @@ export type LayerFxT = {
 
 // The words themselves live on each clip. This is how they look.
 export type TextContentT = {
+	font?: TextFontT
 	weight: TextWeightT
 	// Caps and lower case never both apply.
 	isUppercase: boolean
@@ -335,7 +336,10 @@ export type ClipT = {
 	startTime: number
 	endTime: number | null
 	sourceOffset: number
+	fadeIn: number
+	fadeOut: number
 	isActive: boolean
+	kind: LayerKindT
 	// Text layers: what this clip says, and how. Anything left out
 	// is inherited from the layer.
 	// What the clip is called on the timeline and its own color. Empty
@@ -371,4 +375,38 @@ export type LayerT = {
 	shape: ShapeT | null
 	assetId: string | null
 	svgColor: SvgColorT
+}
+
+
+export type ClipParamKeyT = keyof ClipTransformT
+
+export type TextFontT = 'google-sans-flex' | 'dm-sans' | 'system-ui' | 'serif' | 'monospace' | 'display'
+
+export type ModulatorRefT =
+	| { kind: 'emitter'; trackId: string }
+	| { kind: 'lane'; laneId: string }
+
+export type MappingTargetT =
+	| { kind: 'layer'; layerId: string; param: LayerParamKeyT }
+	| { kind: 'clip'; layerId: string; clipId: string; param: ClipParamKeyT }
+	| { kind: 'fx'; layerId: string; fxId: string }
+	| { kind: 'setting'; key: AutomatableKeyT }
+
+export type MappingTimeModeT = 'song' | 'clip'
+
+export type AdEnvelopeT = {
+	attackMs: number
+	attackCurve: number
+	decayMs: number
+	decayCurve: number
+}
+
+export type MappingT = {
+	id: string
+	modulator: ModulatorRefT
+	target: MappingTargetT
+	influence: number
+	timeMode: MappingTimeModeT
+	envelope: AdEnvelopeT
+	isBypassed: boolean
 }

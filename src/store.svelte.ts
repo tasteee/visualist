@@ -1,6 +1,6 @@
 import { toaster } from '@tasteee/zest'
 import { untrack } from 'svelte'
-import { analyzeAudio, computeBeatOffset } from './engine/analysis'
+import { analyzeAudio } from './engine/analysis'
 import {
 	createRecordingTap,
 	getAudioContext,
@@ -13,17 +13,20 @@ import {
 	setExtraVolumes,
 	startExtras,
 	setPausedPosition,
-	startPlayback
+	startPlayback,
+	playMetronomeClick
 } from './engine/audio'
 import { automation, recordHistory, startAutomationWatchers } from './automation.svelte'
-import { applyAutomation, applyLayerAutomation } from './engine/automation'
+import { applyAutomation, applyLayerAutomationOnly } from './engine/automation'
+import { applyMappingsToLayers, applyMappingsToSettings } from './engine/mappings'
 import { applySettingsModulation, computeSignals } from './engine/modulation'
+import { mappingsStore, startMappingsWatchers } from './mappings.svelte'
 import { checkHasPost, getPostAmounts } from './engine/post'
 import { startAppearanceWatchers } from './appearance.svelte'
 import { findLayer, layerStore, restoreLayerAssets, selectLayer, startLayerWatchers } from './layers.svelte'
 import { buildEnginePalette } from './palette.svelte'
-import { createAudioLayer } from './engine/layers'
-import { getCompiledSources, getRoleImpulses, startSourceWatchers } from './sources.svelte'
+import { createAudioLayer, getClipLevel } from './engine/layers'
+import { getCompiledSources, getRoleImpulses, sources, startSourceWatchers } from './sources.svelte'
 import type { RoleImpulsesT } from './sources.svelte'
 import { buildDemoAnalysis } from './engine/demo'
 import { buildLogoLayers } from './engine/logoLayers'
@@ -70,6 +73,8 @@ type AppStateT = {
 	// project has a silent timeline.
 	hasAudio: boolean
 	hasSong: boolean
+	// User-configured minimum project duration in seconds (default 180s / 3 min).
+	projectDuration: number
 	duration: number
 	trimStart: number
 	trimEnd: number
@@ -78,6 +83,7 @@ type AppStateT = {
 	loopStart: number
 	loopEnd: number
 	isLoopEnabled: boolean
+	isMetronomeEnabled: boolean
 	// A tempo found in a song, waiting for the user to say whether
 	// the project should take it.
 	pendingBpm: number | null
@@ -98,8 +104,9 @@ type AppStateT = {
 	recorderLabel: string
 }
 
-const DEFAULT_PROJECT_SECONDS = 60
-const MIN_PROJECT_SECONDS = 1
+export const DEFAULT_PROJECT_SECONDS = 180
+export const MIN_PROJECT_SECONDS = 5
+export const MAX_PROJECT_SECONDS = 3600
 // The lowest rate Web Audio accepts. The base is silent, so quality
 // does not matter, only length.
 const SILENT_SAMPLE_RATE = 8000
@@ -117,14 +124,16 @@ export const app = $state<AppStateT>({
 	beatOffset: 0,
 	downbeatAnchor: null,
 	fileName: '',
-	hasAudio: false,
+	hasAudio: true,
 	hasSong: false,
-	duration: 0,
+	projectDuration: DEFAULT_PROJECT_SECONDS,
+	duration: DEFAULT_PROJECT_SECONDS,
 	trimStart: 0,
-	trimEnd: 0,
+	trimEnd: DEFAULT_PROJECT_SECONDS,
 	loopStart: 0,
-	loopEnd: 0,
+	loopEnd: 8,
 	isLoopEnabled: false,
+	isMetronomeEnabled: false,
 	pendingBpm: null,
 	kickCount: 0,
 	isAnalyzing: false,
@@ -159,6 +168,7 @@ let animationFrame = 0
 let isDirty = true
 let demoStartedAt = performance.now()
 let lastTickTime = 0
+let lastMetronomeBeatIndex: number | null = null
 let activeRecording: ActiveRecordingT | null = null
 let recorderFormat: RecorderFormatT | null = null
 
@@ -170,15 +180,16 @@ export const getDetectedAnalysis = (): AnalysisT => detectedAnalysis
 
 // The analysis everything renders from: the user's tempo and
 // downbeat, and any impulse tracks standing in for kicks or snares.
-const buildEffectiveAnalysis = (detected: AnalysisT, bpm: number, beatOffset: number, roleImpulses: RoleImpulsesT): AnalysisT => ({
+const buildEffectiveAnalysis = (detected: AnalysisT, duration: number, bpm: number, beatOffset: number, roleImpulses: RoleImpulsesT): AnalysisT => ({
 	...detected,
+	duration,
 	bpm,
 	beatOffset,
 	kicks: roleImpulses.kicks ?? detected.kicks,
 	snaps: roleImpulses.snaps ?? detected.snaps
 })
 
-const effectiveAnalysis = $derived(buildEffectiveAnalysis(detectedAnalysis, app.bpm, app.beatOffset, getRoleImpulses()))
+const effectiveAnalysis = $derived(buildEffectiveAnalysis(detectedAnalysis, app.duration, app.bpm, app.beatOffset, getRoleImpulses()))
 
 export const getAnalysis = (): AnalysisT => effectiveAnalysis
 export const getLogoLayers = (): LogoLayersT | null => layers
@@ -221,8 +232,12 @@ const getVisualLayers = (): LayerT[] => (layerStore.layers as LayerT[]).filter((
 const buildFrameInput = (time: number): FrameInputT => {
 	const analysis = getAnalysis()
 	const signals = computeSignals(analysis, time, getCompiledSources())
+	const modContext = { tracks: sources.tracks, lanes: automation.lanes }
 	const automatedSettings = applyAutomation(app.settings, automation.lanes, time)
-	const settings = applySettingsModulation(automatedSettings, signals)
+	const mappedSettings = applyMappingsToSettings(automatedSettings, mappingsStore.list, modContext, time)
+	const settings = applySettingsModulation(mappedSettings, signals)
+	const automatedLayers = applyLayerAutomationOnly(getVisualLayers(), app.settings, automation.lanes, time)
+	const layersWithMappings = applyMappingsToLayers(automatedLayers, mappingsStore.list, modContext, time)
 
 	return {
 		time,
@@ -232,7 +247,7 @@ const buildFrameInput = (time: number): FrameInputT => {
 		bpm: analysis.bpm,
 		beatOffset: analysis.beatOffset,
 		isIntroActive: app.isPlaying || app.isRecording,
-		layers: applyLayerAutomation(getVisualLayers(), app.settings, automation.lanes, time),
+		layers: layersWithMappings,
 		signals
 	}
 }
@@ -408,11 +423,27 @@ const tick = (): void => {
 	if (shouldDraw && app.isRecording) drawVideoFade(context, size.width, size.height, recordingElapsed)
 	isDirty = false
 
-	if (app.isPlaying && extraLayerIds.length > 0) followVolumeAutomation(time)
+	if (app.isPlaying && extraTrackRefs.length > 0) followVolumeAutomation(time)
 	const hasWrapped = app.isPlaying && !app.isRecording && app.isLoopEnabled && time < lastTickTime - 0.05
 	if (hasWrapped) {
 		syncExtraTracks()
 		startExtras(time)
+		lastMetronomeBeatIndex = null
+	}
+	const shouldRunMetronome = app.isPlaying && !app.isRecording && app.isMetronomeEnabled
+	if (!shouldRunMetronome) lastMetronomeBeatIndex = null
+	if (shouldRunMetronome) {
+		const beatLength = 60 / Math.max(1, app.bpm)
+		const currentBeatIndex = Math.floor((time - app.beatOffset + 0.002) / beatLength)
+		const isFirstMetronomeTick = lastMetronomeBeatIndex === null
+		const hasAdvancedBeat = lastMetronomeBeatIndex !== null && currentBeatIndex > lastMetronomeBeatIndex
+		const distanceToBeat = Math.abs(time - (app.beatOffset + currentBeatIndex * beatLength))
+		const shouldClick = hasAdvancedBeat || (isFirstMetronomeTick && distanceToBeat < 0.035)
+		if (shouldClick) {
+			const isDownbeat = ((currentBeatIndex % 4) + 4) % 4 === 0
+			playMetronomeClick(isDownbeat)
+		}
+		lastMetronomeBeatIndex = currentBeatIndex
 	}
 	lastTickTime = time
 
@@ -460,7 +491,10 @@ const audioLayerBuffers = new Map<string, AudioBuffer>()
 // mix are worked out again.
 let audioVersion = $state(0)
 
-export const getAudioLayerBuffer = (layerId: string): AudioBuffer | undefined => audioLayerBuffers.get(layerId)
+export const getAudioLayerBuffer = (layerId: string): AudioBuffer | undefined => {
+	void audioVersion
+	return audioLayerBuffers.get(layerId)
+}
 
 // A duplicate shares its original's decoded audio.
 export const shareAudioLayerBuffer = (fromLayerId: string, toLayerId: string): void => {
@@ -479,6 +513,7 @@ const PEAKS_PER_SECOND = 100
 const peaksByBuffer = new WeakMap<AudioBuffer, BufferPeaksT>()
 
 export const getAudioLayerPeaks = (layerId: string): BufferPeaksT | undefined => {
+	void audioVersion
 	const buffer = audioLayerBuffers.get(layerId)
 	if (buffer === undefined) return undefined
 	const cached = peaksByBuffer.get(buffer)
@@ -499,19 +534,26 @@ export const getAudioLayerPeaks = (layerId: string): BufferPeaksT | undefined =>
 }
 
 // A hidden audio layer is muted.
-let extraLayerIds: string[] = []
+type ExtraTrackRefT = {
+	layerId: string
+	clipId: string
+	naturalEnd: number
+}
+
+let extraTrackRefs: ExtraTrackRefT[] = []
 
 const syncExtraTracks = (): void => {
 	const tracks = []
-	extraLayerIds = []
+	extraTrackRefs = []
 	for (const layer of layerStore.layers) {
 		const isAudio = layer.kind === 'audio'
 		const buffer = isAudio ? audioLayerBuffers.get(layer.id) : undefined
 		if (!isAudio || buffer === undefined || !layer.isVisible) continue
-		// One track per active clip, so volume follows the layer's lane.
+		// One track per active clip, so volume follows the layer's lane and the clip's fades.
 		for (const clip of layer.clips) {
 			if (!clip.isActive) continue
-			extraLayerIds.push(layer.id)
+			const naturalEnd = clip.startTime + Math.max(0, buffer.duration - clip.sourceOffset)
+			extraTrackRefs.push({ layerId: layer.id, clipId: clip.id, naturalEnd })
 			tracks.push({ buffer, startTime: clip.startTime, endTime: clip.endTime, volume: layer.transform.volume, offset: clip.sourceOffset })
 		}
 	}
@@ -576,6 +618,17 @@ export const setLoopEnabled = (isEnabled: boolean): void => {
 
 export const toggleLoop = (): void => setLoopEnabled(!app.isLoopEnabled)
 
+export const toggleMetronome = (): void => {
+	app.isMetronomeEnabled = !app.isMetronomeEnabled
+	lastMetronomeBeatIndex = null
+}
+
+export const setProjectDuration = (seconds: number): void => {
+	const isNumber = Number.isFinite(seconds)
+	if (!isNumber) return
+	app.projectDuration = clamp(seconds, MIN_PROJECT_SECONDS, MAX_PROJECT_SECONDS)
+}
+
 const resetLoopRegion = (): void => {
 	const barLength = getBarLength(app.bpm)
 	const defaultEnd = Math.min(app.duration, barLength * BARS_IN_DEFAULT_LOOP)
@@ -583,10 +636,18 @@ const resetLoopRegion = (): void => {
 	app.loopEnd = Math.max(MIN_CLIP_SECONDS, defaultEnd)
 }
 
+const ensureAudioBuffer = (): AudioBuffer => {
+	if (audioBuffer !== null) return audioBuffer
+	const initialDuration = Math.max(MIN_PROJECT_SECONDS, app.projectDuration || DEFAULT_PROJECT_SECONDS)
+	audioBuffer = buildSilentBuffer(initialDuration)
+	return audioBuffer
+}
+
 // Stop goes back to the marker instead of pausing in place.
 export const togglePlay = (): void => {
-	const canPlay = app.hasAudio && audioBuffer !== null && !app.isRecording
-	if (!canPlay || audioBuffer === null) return
+	const canPlay = app.hasAudio && !app.isRecording
+	if (!canPlay) return
+	const buffer = ensureAudioBuffer()
 
 	if (app.isPlaying) {
 		pausePlayback()
@@ -603,15 +664,16 @@ export const togglePlay = (): void => {
 	app.currentTime = startTime
 	setActiveLoop(getLoopRegion())
 	syncExtraTracks()
-	startPlayback(audioBuffer, startTime, null, handleEnded)
+	startPlayback(buffer, startTime, null, handleEnded)
 	app.isPlaying = true
 }
 
 // Every seek is the user placing the playhead, so it moves the
 // marker too.
 export const seekTo = (seconds: number): void => {
-	const canSeek = app.hasAudio && audioBuffer !== null && !app.isRecording
-	if (!canSeek || audioBuffer === null) return
+	const canSeek = app.hasAudio && !app.isRecording
+	if (!canSeek) return
+	const buffer = ensureAudioBuffer()
 
 	const songTarget = clamp(seconds, 0, Math.max(0, app.duration - 0.01))
 	const target = clampToLoop(songTarget)
@@ -622,7 +684,7 @@ export const seekTo = (seconds: number): void => {
 	if (app.isPlaying && isOnLoopEnd) return seekTo(app.loopStart)
 	if (app.isPlaying) {
 		syncExtraTracks()
-		startPlayback(audioBuffer, target, null, handleEnded)
+		startPlayback(buffer, target, null, handleEnded)
 	}
 	if (!app.isPlaying) setPausedPosition(target)
 }
@@ -640,13 +702,14 @@ const buildSilentBuffer = (seconds: number): AudioBuffer => {
 const useSilentBase = (): void => {
 	pausePlayback()
 	setActiveLoop(null)
-	audioBuffer = buildSilentBuffer(DEFAULT_PROJECT_SECONDS)
+	const initialDuration = Math.max(MIN_PROJECT_SECONDS, app.projectDuration || DEFAULT_PROJECT_SECONDS)
+	audioBuffer = buildSilentBuffer(initialDuration)
 	app.hasAudio = true
 	app.hasSong = false
 	app.isPlaying = false
-	app.duration = DEFAULT_PROJECT_SECONDS
+	app.duration = initialDuration
 	app.trimStart = 0
-	app.trimEnd = DEFAULT_PROJECT_SECONDS
+	app.trimEnd = initialDuration
 	app.currentTime = 0
 	app.playMarker = 0
 	app.fileName = ''
@@ -660,18 +723,17 @@ const useSilentBase = (): void => {
 
 // ---- Project length -------------------------------------------
 
-// The project runs as long as its audio and video. With neither, it
-// is a minute of silence.
+// The project is at least app.projectDuration (default 3 minutes),
+// and expands automatically if any clip or media extends beyond it.
 const getProjectLength = (): number => {
-	let end = 0
-	let hasContent = false
+	let end = Math.max(MIN_PROJECT_SECONDS, app.projectDuration || DEFAULT_PROJECT_SECONDS)
 	for (const layer of layerStore.layers as LayerT[]) {
 		const contentEnd = getContentEnd(layer)
-		if (contentEnd === null) continue
-		hasContent = true
-		end = Math.max(end, contentEnd)
+		if (contentEnd !== null) end = Math.max(end, contentEnd)
+		for (const clip of layer.clips) {
+			if (clip.endTime !== null) end = Math.max(end, clip.endTime)
+		}
 	}
-	if (!hasContent) return DEFAULT_PROJECT_SECONDS
 	return Math.max(MIN_PROJECT_SECONDS, end)
 }
 
@@ -698,10 +760,13 @@ const applyProjectLength = (nextLength: number): void => {
 	const isSame = Math.abs(nextLength - app.duration) < 0.001
 	if (isSame) return
 	const wasFullRange = app.trimEnd >= app.duration - 0.01
+	const wasLoopClampedToEnd = app.loopStart <= 0.01 && app.loopEnd >= app.duration - 0.01
 	app.duration = nextLength
 	audioBuffer = buildSilentBuffer(nextLength)
 	if (wasFullRange || app.trimEnd > nextLength) app.trimEnd = nextLength
 	app.trimStart = Math.min(app.trimStart, Math.max(0, app.trimEnd - MIN_CLIP_SECONDS))
+	const idealFourBarEnd = app.beatOffset + getBarLength(app.bpm) * BARS_IN_DEFAULT_LOOP
+	if (wasLoopClampedToEnd) app.loopEnd = Math.min(nextLength, Math.max(MIN_CLIP_SECONDS, idealFourBarEnd))
 	app.loopEnd = Math.min(app.loopEnd, nextLength)
 	app.loopStart = Math.min(app.loopStart, Math.max(0, app.loopEnd - MIN_CLIP_SECONDS))
 	if (app.playMarker > nextLength) app.playMarker = nextLength
@@ -758,8 +823,6 @@ export const startRecording = async (): Promise<void> => {
 // The first audio never takes over the project's tempo by itself.
 // The tempo it found is offered, and the user decides.
 const offerTempo = (found: AnalysisT): void => {
-	app.beatOffset = computeBeatOffset(found.flux, app.bpm)
-	app.downbeatAnchor = null
 	const isDifferent = Math.abs(found.bpm - app.bpm) >= 0.05
 	app.pendingBpm = isDifferent ? found.bpm : null
 }
@@ -807,8 +870,25 @@ export const setBpm = (value: number): void => {
 	const isNumber = Number.isFinite(value)
 	const isInRange = value >= 40 && value <= 240
 	if (!isNumber || !isInRange) return
+	const previousBpm = app.bpm
+	const isChange = Math.abs(value - previousBpm) >= 0.001
+	if (!isChange) return
+	const previousBarLength = getBarLength(previousBpm)
+	const nextBarLength = getBarLength(value)
+	const startInBars = (app.loopStart - app.beatOffset) / previousBarLength
+	const rawLengthInBars = (app.loopEnd - app.loopStart) / previousBarLength
+	const wasClippedByDuration = app.loopEnd >= app.duration - 0.01 && rawLengthInBars < BARS_IN_DEFAULT_LOOP
+	const lengthInBars = wasClippedByDuration ? BARS_IN_DEFAULT_LOOP : Math.max(1, Math.round(rawLengthInBars * 4) / 4)
 	app.bpm = value
 	app.beatOffset = resolveBeatOffset(value)
+	const nextLoopStart = Math.max(0, app.beatOffset + startInBars * nextBarLength)
+	const nextLoopEnd = nextLoopStart + lengthInBars * nextBarLength
+	setLoopRegion(nextLoopStart, nextLoopEnd)
+}
+
+export const resetDownbeat = (): void => {
+	app.downbeatAnchor = null
+	app.beatOffset = 0
 }
 
 export const setDownbeatAt = (time: number): void => {
@@ -831,11 +911,20 @@ export const setTheme = (mode: ModeT): void => {
 	app.settings.mode = mode
 }
 
-// Volume lanes change what is heard as the song plays.
+// Volume lanes and clip fades change what is heard as the song plays.
 const followVolumeAutomation = (time: number): void => {
-	const audioLayers = layerStore.layers.filter((layer) => extraLayerIds.includes(layer.id)) as LayerT[]
-	const live = applyLayerAutomation(audioLayers, app.settings, automation.lanes, time)
-	const volumes = extraLayerIds.map((layerId) => live.find((layer) => layer.id === layerId)?.transform.volume ?? 1)
+	const layerIdSet = new Set(extraTrackRefs.map((ref) => ref.layerId))
+	const audioLayers = layerStore.layers.filter((layer) => layerIdSet.has(layer.id)) as LayerT[]
+	const modContext = { tracks: sources.tracks, lanes: automation.lanes }
+	const automated = applyLayerAutomationOnly(audioLayers, app.settings, automation.lanes, time)
+	const live = applyMappingsToLayers(automated, mappingsStore.list, modContext, time)
+	const volumes = extraTrackRefs.map((ref) => {
+		const layer = live.find((candidate) => candidate.id === ref.layerId)
+		const clip = layer?.clips.find((candidate) => candidate.id === ref.clipId)
+		const baseVolume = layer?.transform.volume ?? 1
+		if (clip === undefined) return baseVolume
+		return baseVolume * getClipLevel(clip, time, Math.min(app.duration, ref.naturalEnd))
+	})
 	setExtraVolumes(volumes)
 }
 
@@ -851,6 +940,7 @@ const startWatchers = (): void => {
 		$effect(() => {
 			JSON.stringify(app.settings)
 			JSON.stringify(automation.lanes)
+			JSON.stringify(mappingsStore.list)
 			JSON.stringify(layerStore.layers)
 			void layerStore.assetVersion
 			void app.projectName
@@ -867,10 +957,13 @@ const startWatchers = (): void => {
 			saveSettings($state.snapshot(app.settings))
 		})
 
-		// The project is as long as its audio and video.
+		// The project is at least app.projectDuration, and grows when clips/files exceed it.
 		$effect(() => {
 			void audioVersion
 			void layerStore.assetVersion
+			void app.projectDuration
+			const clipEnds = (layerStore.layers as LayerT[]).map((layer) => layer.clips.map((clip) => `${clip.startTime}:${clip.endTime ?? ''}`).join(',')).join('|')
+			void clipEnds
 			const nextLength = getProjectLength()
 			untrack(() => applyProjectLength(nextLength))
 		})
@@ -886,7 +979,7 @@ const startWatchers = (): void => {
 		// from where it is, so the change is heard at once.
 		$effect(() => {
 			const audioLayers = layerStore.layers.filter((layer) => layer.kind === 'audio')
-			const mixKey = audioLayers.map((layer) => [layer.id, layer.isVisible, ...layer.clips.map((clip) => [clip.startTime, clip.endTime, clip.sourceOffset, clip.isActive].join(','))].join(':')).join('|')
+			const mixKey = audioLayers.map((layer) => [layer.id, layer.isVisible, ...layer.clips.map((clip) => [clip.startTime, clip.endTime, clip.sourceOffset, clip.fadeIn, clip.fadeOut, clip.isActive].join(','))].join(':')).join('|')
 			void mixKey
 			untrack(restartMixIfPlaying)
 		})
@@ -905,6 +998,7 @@ export const startApp = async (): Promise<void> => {
 	startWatchers()
 	startLayerWatchers()
 	startAutomationWatchers()
+	startMappingsWatchers()
 	startSourceWatchers()
 	startAppearanceWatchers()
 	setVideoFrameListener(markDirty)
@@ -922,11 +1016,21 @@ export const startApp = async (): Promise<void> => {
 		})
 	})
 
-	await document.fonts.load('900 52px "DM Sans"')
-	layers = await buildLogoLayers()
-	app.isLayersReady = true
-	await restoreLayerAssets()
-	await restoreAudioLayers()
+	const loadFontsAndLogo = async () => {
+		try {
+			await Promise.race([
+				document.fonts.load('900 52px "DM Sans"'),
+				new Promise((resolve) => setTimeout(resolve, 1500))
+			])
+		} catch {
+			// Continue even if the font load fails.
+		}
+		layers = await buildLogoLayers()
+		app.isLayersReady = true
+		markDirty()
+	}
+
+	await Promise.all([loadFontsAndLogo(), restoreLayerAssets(), restoreAudioLayers()])
 }
 
 // ---- Audio layers -------------------------------------------
@@ -967,44 +1071,13 @@ const findFirstAudioLayer = (): LayerT | undefined => {
 	return audioLayers.find((layer) => audioLayerBuffers.has(layer.id))
 }
 
-<<<<<<< HEAD
-let isRestoringAudio = false
-
-// Deleting the audio the picture listens to hands the job to the next
-// audio layer, or to the demo beat if there is none. Undo brings it
-// back the same way.
-const syncSongSource = (): void => {
-	if (isRestoringAudio) return
-	const currentId = app.songLayerId
-	const current = currentId === null ? undefined : findLayer(currentId)
-	const isCurrentValid = current !== undefined && audioLayerBuffers.has(current.id)
-	if (isCurrentValid) return
-	const next = findFirstAudioLayer()
-	if (next === undefined) {
-		if (currentId !== null) clearSong()
-		return
-	}
-	void adoptSong(next.id, 'quiet')
-}
-
-// Where the song's clip sits on the timeline, as the analysis needs it.
-const readSongPlacement = (): ClipPlacementT | null => {
-	const layerId = songSource?.layerId
-	const layer = layerId === undefined ? undefined : findLayer(layerId)
-	const buffer = layerId === undefined ? undefined : audioLayerBuffers.get(layerId)
-	if (layer === undefined || buffer === undefined) return null
-	const clip = layer.clips[0]
-	if (clip === undefined) return null
-	const naturalEnd = clip.startTime + Math.max(0, buffer.duration - clip.sourceOffset)
-	const endTime = clip.endTime ?? naturalEnd
-	return { startTime: clip.startTime, endTime: Math.min(endTime, naturalEnd), sourceOffset: clip.sourceOffset }
-=======
 // Whether the project has audio, as layers come and go.
 const syncHasAudioLayers = (): void => {
 	const first = findFirstAudioLayer()
+	const hadSong = app.hasSong
 	app.hasSong = first !== undefined
 	app.fileName = first === undefined ? '' : first.name
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
+	if (hadSong && first === undefined && app.downbeatAnchor === null) app.beatOffset = 0
 }
 
 export type AddAudioOptionsT = {

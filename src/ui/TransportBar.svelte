@@ -1,8 +1,9 @@
 <script lang="ts">
 	import ArrowsOutLineHorizontalIcon from 'phosphor-svelte/lib/ArrowsOutLineHorizontalIcon'
+	import MetronomeIcon from 'phosphor-svelte/lib/MetronomeIcon'
 	import MusicNotesIcon from 'phosphor-svelte/lib/MusicNotesIcon'
 	import { formatBarBeat, formatBpm, formatPreciseTime } from '../engine/timeline'
-	import { app, getAnalysis } from '../store.svelte'
+	import { app, getAnalysis, setBpm, toggleMetronome } from '../store.svelte'
 	import { checkIsFitted, fitView, getZoomLevel, setEditorMode, timeline } from '../timeline.svelte'
 	import type { EditorModeT } from '../timeline.svelte'
 	import { openAudioPicker } from './filePicker'
@@ -23,6 +24,12 @@
 	const isFitted = $derived(checkIsFitted())
 
 	let modes = $state<HTMLElement | undefined>()
+
+	const handleBpmInput = (event: Event) => {
+		const target = event.currentTarget as HTMLInputElement
+		const parsed = Number(target.value)
+		if (Number.isFinite(parsed)) setBpm(parsed)
+	}
 
 	const handleModeChange = (event: Event) => {
 		const detail = (event as CustomEvent<{ value?: string | string[] }>).detail
@@ -53,9 +60,33 @@
 			<span class="transport-bar-eyebrow">Bar</span>
 			<span class="transport-bar-figure">{barBeatLabel}</span>
 		</div>
-		<div class="transport-bar-cell">
+		<label class="transport-bar-cell isBpm" title="Project BPM — click or use Up/Down arrows to adjust">
 			<span class="transport-bar-eyebrow">BPM</span>
-			<span class="transport-bar-figure">{bpmLabel}</span>
-		</div>
+			<input
+				class="transport-bar-bpm-input"
+				type="number"
+				min="40"
+				max="240"
+				step="1"
+				value={bpmLabel}
+				aria-label="Project BPM"
+				oninput={handleBpmInput}
+				onchange={handleBpmInput}
+			/>
+		</label>
 	</div>
+
+	<z-tooltip content={app.isMetronomeEnabled ? 'Metronome on (M) — clicks on every beat' : 'Metronome off (M) — click to hear beats'} placement="bottom">
+		<z-button
+			isIcon
+			size="sm"
+			kind={app.isMetronomeEnabled ? 'soft' : 'ghost'}
+			tone={app.isMetronomeEnabled ? 'primary' : 'neutral'}
+			aria-pressed={app.isMetronomeEnabled}
+			aria-label="Metronome"
+			{...press(toggleMetronome)}
+		>
+			<MetronomeIcon weight="bold" />
+		</z-button>
+	</z-tooltip>
 </div>

@@ -10,6 +10,7 @@ import type {
 	LayerT,
 	LayerTransformT,
 	ShapeT,
+	TextFontT,
 	TextWeightT
 } from './types'
 
@@ -84,10 +85,20 @@ export const BLEND_OPTIONS: OptionT<BlendModeT>[] = [
 	{ value: 'difference', label: 'Difference' }
 ]
 
+export const TEXT_FONT_OPTIONS: OptionT<TextFontT>[] = [
+	{ value: 'google-sans-flex', label: 'Google Sans Flex' },
+	{ value: 'dm-sans', label: 'DM Sans' },
+	{ value: 'system-ui', label: 'System Sans' },
+	{ value: 'serif', label: 'Editorial Serif' },
+	{ value: 'monospace', label: 'Monospace' },
+	{ value: 'display', label: 'Impact Display' }
+]
+
 export const TEXT_WEIGHT_OPTIONS: OptionT<string>[] = [
 	{ value: '400', label: 'Regular' },
 	{ value: '700', label: 'Bold' },
-	{ value: '900', label: 'Black' }
+	{ value: '900', label: 'Black' },
+	{ value: '1000', label: 'Extra Black' }
 ]
 
 const BLEND_OPERATIONS: Record<BlendModeT, GlobalCompositeOperation> = {
@@ -123,6 +134,9 @@ export const createClip = (clip: Partial<ClipT> = {}): ClipT => ({
 	startTime: 0,
 	endTime: null,
 	sourceOffset: 0,
+	fadeIn: 0,
+	fadeOut: 0,
+	kind: 'text',
 	isActive: true,
 	name: '',
 	color: null,
@@ -140,7 +154,7 @@ const createBaseLayer = (kind: LayerKindT, name: string): LayerT => ({
 	transform: createIdentityTransform(),
 	modulations: {},
 	blend: 'normal',
-	clips: [createClip()],
+	clips: [createClip({ kind })],
 	fx: [],
 	text: null,
 	shape: null,
@@ -157,7 +171,8 @@ export const createTextLayer = (text: string): LayerT => {
 	const layer = createBaseLayer('text', 'Text')
 	const transform = { ...layer.transform, y: 30 }
 	const content = {
-		weight: 900 as TextWeightT,
+		font: 'dm-sans' as TextFontT,
+		weight: '900' as TextWeightT,
 		isUppercase: true,
 		isLowercase: false,
 		isItalic: false,
@@ -205,24 +220,54 @@ const EDGE_FADE_SECONDS = 0
 
 // 0-1 visibility from the layer's time range. A layer that
 // starts at zero is fully on from the first frame.
-export const getClipLevel = (clip: ClipT, time: number): number => {
+// Visibility from 0 to 1 across the clip's time range.
+// A clip that starts at zero is fully visible from the first frame.
+export const getClipLevel = (
+	clip: ClipT,
+	time: number,
+	songLength = Number.POSITIVE_INFINITY
+): number => {
 	if (!clip.isActive) return 0
-	const endTime = clip.endTime ?? Number.POSITIVE_INFINITY
+
+	const endTime = clip.endTime ?? songLength
 	const isBeforeStart = time < clip.startTime
 	const isAfterEnd = time > endTime
 	if (isBeforeStart || isAfterEnd) return 0
-	const hasFade = EDGE_FADE_SECONDS > 0
-	const fadeInLevel = hasFade ? clamp((time - clip.startTime) / EDGE_FADE_SECONDS, 0, 1) : 1
-	const fadeOutLevel = hasFade ? clamp((endTime - time) / EDGE_FADE_SECONDS, 0, 1) : 1
-	const hasStartAtZero = clip.startTime <= 0
-	const startLevel = hasStartAtZero ? 1 : fadeInLevel
-	return Math.min(startLevel, fadeOutLevel)
+
+	const fadeIn = Math.max(0, clip.fadeIn ?? 0)
+	const fadeOut = Math.max(0, clip.fadeOut ?? 0)
+	const hasExplicitFade = fadeIn > 0 || fadeOut > 0
+	const startsAtZero = clip.startTime <= 0
+
+	if (hasExplicitFade) {
+		const canFadeIn = fadeIn > 0 && !startsAtZero
+		const canFadeOut = fadeOut > 0 && Number.isFinite(endTime)
+
+		const incomingLevel = canFadeIn
+			? clamp((time - clip.startTime) / fadeIn, 0, 1)
+			: 1
+		const outgoingLevel = canFadeOut
+			? clamp((endTime - time) / fadeOut, 0, 1)
+			: 1
+
+		return Math.min(incomingLevel, outgoingLevel)
+	}
+
+	const hasEdgeFade = EDGE_FADE_SECONDS > 0
+	if (!hasEdgeFade) return 1
+
+	const incomingLevel = startsAtZero
+		? 1
+		: clamp((time - clip.startTime) / EDGE_FADE_SECONDS, 0, 1)
+	const outgoingLevel = clamp((endTime - time) / EDGE_FADE_SECONDS, 0, 1)
+
+	return Math.min(incomingLevel, outgoingLevel)
 }
 
 // The layer shows through whichever of its clips is on right now.
-export const getTimeRangeLevel = (layer: LayerT, time: number): number => {
+export const getTimeRangeLevel = (layer: LayerT, time: number, songLength = Number.POSITIVE_INFINITY): number => {
 	let level = 0
-	for (const clip of layer.clips) level = Math.max(level, getClipLevel(clip, time))
+	for (const clip of layer.clips) level = Math.max(level, getClipLevel(clip, time, songLength))
 	return level
 }
 
@@ -251,4 +296,29 @@ export const applyClipToLayer = (layer: LayerT, time: number): LayerT => {
 // The active clip that covers this moment, if any.
 export const findClipAt = (layer: LayerT, time: number): ClipT | undefined => {
 	return layer.clips.find((clip) => clip.isActive && time >= clip.startTime && time <= (clip.endTime ?? Number.POSITIVE_INFINITY))
+}
+
+
+export type ClipBoundsT = {
+	minStart: number
+	maxEnd: number
+}
+
+// Hard-clamping bounds from a clip's immediate left and right neighbors
+// on the same layer, so clips never overlap.
+export const getClipNeighborBounds = (clips: ClipT[], clipId: string, getClipEndTime: (clip: ClipT) => number, maxTimelineEnd: number): ClipBoundsT => {
+	const current = clips.find((candidate) => candidate.id === clipId)
+	if (current === undefined) return { minStart: 0, maxEnd: maxTimelineEnd }
+	let minStart = 0
+	let maxEnd = maxTimelineEnd
+	const currentEnd = getClipEndTime(current)
+	for (const neighbor of clips) {
+		if (neighbor.id === clipId) continue
+		const neighborEnd = getClipEndTime(neighbor)
+		const isLeftNeighbor = neighborEnd <= current.startTime + 1e-6 || (neighbor.startTime < current.startTime && neighborEnd < currentEnd)
+		if (isLeftNeighbor) minStart = Math.max(minStart, neighborEnd)
+		const isRightNeighbor = neighbor.startTime >= currentEnd - 1e-6 || neighbor.startTime > current.startTime
+		if (isRightNeighbor) maxEnd = Math.min(maxEnd, neighbor.startTime)
+	}
+	return { minStart, maxEnd }
 }

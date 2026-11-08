@@ -1,33 +1,50 @@
-<<<<<<< HEAD
-import { recordHistory } from './automation.svelte'
+import { recordHistory, recordHistoryCoalesced } from './automation.svelte'
 import { LOGO_LAYER_ID, createClip } from './engine/layers'
 import type { ClipT, LayerT } from './engine/types'
-import { getSelectedClip, layerStore, selectLayers } from './layers.svelte'
+import { findLayer, getSelectedClips, layerStore, removeClips, removeLayers, selectClips, selectLayers, setLayerTimeRange } from './layers.svelte'
+import type { SelectedClipRefT } from './layers.svelte'
+import { cloneMappingsForSlicedClip } from './mappings.svelte'
 import { app, shareAudioLayerBuffer } from './store.svelte'
-import { MIN_CLIP_SECONDS } from './engine/settings'
+import { MIN_CLIP_SECONDS, clamp } from './engine/settings'
 import { copyVideo } from './engine/video'
-=======
-import { recordHistory, recordHistoryCoalesced } from './automation.svelte'
-import { LOGO_LAYER_ID } from './engine/layers'
-import type { LayerT } from './engine/types'
-import { layerStore, selectLayers, setLayerTimeRange } from './layers.svelte'
-import { app, getAudioLayerBuffer, shareAudioLayerBuffer } from './store.svelte'
-import { copyVideo, getVideoDuration } from './engine/video'
-import { MIN_CLIP_SECONDS } from './engine/settings'
-import { removeLayers } from './layers.svelte'
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 
-// Copy, paste, duplicate and deactivate for the selected layers,
+// Copy, paste, duplicate and deactivate for the selected clips or layers,
 // the way clips behave in an audio editor.
 
-// What copy holds: plain copies of the layers, and the ids they
-// came from, so pasted audio can share its original's sound.
 type ClipboardEntryT = {
 	layer: LayerT
 	sourceId: string
 }
 
+type ClipClipboardEntryT = {
+	layerId: string
+	clip: ClipT
+	length: number
+}
+
+export type MultiClipDragItemT = {
+	layerId: string
+	clipId: string
+	isMedia: boolean
+	initStart: number
+	initEnd: number
+	length: number
+	hasExplicitEnd: boolean
+	minDelta: number
+	maxDelta: number
+}
+
+export type MultiClipDragSessionT = {
+	anchorLayerId: string
+	anchorClipId: string
+	anchorInitStart: number
+	minDelta: number
+	maxDelta: number
+	items: MultiClipDragItemT[]
+}
+
 let clipboard: ClipboardEntryT[] = []
+let clipClipboard: ClipClipboardEntryT[] = []
 
 const getSelectedLayers = (): LayerT[] => {
 	const selected = layerStore.layers.filter((layer) => layerStore.selectedLayerIds.includes(layer.id))
@@ -53,25 +70,11 @@ const copyVideoFile = (copy: LayerT, sourceAssetId: string | null): void => {
 	void copyVideo(sourceAssetId, copy.id, copy.name).then(() => (layerStore.assetVersion += 1))
 }
 
-<<<<<<< HEAD
 // Where a clip ends on the timeline. Layers with no file run to the
 // end of the song.
-const getClipEnd = (layer: LayerT, clip: ClipT, fileLength: number): number => {
+export const getClipEnd = (layer: LayerT, clip: ClipT, fileLength: number): number => {
 	if (clip.endTime !== null) return clip.endTime
 	if (checkIsClip(layer)) return clip.startTime + Math.max(0, fileLength - clip.sourceOffset)
-=======
-// How long an audio or video file is. Other layers have no file.
-const getFileLength = (layer: LayerT): number => {
-	if (layer.kind === 'audio') return getAudioLayerBuffer(layer.id)?.duration ?? 0
-	if (layer.kind === 'video') return getVideoDuration(layer.assetId)
-	return 0
-}
-
-// Where a layer ends on the timeline.
-const getClipEnd = (layer: LayerT): number => {
-	if (layer.endTime !== null) return layer.endTime
-	if (checkIsClip(layer)) return layer.startTime + Math.max(0, getFileLength(layer) - layer.sourceOffset)
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 	return app.duration
 }
 
@@ -95,15 +98,30 @@ const shiftCopy = (copy: LayerT, sourceId: string, delta: number): void => {
 	if (copy.kind === 'video') copyVideoFile(copy, sourceAssetId)
 }
 
-export const copySelectedLayers = (): boolean => {
+export const copySelectedLayers = (getFileLength?: (layerId: string) => number): boolean => {
+	const selectedClips = getSelectedClips()
+	if (selectedClips.length > 0) {
+		clipClipboard = selectedClips.map((target) => {
+			const fileLength = getFileLength === undefined ? 0 : getFileLength(target.layer.id)
+			const end = getClipEnd(target.layer, target.clip, fileLength)
+			return {
+				layerId: target.layer.id,
+				clip: $state.snapshot(target.clip) as ClipT,
+				length: Math.max(MIN_CLIP_SECONDS, end - target.clip.startTime)
+			}
+		})
+		clipboard = []
+		return true
+	}
 	const selected = getSelectedLayers()
 	const hasLayers = selected.length > 0
 	if (!hasLayers) return false
 	clipboard = selected.map((layer) => ({ layer: $state.snapshot(layer) as LayerT, sourceId: layer.id }))
+	clipClipboard = []
 	return true
 }
 
-export const checkCanPaste = (): boolean => clipboard.length > 0
+export const checkCanPaste = (): boolean => clipboard.length > 0 || clipClipboard.length > 0
 
 const addCopies = (copies: LayerT[]): void => {
 	recordHistory()
@@ -112,8 +130,42 @@ const addCopies = (copies: LayerT[]): void => {
 	selectLayers(ids, ids[ids.length - 1] ?? null)
 }
 
+const insertClipCopyIntoLayer = (layer: LayerT, sourceClip: ClipT, targetStart: number, length: number): ClipT => {
+	const start = Math.max(0, targetStart)
+	const end = start + Math.max(MIN_CLIP_SECONDS, length)
+	const created = createClip({
+		...sourceClip,
+		id: crypto.randomUUID(),
+		kind: layer.kind,
+		startTime: start,
+		endTime: end,
+		textStyle: { ...sourceClip.textStyle },
+		transform: { ...sourceClip.transform }
+	})
+	layer.clips.push(created)
+	layer.clips.sort((first, second) => first.startTime - second.startTime)
+	cloneMappingsForSlicedClip(layer.id, sourceClip.id, created.id)
+	return created
+}
+
 // Clips land where the playhead is. Everything else lands as it was.
 export const pasteLayers = (playheadTime: number, getFileLength: (layerId: string) => number): boolean => {
+	if (clipClipboard.length > 0) {
+		const validEntries = clipClipboard.filter((entry) => findLayer(entry.layerId) !== undefined)
+		if (validEntries.length === 0) return false
+		recordHistory()
+		const earliestStart = Math.min(...validEntries.map((entry) => entry.clip.startTime))
+		const delta = playheadTime - earliestStart
+		const pastedRefs: SelectedClipRefT[] = []
+		for (const entry of validEntries) {
+			const layer = findLayer(entry.layerId)
+			if (layer === undefined) continue
+			const created = insertClipCopyIntoLayer(layer, entry.clip, entry.clip.startTime + delta, entry.length)
+			pastedRefs.push({ layerId: layer.id, clipId: created.id })
+		}
+		selectClips(pastedRefs)
+		return true
+	}
 	const hasClipboard = clipboard.length > 0
 	if (!hasClipboard) return false
 	const copies: LayerT[] = []
@@ -127,31 +179,59 @@ export const pasteLayers = (playheadTime: number, getFileLength: (layerId: strin
 	return true
 }
 
-// Clips repeat right after the original. Other layers sit on top of it.
-export const duplicateSelectedLayers = (): boolean => {
+// Clips repeat right after the selection span. Other layers sit on top of it.
+export const duplicateSelectedLayers = (getFileLength: (layerId: string) => number): boolean => {
+	const selectedClips = getSelectedClips()
+	if (selectedClips.length > 0) {
+		recordHistory()
+		const starts = selectedClips.map((target) => target.clip.startTime)
+		const ends = selectedClips.map((target) => getClipEnd(target.layer, target.clip, getFileLength(target.layer.id)))
+		const earliestStart = Math.min(...starts)
+		const latestEnd = Math.max(...ends)
+		const spanDelta = Math.max(MIN_CLIP_SECONDS, latestEnd - earliestStart)
+		const duplicatedRefs: SelectedClipRefT[] = []
+		for (const target of selectedClips) {
+			const end = getClipEnd(target.layer, target.clip, getFileLength(target.layer.id))
+			const length = Math.max(MIN_CLIP_SECONDS, end - target.clip.startTime)
+			const plainClip = $state.snapshot(target.clip) as ClipT
+			const created = insertClipCopyIntoLayer(target.layer, plainClip, target.clip.startTime + spanDelta, length)
+			duplicatedRefs.push({ layerId: target.layer.id, clipId: created.id })
+		}
+		selectClips(duplicatedRefs)
+		return true
+	}
 	const selected = getSelectedLayers()
 	const hasLayers = selected.length > 0
 	if (!hasLayers) return false
 	const copies = selected.map((layer) => {
 		const copy = cloneLayer(layer)
 		const isClip = checkIsClip(layer)
-<<<<<<< HEAD
 		const span = getLayerSpan(layer, getFileLength(layer.id))
 		if (isClip) shiftCopy(copy, layer.id, span.end - span.start)
-=======
-		if (isClip) placeCopy(copy, layer.id, getClipEnd(layer))
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 		return copy
 	})
 	addCopies(copies)
 	return true
 }
 
-// The clips the editing keys act on: the one picked on its own, or
+// Cut copies the selected clips or layers, then removes them.
+export const cutSelectedLayers = (getFileLength?: (layerId: string) => number): boolean => {
+	const hadClips = layerStore.selectedClips.length > 0
+	const didCopy = copySelectedLayers(getFileLength)
+	if (!didCopy) return false
+	if (hadClips) {
+		removeClips(layerStore.selectedClips)
+		return true
+	}
+	removeLayers(getSelectedLayers().map((layer) => layer.id))
+	return true
+}
+
+// The clips the editing keys act on: the selected clips, or
 // every clip in the selected layers.
-const getTargetClips = (): { layer: LayerT; clip: ClipT }[] => {
-	const picked = getSelectedClip()
-	if (picked !== undefined) return [picked]
+export const getTargetClips = (): { layer: LayerT; clip: ClipT }[] => {
+	const pickedClips = getSelectedClips()
+	if (pickedClips.length > 0) return pickedClips
 	return getSelectedLayers().flatMap((layer) => layer.clips.map((clip) => ({ layer, clip })))
 }
 
@@ -160,26 +240,28 @@ const getTargetClips = (): { layer: LayerT; clip: ClipT }[] => {
 // off.
 export const sliceSelectedLayers = (time: number, getFileLength: (layerId: string) => number): boolean => {
 	let didSlice = false
-	for (const { layer, clip } of getTargetClips()) {
-		const end = getClipEnd(layer, clip, getFileLength(layer.id))
-		const isCrossed = time > clip.startTime + MIN_CLIP_SECONDS && time < end - MIN_CLIP_SECONDS
+	for (const target of getTargetClips()) {
+		const end = getClipEnd(target.layer, target.clip, getFileLength(target.layer.id))
+		const isCrossed = time > target.clip.startTime + MIN_CLIP_SECONDS && time < end - MIN_CLIP_SECONDS
 		if (!isCrossed) continue
 		if (!didSlice) recordHistory()
 		didSlice = true
-		const isMedia = checkIsClip(layer)
+		const isMedia = checkIsClip(target.layer)
 		const tail = createClip({
+			kind: target.layer.kind,
 			startTime: time,
-			endTime: clip.endTime === null && !isMedia ? null : end,
-			sourceOffset: isMedia ? clip.sourceOffset + (time - clip.startTime) : 0,
-			isActive: clip.isActive,
-			name: clip.name,
-			color: clip.color,
-			text: clip.text,
-			textStyle: { ...clip.textStyle },
-			transform: { ...clip.transform }
+			endTime: target.clip.endTime === null && !isMedia ? null : end,
+			sourceOffset: target.clip.sourceOffset + (time - target.clip.startTime),
+			isActive: target.clip.isActive,
+			name: target.clip.name,
+			color: target.clip.color,
+			text: target.clip.text,
+			textStyle: { ...target.clip.textStyle },
+			transform: { ...target.clip.transform }
 		})
-		clip.endTime = time
-		layer.clips.splice(layer.clips.indexOf(clip) + 1, 0, tail)
+		target.clip.endTime = time
+		target.layer.clips.splice(target.layer.clips.indexOf(target.clip) + 1, 0, tail)
+		cloneMappingsForSlicedClip(target.layer.id, target.clip.id, tail.id)
 	}
 	return didSlice
 }
@@ -196,49 +278,83 @@ export const toggleSelectedLayersActive = (): boolean => {
 	return true
 }
 
-// Cut copies the selected layers, then removes them.
-export const cutSelectedLayers = (): boolean => {
-	const didCopy = copySelectedLayers()
-	if (!didCopy) return false
-	removeLayers(getSelectedLayers().map((layer) => layer.id))
-	return true
+export const buildMultiClipDragSession = (
+	anchorLayerId: string,
+	anchorClipId: string,
+	getFileLength: (layerId: string) => number
+): MultiClipDragSessionT | null => {
+	const rawTargets = getTargetClips()
+	const hasAnchorInTargets = rawTargets.some((target) => target.layer.id === anchorLayerId && target.clip.id === anchorClipId)
+	const anchorLayer = findLayer(anchorLayerId)
+	const anchorClip = anchorLayer?.clips.find((candidate) => candidate.id === anchorClipId)
+	if (anchorLayer === undefined || anchorClip === undefined) return null
+	const targets = hasAnchorInTargets ? rawTargets : [{ layer: anchorLayer, clip: anchorClip }]
+
+	const movingKeys = new Set(targets.map((target) => `${target.layer.id}:${target.clip.id}`))
+	const items: MultiClipDragItemT[] = []
+
+	for (const target of targets) {
+		const isMedia = checkIsClip(target.layer)
+		const fileLength = getFileLength(target.layer.id)
+		const initStart = target.clip.startTime
+		const initEnd = getClipEnd(target.layer, target.clip, fileLength)
+		const length = Math.max(MIN_CLIP_SECONDS, initEnd - initStart)
+		const maxTimelineEnd = isMedia ? Number.POSITIVE_INFINITY : app.duration
+		let minStart = 0
+		let maxEnd = maxTimelineEnd
+		for (const candidate of target.layer.clips) {
+			const candidateKey = `${target.layer.id}:${candidate.id}`
+			if (movingKeys.has(candidateKey)) continue
+			const candidateEnd = getClipEnd(target.layer, candidate, fileLength)
+			if (candidateEnd <= initStart + 1e-4) minStart = Math.max(minStart, candidateEnd)
+			if (candidate.startTime >= initEnd - 1e-4) maxEnd = Math.min(maxEnd, candidate.startTime)
+		}
+		const minDelta = minStart - initStart
+		const maxDelta = Math.max(minDelta, maxEnd - initEnd)
+		items.push({
+			layerId: target.layer.id,
+			clipId: target.clip.id,
+			isMedia,
+			initStart,
+			initEnd,
+			length,
+			hasExplicitEnd: target.clip.endTime !== null,
+			minDelta,
+			maxDelta
+		})
+	}
+
+	const anchorItem = items.find((item) => item.layerId === anchorLayerId && item.clipId === anchorClipId)
+	if (anchorItem === undefined) return null
+	const minDelta = Math.max(...items.map((item) => item.minDelta))
+	const maxDelta = Math.min(...items.map((item) => item.maxDelta))
+	return {
+		anchorLayerId,
+		anchorClipId,
+		anchorInitStart: anchorItem.initStart,
+		minDelta,
+		maxDelta: Math.max(minDelta, maxDelta),
+		items
+	}
 }
 
-// Slicing cuts the one clip you clicked, at the playhead, into two.
-// For audio and video the second piece plays on from the cut, so each
-// piece keeps its own part of the file. Text, images and shapes just
-// show for a shorter span each.
-export const sliceSelectedLayers = (time: number): boolean => {
-	const clicked = layerStore.layers.find((layer) => layer.id === layerStore.selectedLayerId)
-	const isSliceable = clicked !== undefined && clicked.id !== LOGO_LAYER_ID && checkCanSlice(clicked, time)
-	if (!isSliceable) return false
-	recordHistory()
-	const right = sliceLayer(clicked, time)
-	selectLayers([right.id], right.id)
-	return true
-}
-
-const checkCanSlice = (layer: LayerT, time: number): boolean => {
-	const margin = 0.01
-	const isAfterStart = time > layer.startTime + margin
-	const isBeforeEnd = time < getClipEnd(layer) - margin
-	return isAfterStart && isBeforeEnd
-}
-
-const sliceLayer = (layer: LayerT, time: number): LayerT => {
-	const right = cloneLayer(layer)
-	const originalEnd = layer.endTime
-	const sourceId = layer.id
-	const sourceAssetId = layer.assetId
-	right.startTime = time
-	right.endTime = originalEnd
-	right.sourceOffset = layer.sourceOffset + (checkIsClip(layer) ? time - layer.startTime : 0)
-	layer.endTime = time
-	if (layer.kind === 'audio') shareAudioLayerBuffer(sourceId, right.id)
-	if (layer.kind === 'video') copyVideoFile(right, sourceAssetId)
-	const index = layerStore.layers.findIndex((candidate) => candidate.id === layer.id)
-	layerStore.layers.splice(index + 1, 0, right)
-	return right
+export const applyMultiClipDragDelta = (session: MultiClipDragSessionT, rawDelta: number): void => {
+	const delta = clamp(rawDelta, session.minDelta, session.maxDelta)
+	const orderedItems = delta >= 0 ? [...session.items].sort((first, second) => second.initStart - first.initStart) : [...session.items].sort((first, second) => first.initStart - second.initStart)
+	for (const item of orderedItems) {
+		const layer = findLayer(item.layerId)
+		const clip = layer?.clips.find((candidate) => candidate.id === item.clipId)
+		if (layer === undefined || clip === undefined) continue
+		const nextStart = Math.max(0, item.initStart + delta)
+		const nextEnd = nextStart + item.length
+		if (item.isMedia) {
+			clip.startTime = nextStart
+			const hasFiniteMax = item.maxDelta < Number.POSITIVE_INFINITY
+			if (item.hasExplicitEnd || hasFiniteMax) clip.endTime = nextEnd
+			continue
+		}
+		setLayerTimeRange(layer.id, clip.id, nextStart, nextEnd, app.duration)
+	}
 }
 
 export type ClipNudgeT = {
@@ -259,30 +375,19 @@ const getNudgeDelta = (anchorStart: number, nudge: ClipNudgeT): number => {
 	return offset + nextStep * nudge.step - anchorStart
 }
 
-// Moves the selected layers along the timeline, all by the same
-// amount. The first one lands on the next grid line. True when a
-// layer took the key.
-export const nudgeSelectedLayerTimes = (nudge: ClipNudgeT): boolean => {
-	const selected = getSelectedLayers()
-	const hasLayers = selected.length > 0
-	if (!hasLayers) return false
-	const earliest = Math.min(...selected.map((layer) => layer.startTime))
-	const rawDelta = getNudgeDelta(earliest, nudge)
-	const delta = Math.max(rawDelta, -earliest)
-	if (delta === 0) return true
+// Moves the targeted clips along the timeline, all by the same
+// amount. The first one lands on the next grid line.
+export const nudgeSelectedLayerTimes = (nudge: ClipNudgeT, getFileLength: (layerId: string) => number): boolean => {
+	const targets = getTargetClips()
+	const hasTargets = targets.length > 0
+	if (!hasTargets) return false
+	const earliestTarget = targets.reduce((best, current) => (current.clip.startTime < best.clip.startTime ? current : best), targets[0])
+	const session = buildMultiClipDragSession(earliestTarget.layer.id, earliestTarget.clip.id, getFileLength)
+	if (session === null) return false
+	const rawDelta = getNudgeDelta(earliestTarget.clip.startTime, nudge)
+	const clampedDelta = clamp(rawDelta, session.minDelta, session.maxDelta)
+	if (Math.abs(clampedDelta) < 1e-6) return true
 	recordHistoryCoalesced('nudge-clip-times')
-	for (const layer of selected) moveLayerInTime(layer, delta)
+	applyMultiClipDragDelta(session, clampedDelta)
 	return true
-}
-
-const moveLayerInTime = (layer: LayerT, delta: number): void => {
-	const start = layer.startTime + delta
-	const isMedia = checkIsClip(layer)
-	if (isMedia) {
-		layer.startTime = start
-		layer.endTime = layer.endTime === null ? null : layer.endTime + delta
-		return
-	}
-	const length = getClipEnd(layer) - layer.startTime
-	setLayerTimeRange(layer.id, start, start + Math.max(length, MIN_CLIP_SECONDS), app.duration)
 }

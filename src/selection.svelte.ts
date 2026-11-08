@@ -7,7 +7,9 @@ import {
 	selectPoints,
 	togglePointSelected
 } from './automation.svelte'
-import { layerStore, removeClip, removeLayers, selectClip, selectLayers } from './layers.svelte'
+import { checkIsClipInSelection, layerStore, removeClips, removeLayers, selectClip, selectClips, selectLayers } from './layers.svelte'
+import type { SelectedClipRefT } from './layers.svelte'
+import { mappingsStore, selectModulator } from './mappings.svelte'
 import {
 	addImpulsesToSelection,
 	clearImpulseSelection,
@@ -65,6 +67,7 @@ const clearOtherKinds = (keep: SelectionKindT): void => {
 	if (keep !== 'lane') clearLaneSelection()
 	if (keep !== 'point') clearPointSelection()
 	if (keep !== 'impulse') resetImpulseSelection()
+	if (keep === 'layer' || keep === 'none') selectModulator(null)
 }
 
 export const clearSelection = (): void => {
@@ -76,8 +79,9 @@ export const checkHasSelection = (): boolean => {
 	const hasLanes = selection.laneIds.length > 0
 	const hasPoints = automation.selectedPointIds.length > 0
 	const hasImpulses = sources.impulseSelection.impulseIds.length > 0
-	const hasClip = layerStore.selectedClip !== null
-	return hasLayers || hasClip || hasLanes || hasPoints || hasImpulses
+	const hasClip = layerStore.selectedClips.length > 0
+	const hasModulator = mappingsStore.selectedModulator !== null
+	return hasLayers || hasClip || hasLanes || hasPoints || hasImpulses || hasModulator
 }
 
 const pickFromList = (currentIds: string[], anchorId: string | null, targetId: string, orderedIds: string[], modifiers: PickModifiersT): string[] => {
@@ -99,10 +103,27 @@ const pickFromList = (currentIds: string[], anchorId: string | null, targetId: s
 // ---- Layers -------------------------------------------------
 
 // orderedIds is the list the click happened in, as shown.
-// A clip is picked on its own, and nothing else stays selected.
-export const pickClip = (layerId: string, clipId: string): void => {
+// A clip is picked on its own, or toggled with Shift/Cmd/Ctrl.
+export const pickClip = (layerId: string, clipId: string, modifiers?: PickModifiersT): void => {
+	const isAdditive = modifiers !== undefined && (modifiers.isToggle || modifiers.isRange)
+	if (isAdditive) {
+		const current = [...layerStore.selectedClips]
+		const isAlreadySelected = checkIsClipInSelection(layerId, clipId)
+		clearOtherKinds('none')
+		const next = isAlreadySelected
+			? current.filter((entry) => !(entry.layerId === layerId && entry.clipId === clipId))
+			: [...current, { layerId, clipId }]
+		selectClips(next)
+		return
+	}
 	clearOtherKinds('none')
 	selectClip(layerId, clipId)
+}
+
+export const pickClipsInBox = (clips: SelectedClipRefT[], isAdditive: boolean): void => {
+	const current = isAdditive ? [...layerStore.selectedClips] : []
+	clearOtherKinds('none')
+	selectClips([...current, ...clips])
 }
 
 export const pickLayer = (layerId: string, orderedIds: string[], modifiers: PickModifiersT): void => {
@@ -125,6 +146,12 @@ export const pickLane = (laneId: string, orderedIds: string[], modifiers: PickMo
 	const isExtending = modifiers.isRange || modifiers.isToggle
 	if (!isExtending) selection.anchorLaneId = laneId
 	selection.laneIds = nextIds
+	selectModulator({ kind: 'lane', laneId })
+}
+
+export const pickEmitterTrack = (trackId: string): void => {
+	clearOtherKinds('impulse')
+	selectModulator({ kind: 'emitter', trackId })
 }
 
 export const checkIsLaneSelected = (laneId: string): boolean => selection.laneIds.includes(laneId)
@@ -205,9 +232,9 @@ export const deleteSelection = (): boolean => {
 		clearLaneSelection()
 		return true
 	}
-	const pickedClip = layerStore.selectedClip
-	if (pickedClip !== null) {
-		removeClip(pickedClip.layerId, pickedClip.clipId)
+	const hasClips = layerStore.selectedClips.length > 0
+	if (hasClips) {
+		removeClips(layerStore.selectedClips)
 		return true
 	}
 	const hasLayers = layerStore.selectedLayerIds.length > 0

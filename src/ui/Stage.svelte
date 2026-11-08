@@ -1,42 +1,23 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
-	import { automation, recordHistory } from '../automation.svelte'
-	import { applyLayerAutomation } from '../engine/automation'
-	import type { LayerT } from '../engine/types'
-	import { layerStore } from '../layers.svelte'
-	import { checkIsLayerSelected } from '../layers.svelte'
-	import { clearSelection, pickLayer, readModifiers } from '../selection.svelte'
-	import type { PickModifiersT } from '../selection.svelte'
 	import {
 		checkIsStageReset,
-		getSelectedLayers,
-		moveLayerBy,
 		resetStageView,
 		setStageZoom,
 		stageView,
 		zoomStageAt
 	} from '../stage.svelte'
-	import { findLayerAtPoint, readFrame } from '../stageGeometry'
-	import type { FramePointT } from '../stageGeometry'
-	import { buildEnginePalette } from '../palette.svelte'
 	import { uiState } from '../uiState.svelte'
 	import { app, attachCanvas, getOutputSize } from '../store.svelte'
-	import StageSelection from './StageSelection.svelte'
 	import './Stage.css'
 
-	// A press on the stage is one of two things. On a layer that
-	// is already selected it moves the layer. Anywhere else it
-	// pans the view, and a click that never moved selects the
-	// layer under it, or clears the selection over empty space.
+	// Dragging on the stage viewport pans the view; wheel and pinch zoom it.
+	// Layers and clips are controlled exclusively via their Inspector properties.
 	type StageDragT = {
-		mode: 'pan' | 'move'
 		startX: number
 		startY: number
 		startPanX: number
 		startPanY: number
-		startPositions: Map<string, { x: number; y: number }>
-		pendingLayerId: string | null
-		modifiers: PickModifiersT
 		hasMoved: boolean
 	}
 
@@ -58,7 +39,6 @@
 	const isVertical = $derived(app.settings.aspectRatio === '9:16')
 	const isSquare = $derived(app.settings.aspectRatio === '1:1')
 	const isPortrait = $derived(app.settings.aspectRatio === '4:5')
-	const frame = $derived(readFrame(app.settings.aspectRatio))
 	const isViewReset = $derived(checkIsStageReset())
 	const ZOOM_PERCENTS = [25, 50, 100, 200, 400]
 	const ZOOM_25_OPTION = { label: '25', value: '25' }
@@ -72,39 +52,11 @@
 	const zoomPercent = $derived(fitWidth > 0 ? (stageView.zoom * fitWidth * 100) / outputWidth : 100)
 	const matchingPercent = $derived(ZOOM_PERCENTS.find((percent) => Math.abs(percent - zoomPercent) < 1))
 	const zoomValue = $derived(isViewReset ? 'fit' : matchingPercent === undefined ? 'custom' : String(matchingPercent))
-	const customLabel = $derived(`${Math.round(zoomPercent)}%`)
-	const canEditLayers = $derived(app.isLayersReady && !app.isRecording)
 	const isFocused = $derived(uiState.isStageFocused)
-	const shouldShowHandles = $derived(canEditLayers && !uiState.isUiHidden && !isFocused)
 
 	const frameStyle = $derived(
 		`--stage-zoom: ${stageView.zoom}; transform: translate(${stageView.panX}px, ${stageView.panY}px) scale(${stageView.zoom});`
 	)
-
-	const getFrameRect = (): DOMRect => frameElement.getBoundingClientRect()
-
-	const readFramePoint = (event: PointerEvent): FramePointT => {
-		const rect = getFrameRect()
-		const x = ((event.clientX - rect.left) / rect.width) * frame.width
-		const y = ((event.clientY - rect.top) / rect.height) * frame.height
-		return { x, y }
-	}
-
-	const readLiveLayers = (): LayerT[] => {
-		return applyLayerAutomation(layerStore.layers as LayerT[], app.settings, automation.lanes, app.currentTime)
-	}
-
-	const findLayerUnderPointer = (event: PointerEvent): LayerT | null => {
-		const palette = buildEnginePalette(app.settings.background)
-		const point = readFramePoint(event)
-		return findLayerAtPoint(readLiveLayers(), palette, frame, app.currentTime, point)
-	}
-
-	const capturePositions = (): Map<string, { x: number; y: number }> => {
-		const positions = new Map<string, { x: number; y: number }>()
-		for (const layer of getSelectedLayers()) positions.set(layer.id, { x: layer.transform.x, y: layer.transform.y })
-		return positions
-	}
 
 	const checkIsControl = (target: EventTarget | null): boolean => {
 		const isElement = target instanceof Element
@@ -119,36 +71,13 @@
 		if (isZoomer) return
 		const isPanButton = event.button === 0 || event.button === 1
 		if (!isPanButton || checkIsControl(event.target) || isFocused) return
-		const modifiers = readModifiers(event)
-		const isPicking = modifiers.isRange || modifiers.isToggle
-		console.log({ isPanButton, modifiers, isPicking })
-		const layer = canEditLayers ? findLayerUnderPointer(event) : null
-		const isOnSelected = layer !== null && checkIsLayerSelected(layer.id)
-		const shouldMove = isOnSelected && !isPicking
 		viewport.setPointerCapture(event.pointerId)
 		drag = {
-			mode: shouldMove ? 'move' : 'pan',
 			startX: event.clientX,
 			startY: event.clientY,
 			startPanX: stageView.panX,
 			startPanY: stageView.panY,
-			startPositions: shouldMove ? capturePositions() : new Map(),
-			pendingLayerId: layer === null ? null : layer.id,
-			modifiers,
 			hasMoved: false
-		}
-	}
-
-	const moveSelectedLayers = (event: PointerEvent, activeDrag: StageDragT) => {
-		const rect = getFrameRect()
-		const deltaXPercent = ((event.clientX - activeDrag.startX) / rect.width) * 100
-		const deltaYPercent = ((event.clientY - activeDrag.startY) / rect.height) * 100
-		for (const layer of getSelectedLayers()) {
-			const start = activeDrag.startPositions.get(layer.id)
-			if (start === undefined) continue
-			layer.transform.x = start.x
-			layer.transform.y = start.y
-			moveLayerBy(layer, deltaXPercent, deltaYPercent)
 		}
 	}
 
@@ -160,35 +89,15 @@
 		const travel = Math.abs(deltaX) + Math.abs(deltaY)
 		const hasStarted = activeDrag.hasMoved || travel > DRAG_THRESHOLD_PX
 		if (!hasStarted) return
-		const isFirstMove = !activeDrag.hasMoved
 		activeDrag.hasMoved = true
-		if (activeDrag.mode === 'pan') {
-			isPanning = true
-			stageView.panX = activeDrag.startPanX + deltaX
-			stageView.panY = activeDrag.startPanY + deltaY
-			return
-		}
-		// One undo step per move, recorded when it really starts.
-		if (isFirstMove) recordHistory()
-		moveSelectedLayers(event, activeDrag)
-	}
-
-	const finishClick = (activeDrag: StageDragT) => {
-		const layerId = activeDrag.pendingLayerId
-		const isOverLayer = layerId !== null
-		if (!isOverLayer) return clearSelection()
-		const orderedIds = [...layerStore.layers].reverse().map((layer) => layer.id)
-		pickLayer(layerId, orderedIds, activeDrag.modifiers)
+		isPanning = true
+		stageView.panX = activeDrag.startPanX + deltaX
+		stageView.panY = activeDrag.startPanY + deltaY
 	}
 
 	const handlePointerUp = () => {
-		const activeDrag = drag
 		drag = null
 		isPanning = false
-		if (activeDrag === null || activeDrag.hasMoved) return
-		const isMove = activeDrag.mode === 'move'
-		if (isMove) return
-		finishClick(activeDrag)
 	}
 
 	const handleDoubleClick = (event: MouseEvent) => {
@@ -228,7 +137,6 @@
 		event.stopPropagation()
 		event.preventDefault()
 
-		console.log(event.target, event.currentTarget)
 		select.blur()
 		if (choice === 'fit') return resetStageView()
 		const percent = Number(choice)
@@ -245,7 +153,7 @@
 	onMount(() => attachCanvas(canvas))
 
 	$effect(() => {
-		const zoomer = document.getElementById('stage-zoomer')
+		const zoomer = document.getElementById('stage-zoomer') as (HTMLElement & { options?: typeof ZOOM_OPTIONS }) | null
 		if (zoomer) zoomer.options = ZOOM_OPTIONS
 	})
 </script>
@@ -295,10 +203,6 @@
 				</div>
 			{/if}
 		</div>
-
-		{#if shouldShowHandles}
-			<StageSelection {frame} {getFrameRect} />
-		{/if}
 	</div>
 
 	{#if !isFocused && !uiState.isUiHidden}

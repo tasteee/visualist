@@ -1,19 +1,32 @@
 <script lang="ts">
 	import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon'
 	import CaretUpIcon from 'phosphor-svelte/lib/CaretUpIcon'
+	import TextItalicIcon from 'phosphor-svelte/lib/TextItalicIcon'
+	import TextStrikethroughIcon from 'phosphor-svelte/lib/TextStrikethroughIcon'
+	import TextUnderlineIcon from 'phosphor-svelte/lib/TextUnderlineIcon'
 	import UploadSimpleIcon from 'phosphor-svelte/lib/UploadSimpleIcon'
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import { recordHistory, recordHistoryCoalesced } from '../automation.svelte'
 	import { getAsset } from '../engine/assets'
 	import { getVideo } from '../engine/video'
-	import { BLEND_OPTIONS, FX_SPECS, TEXT_WEIGHT_OPTIONS, findClipAt, getLayerParams } from '../engine/layers'
+	import { BLEND_OPTIONS, FX_SPECS, TEXT_FONT_OPTIONS, getLayerParams } from '../engine/layers'
 	import { DEMO_LOOP_SECONDS } from '../engine/settings'
-	import type { BlendModeT, FxKindT, LayerT, ShapeFillT, ShapeKindT, TextWeightT } from '../engine/types'
+	import type { BlendModeT, FxKindT, LayerT, ShapeFillT, ShapeKindT, TextFontT } from '../engine/types'
 	import { palette } from '../palette.svelte'
-	import { addLayerFx, checkCanMove, layerStore, moveLayer, removeLayer, removeLayerFx, renameLayer, setLayerImageFile } from '../layers.svelte'
+	import {
+		addLayerFx,
+		checkCanMove,
+		layerStore,
+		moveLayer,
+		removeLayer,
+		removeLayerFx,
+		renameLayer,
+		setLayerImageFile
+	} from '../layers.svelte'
 	import { app } from '../store.svelte'
 	import { formatPreciseTime } from '../engine/timeline'
+	import ColorPicker from './ColorPicker.svelte'
 	import FxRow from './FxRow.svelte'
 	import LayerParamSlider from './LayerParamSlider.svelte'
 	import { openPicturePicker } from './filePicker'
@@ -21,6 +34,7 @@
 	import Section from './Section.svelte'
 	import Segmented from './Segmented.svelte'
 	import SettingSlider from './SettingSlider.svelte'
+	import './ClipProperties.css'
 	import './LayerEditor.css'
 
 	type LayerEditorPropsT = {
@@ -123,7 +137,11 @@
 	}
 
 	const timingLabel = $derived(`${formatPreciseTime(firstClip?.startTime ?? 0)} – ${formatPreciseTime(endTimeValue)}`)
-	const timingDescription = $derived(app.hasAudio ? `Shows ${timingLabel}. Drag its bar in the timeline to change when.` : 'Load a song to set when this layer shows.')
+	const timingDescription = $derived(
+		app.hasAudio
+			? `Shows ${timingLabel}. Drag its bar in the timeline to change when.`
+			: 'Load a song to set when this layer shows.'
+	)
 
 	const handleAddFx = (kind: FxKindT) => addLayerFx(props.layer.id, kind)
 
@@ -134,66 +152,125 @@
 	const handleMoveBackward = () => moveLayer(props.layer.id, 'backward')
 
 	const handleDelete = () => removeLayer(props.layer.id)
+
+	type StyleKeyT = 'isStrike' | 'isUnderline' | 'isItalic' | 'isUppercase' | 'isLowercase'
+	const MIN_WEIGHT = 100
+	const MAX_WEIGHT = 1000
+	const WEIGHT_STEP = 50
+
+	const handleLayerFont = (event: Event) => {
+		if (props.layer.text === null) return
+		recordHistory()
+		props.layer.text.font = readText(event) as TextFontT
+	}
+
+	const handleLayerWeight = (event: Event) => {
+		if (props.layer.text === null) return
+		const value = Number((event as CustomEvent<{ value: number }>).detail.value)
+		if (!Number.isFinite(value)) return
+		recordHistoryCoalesced(`layer-weight:${props.layer.id}`)
+		props.layer.text.weight = String(Math.min(MAX_WEIGHT, Math.max(MIN_WEIGHT, Math.round(value))))
+		console.log('set weight ', props.layer.text.weight)
+	}
+
+	const handleLayerTextColor = (value: string, isContinuous: boolean) => {
+		if (props.layer.text === null) return
+		if (isContinuous) recordHistoryCoalesced(`layer-text-color:${props.layer.id}`)
+		else recordHistory()
+		props.layer.text.color = value
+	}
+
+	const handleLayerStyleToggle = (key: StyleKeyT) => {
+		if (props.layer.text === null) return
+		recordHistory()
+		const next = !props.layer.text[key]
+		props.layer.text[key] = next
+		if (key === 'isUppercase' && next) props.layer.text.isLowercase = false
+		if (key === 'isLowercase' && next) props.layer.text.isUppercase = false
+	}
+
+	const getStyleButtonKind = (isOn: boolean): string => (isOn ? 'soft' : 'outline')
+	const getStyleButtonTone = (isOn: boolean): string => (isOn ? 'primary' : 'neutral')
 </script>
 
 <div class="layer-editor">
-	<Section title="Layer">
-		<div class="layer-editor-name">
-			{#if showName}
-				<RenameField value={props.layer.name} label="Layer name" limit={NAME_LIMIT} oncommit={handleNameCommit} />
-			{/if}
-			<z-button-group>
-				<z-tooltip content="Bring forward" placement="top" openDelay={300}>
-					<z-button size="md" kind="outline" tone="neutral" aria-label="Bring forward" isDisabled={!canMoveForward} onclick={handleMoveForward}>
-						<CaretUpIcon weight="bold" />
-					</z-button>
-				</z-tooltip>
-				<z-tooltip content="Send backward" placement="top" openDelay={300}>
-					<z-button size="md" kind="outline" tone="neutral" aria-label="Send backward" isDisabled={!canMoveBackward} onclick={handleMoveBackward}>
-						<CaretDownIcon weight="bold" />
-					</z-button>
-				</z-tooltip>
-			</z-button-group>
-		</div>
-
-		{#if isMissingFile}
-			<p class="layer-editor-note isWarning">This layer's file could not be restored. Upload it again.</p>
-		{/if}
-
-		{#if isVideo}
-			<p class="layer-editor-note">Drag the clip in the timeline to move it. Drag its edges to trim. Video plays without sound.</p>
-		{/if}
-
-		{#if isPicture}
-			<z-button size="md" kind="outline" tone="neutral" isFullWidth isDisabled={layerStore.isImporting} onclick={handleUpload}>
-				<UploadSimpleIcon weight="bold" />
-				{hasPicture ? 'Replace picture' : 'Upload a picture'}
-			</z-button>
-			<p class="layer-editor-note">PNG, JPG, SVG, WebP or GIF. A new picture goes on top of every other layer.</p>
-		{/if}
-
-		{#if shape !== null}
-			<z-field label="Shape">
-				<z-select value={shape.kind} options={SHAPE_KIND_OPTIONS} aria-label="Shape" onchange={handleShapeKind}></z-select>
+	{#if isText && props.layer.text !== null}
+		<Section title="Typography" description="Default style inherited by clips on this layer unless overridden.">
+			<z-field label="Font" is-horizontal>
+				<z-select
+					value={props.layer.text.font ?? 'dm-sans'}
+					options={TEXT_FONT_OPTIONS}
+					aria-label="Font family"
+					onchange={handleLayerFont}
+				></z-select>
 			</z-field>
-			<Segmented label="Fill" options={SHAPE_FILL_OPTIONS} value={shape.fill} onchange={handleShapeFill} />
-			<z-field label={isGradient ? 'From' : 'Color'}>
-				<z-select value={shape.color} options={colorOptions} aria-label="Shape color" onchange={handleShapeColor}></z-select>
+			<z-field label="Weight" is-horizontal>
+				<z-number-input
+					value={Number(props.layer.text.weight)}
+					min={MIN_WEIGHT}
+					max={MAX_WEIGHT}
+					step={WEIGHT_STEP}
+					size="md"
+					aria-label="Font weight"
+					oninput={handleLayerWeight}
+					onchange={handleLayerWeight}
+					has-stepper-buttons
+				></z-number-input>
 			</z-field>
-			{#if isGradient}
-				<z-field label="To">
-					<z-select value={shape.color2} options={colorOptions} aria-label="Gradient end color" onchange={handleShapeSecondColor}></z-select>
-				</z-field>
-				<SettingSlider label="Angle" value={shape.angle} min={0} max={360} step={1} suffix="°" onchange={handleShapeAngle} />
-			{/if}
-		{/if}
+			<ColorPicker value={props.layer.text.color} label="Text color" onchange={handleLayerTextColor} />
 
-		{#if isSvg}
-			<z-field label="Color">
-				<z-select value={props.layer.svgColor} options={svgColorOptions} aria-label="Vector color" onchange={handleSvgColorChange}></z-select>
-			</z-field>
-		{/if}
-	</Section>
+			<div class="layer-editor-styles clip-properties-styles" role="group" aria-label="Text style">
+				<z-button
+					size="sm"
+					kind={getStyleButtonKind(props.layer.text.isStrike)}
+					tone={getStyleButtonTone(props.layer.text.isStrike)}
+					aria-label="Strike-through"
+					aria-pressed={props.layer.text.isStrike}
+					onclick={() => handleLayerStyleToggle('isStrike')}
+				>
+					<TextStrikethroughIcon weight="bold" />
+				</z-button>
+				<z-button
+					size="sm"
+					kind={getStyleButtonKind(props.layer.text.isUnderline)}
+					tone={getStyleButtonTone(props.layer.text.isUnderline)}
+					aria-label="Underline"
+					aria-pressed={props.layer.text.isUnderline}
+					onclick={() => handleLayerStyleToggle('isUnderline')}
+				>
+					<TextUnderlineIcon weight="bold" />
+				</z-button>
+				<z-button
+					size="sm"
+					kind={getStyleButtonKind(props.layer.text.isItalic)}
+					tone={getStyleButtonTone(props.layer.text.isItalic)}
+					aria-label="Italic"
+					aria-pressed={props.layer.text.isItalic}
+					onclick={() => handleLayerStyleToggle('isItalic')}
+				>
+					<TextItalicIcon weight="bold" />
+				</z-button>
+				<span class="clip-properties-case">
+					<z-button
+						size="sm"
+						kind={getStyleButtonKind(props.layer.text.isUppercase)}
+						tone={getStyleButtonTone(props.layer.text.isUppercase)}
+						aria-label="All caps"
+						aria-pressed={props.layer.text.isUppercase}
+						onclick={() => handleLayerStyleToggle('isUppercase')}>AA</z-button
+					>
+					<z-button
+						size="sm"
+						kind={getStyleButtonKind(props.layer.text.isLowercase)}
+						tone={getStyleButtonTone(props.layer.text.isLowercase)}
+						aria-label="All lower case"
+						aria-pressed={props.layer.text.isLowercase}
+						onclick={() => handleLayerStyleToggle('isLowercase')}>aa</z-button
+					>
+				</span>
+			</div>
+		</Section>
+	{/if}
 
 	<Section title="Transform" description="Modulate any value to move it with the music.">
 		{#each getLayerParams(props.layer.kind) as param (param.key)}
@@ -203,7 +280,8 @@
 
 	<Section title="Blend and timing" description={timingDescription}>
 		<z-field label="Blend">
-			<z-select value={props.layer.blend} options={BLEND_OPTIONS} aria-label="Blend mode" onchange={handleBlendChange}></z-select>
+			<z-select value={props.layer.blend} options={BLEND_OPTIONS} aria-label="Blend mode" onchange={handleBlendChange}
+			></z-select>
 		</z-field>
 	</Section>
 
@@ -224,13 +302,4 @@
 			{/each}
 		</div>
 	</Section>
-
-	{#if !isLogo}
-		<Section title="Remove">
-			<z-button size="md" kind="outline" tone="danger" isFullWidth onclick={handleDelete}>
-				<TrashIcon weight="bold" />
-				Delete layer
-			</z-button>
-		</Section>
-	{/if}
 </div>

@@ -66,12 +66,14 @@ export type LayerAxesT = {
 	canMoveY: boolean
 }
 
-// An automated channel can only be edited in its lane, so the
-// stage can not write it.
-export const getLayerAxes = (layerId: string): LayerAxesT => ({
-	canMoveX: !checkIsParamAutomated(layerId, 'x'),
-	canMoveY: !checkIsParamAutomated(layerId, 'y')
-})
+// Base controls stay unlocked even when modulated or automated.
+export const getLayerAxes = (layerId: string): LayerAxesT => {
+	void layerId
+	return {
+		canMoveX: true,
+		canMoveY: true
+	}
+}
 
 const MAX_OFFSET = 100
 

@@ -56,7 +56,7 @@ const readStoredHeaderWidth = (): number => {
 
 export const timeline = $state<TimelineStateT>({
 	mode: 'staging',
-	view: { start: 0, span: 1 },
+	view: { start: 0, span: 180 },
 	isFollowing: true,
 	isSnapping: true,
 	gridDivision: 'auto',

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
+	import CodeIcon from 'phosphor-svelte/lib/CodeIcon'
 	import ExportIcon from 'phosphor-svelte/lib/ExportIcon'
 	import FadersIcon from 'phosphor-svelte/lib/FadersIcon'
 	import MagicWandIcon from 'phosphor-svelte/lib/MagicWandIcon'
@@ -12,6 +13,7 @@
 	import PostPanel from './PostPanel.svelte'
 	import SettingsPanel from './SettingsPanel.svelte'
 	import OptionsPanel from './OptionsPanel.svelte'
+	import StatePanel from './StatePanel.svelte'
 	import { focusShell } from './focus'
 	import { press } from './press'
 	import './Toolbar.css'
@@ -28,7 +30,8 @@
 		{ tab: 'palette', label: 'Palette' },
 		{ tab: 'post', label: 'Post' },
 		{ tab: 'export', label: 'Export' },
-		{ tab: 'options', label: 'Options' }
+		{ tab: 'options', label: 'Options' },
+		{ tab: 'state', label: 'State' }
 	]
 
 	let root: HTMLDivElement
@@ -87,13 +90,16 @@
 				{#if item.tab === 'export'}
 					<ExportIcon weight="bold" />
 				{/if}
+				{#if item.tab === 'state'}
+					<CodeIcon weight="bold" />
+				{/if}
 				{item.label}
 			</z-button>
 		{/each}
 	</div>
 
 	{#if activeTab !== null}
-		<div class="toolbar-menu" role="dialog" aria-label="{activeTab} menu">
+		<div class="toolbar-menu" class:isWide={activeTab === 'state'} role="dialog" aria-label="{activeTab} menu">
 			{#if activeTab === 'settings'}
 				<SettingsPanel />
 			{/if}
@@ -108,6 +114,9 @@
 			{/if}
 			{#if activeTab === 'export'}
 				<ExportPanel />
+			{/if}
+			{#if activeTab === 'state'}
+				<StatePanel />
 			{/if}
 		</div>
 	{/if}

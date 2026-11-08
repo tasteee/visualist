@@ -17,10 +17,11 @@ import { appearance } from './appearance.svelte'
 import { restorePaletteSnapshot, takePaletteSnapshot } from './palette.svelte'
 import type { PaletteColorT } from './palette.svelte'
 import { findLayer, layerStore } from './layers.svelte'
+import { removeMappingsForModulator, restoreMappingsSnapshot, takeMappingsSnapshot } from './mappings.svelte'
 import { restoreTrackSnapshot, sources, takeTrackSnapshot } from './sources.svelte'
 import type { TrackSnapshotT } from './sources.svelte'
 import { app, markDirty, setLoopRegion } from './store.svelte'
-import type { SettingsT } from './engine/types'
+import type { MappingT, SettingsT } from './engine/types'
 
 type AutomationStateT = {
 	lanes: AutomationLaneT[]
@@ -148,6 +149,7 @@ type HistoryEntryT = {
 	lanes: AutomationLaneT[]
 	layers: LayerT[]
 	impulseTracks: TrackSnapshotT
+	mappings: MappingT[]
 	settings: SettingsT
 	appearance: AppearanceSnapshotT
 	paletteColors: PaletteColorT[]
@@ -175,6 +177,7 @@ const takeSnapshot = (): HistoryEntryT => ({
 	lanes: $state.snapshot(automation.lanes) as AutomationLaneT[],
 	layers: $state.snapshot(layerStore.layers) as LayerT[],
 	impulseTracks: takeTrackSnapshot(),
+	mappings: takeMappingsSnapshot(),
 	settings: $state.snapshot(app.settings) as SettingsT,
 	appearance: takeAppearanceSnapshot(),
 	paletteColors: takePaletteSnapshot(),
@@ -244,6 +247,7 @@ const restoreEntry = (entry: HistoryEntryT): void => {
 	layerStore.selectedLayerId = isSelectionLive ? entry.selectedLayerId : null
 	restoreLanes(entry.lanes, entry.layers)
 	restoreTrackSnapshot(entry.impulseTracks)
+	restoreMappingsSnapshot(entry.mappings)
 	Object.assign(app.settings, entry.settings)
 	restoreAppearance(entry.appearance)
 	restorePaletteSnapshot(entry.paletteColors)
@@ -343,6 +347,27 @@ export const automateTarget = (target: LaneTargetT): void => {
 	revealLane(laneId)
 }
 
+export const addModulationLane = (): string => {
+	recordHistory()
+	const existingNames = new Set(automation.lanes.map((lane) => lane.name ?? ''))
+	let name = 'Automation'
+	for (let index = 1; index <= 99; index++) {
+		const candidate = index === 1 ? 'Automation' : `Automation ${index}`
+		if (!existingNames.has(candidate)) {
+			name = candidate
+			break
+		}
+	}
+	const lane: AutomationLaneT = {
+		id: crypto.randomUUID(),
+		target: { kind: 'unset', groupId: 'modulation' },
+		name,
+		points: [{ id: createPointId(), time: 0, value: 0, bend: 0 }]
+	}
+	automation.lanes.push(lane)
+	return lane.id
+}
+
 export const removeLanes = (laneIds: string[]): void => {
 	const hasLanes = laneIds.length > 0
 	if (!hasLanes) return
@@ -350,6 +375,7 @@ export const removeLanes = (laneIds: string[]): void => {
 	const doomedIds = new Set(laneIds)
 	automation.lanes = automation.lanes.filter((lane) => !doomedIds.has(lane.id))
 	automation.collapsedLaneIds = automation.collapsedLaneIds.filter((candidate) => !doomedIds.has(candidate))
+	for (const laneId of laneIds) removeMappingsForModulator({ kind: 'lane', laneId })
 	clearPointSelection()
 }
 

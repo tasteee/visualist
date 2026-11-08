@@ -1,34 +1,26 @@
-/* A layer's span on the timeline: a bar along the top that moves it,
-   edges that trim it, and a body that puts the playhead where it is
-   clicked. */
+/* A layer's visible span on the timeline. Its body moves the
+   whole span, its edges trim the start and the end. */
 .layer-clip {
 	/* The layer's own color, from the row it sits in. */
 	--layer-clip-tone: var(--tone-5);
 	--layer-clip-ink: oklch(0.22 0.012 146);
 	position: absolute;
-	top: var(--spacing-1);
+	top: var(--spacing-2);
 	right: var(--clip-right);
-	bottom: var(--spacing-1);
+	bottom: var(--spacing-2);
 	left: var(--clip-left);
 	z-index: 1;
 	display: flex;
 	flex-direction: column;
 	min-width: var(--spacing-3);
 	overflow: hidden;
-<<<<<<< HEAD
 	border: 1px solid var(--layer-clip-tone);
 	border-radius: 3px;
-	background: color-mix(in oklab, var(--layer-clip-tone) 16%, var(--bg));
+	background: color-mix(in oklab, var(--layer-clip-tone) 25%, transparent);
 	color: var(--foreground);
 	/* Only the bar and the edges take the pointer. A click in the body
 	   falls through to the row and sets the playhead. */
 	pointer-events: none;
-=======
-	border: 1px solid color-mix(in oklab, var(--layer-clip-tone) 55%, transparent);
-	border-radius: var(--radius-md);
-	background: color-mix(in oklab, var(--layer-clip-tone) 12%, var(--bg));
-	color: var(--foreground);
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 	touch-action: none;
 	user-select: none;
 	transition:
@@ -36,7 +28,6 @@
 		border-color var(--motion-fast) ease;
 }
 
-<<<<<<< HEAD
 /* Selected clips turn neutral, whatever their color. */
 .layer-clip.isSelected {
 	--layer-clip-tone: var(--color-neutral-7);
@@ -60,79 +51,45 @@
 
 .layer-clip.isDragging .layer-clip-bar {
 	cursor: grabbing;
-=======
-.layer-clip.isSelected {
-	border-color: var(--layer-clip-tone);
-	background: color-mix(in oklab, var(--layer-clip-tone) 20%, var(--bg));
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 }
 
 .layer-clip.isHidden {
 	border-style: dashed;
 	background: transparent;
-	opacity: 0.55;
+	color: var(--secondary);
 }
 
-<<<<<<< HEAD
 .layer-clip-bar:focus-visible {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: -2px;
 }
 
 .layer-clip-label {
-=======
-.layer-clip-bar {
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 	display: flex;
-	flex: none;
+	flex: 1;
 	align-items: center;
 	gap: var(--spacing-2);
-<<<<<<< HEAD
 	min-width: 0;
 	padding: 0 var(--spacing-3);
 	overflow: hidden;
 	pointer-events: none;
-=======
-	height: var(--spacing-4);
-	padding: 0 var(--spacing-3);
-	background: color-mix(in oklab, var(--layer-clip-tone) 55%, var(--bg));
-	cursor: grab;
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 }
 
-.layer-clip.isSelected .layer-clip-bar {
-	background: var(--layer-clip-tone);
-}
-
-.layer-clip.isDragging .layer-clip-bar {
-	cursor: grabbing;
-}
-
-.layer-clip-name,
-.layer-clip-range {
+.layer-clip-name {
 	overflow: hidden;
 	font-size: var(--font-size-0);
 	font-weight: var(--font-weight-semibold);
 	line-height: 1;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	pointer-events: none;
 }
 
 .layer-clip-range {
 	flex: none;
-<<<<<<< HEAD
 	font-size: var(--font-size-0);
-=======
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 	font-variant-numeric: tabular-nums;
-	opacity: 0.8;
-}
-
-.layer-clip-body {
-	flex: 1;
-	min-height: 0;
-	cursor: text;
+	font-weight: var(--font-weight-medium);
+	white-space: nowrap;
 }
 
 .layer-clip-edge {
@@ -153,16 +110,8 @@
 	right: 0;
 }
 
-.layer-clip-edge.isStart {
-	left: 0;
-}
-
-.layer-clip-edge.isEnd {
-	right: 0;
-}
-
 /* A short grip line shows on hover so the edges read as
-   handles without crowding the clip at rest. */
+   handles without crowding the bar at rest. */
 .layer-clip-edge::after {
 	position: absolute;
 	top: 30%;
@@ -171,13 +120,13 @@
 	width: 2px;
 	border-radius: 999px;
 	background: var(--layer-clip-tone);
-	content: '';
 	opacity: 0;
 	transform: translateX(-50%);
 	transition: opacity var(--motion-fast) ease;
+	content: '';
 }
 
 .layer-clip:hover .layer-clip-edge::after,
 .layer-clip.isDragging .layer-clip-edge::after {
-	opacity: 0.9;
+	opacity: 0.8;
 }

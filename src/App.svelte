@@ -3,6 +3,7 @@
 	import { toaster } from '@tasteee/zest'
 	import { openMidiFile } from './midiImport.svelte'
 	import { restoreProject, startProjectWatchers } from './project.svelte'
+	import { installGlobalStateInspector } from './stateSnapshot.svelte'
 	import { addAudioFile, app, startApp, togglePlay } from './store.svelte'
 	import { addAssetLayer, addVideoLayer } from './layers.svelte'
 	import { readDroppedKind } from './droppedFiles'
@@ -19,7 +20,7 @@
 	import { timeline } from './timeline.svelte'
 	import { toggleStageFocused, toggleUiHidden, uiState } from './uiState.svelte'
 	import { installFocusGuard } from './ui/focus'
-	import { checkIsTyping } from './ui/keyboard'
+	import { checkIsTextEntry, checkIsTyping } from './ui/keyboard'
 
 	let shell: HTMLElement
 
@@ -30,6 +31,12 @@
 	// key, which is only possible after a Tab, since a click
 	// hands focus back to the shell.
 	const handleKeyDown = (event: KeyboardEvent) => {
+		if (checkIsTextEntry(event)) return
+		const hasModifierKey = event.metaKey || event.ctrlKey || event.altKey
+		if (!hasModifierKey && event.code === 'Space') {
+			event.preventDefault()
+			return togglePlay()
+		}
 		if (checkIsTyping(event)) return
 		const hasModifier = event.metaKey || event.ctrlKey || event.altKey
 		if (hasModifier) return
@@ -104,6 +111,7 @@
 	}
 
 	onMount(() => {
+		installGlobalStateInspector()
 		const removeFocusGuard = installFocusGuard(shell)
 		const removeHelpText = installHelpText()
 		shell.focus({ preventScroll: true })

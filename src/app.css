@@ -1,7 +1,10 @@
 /* Zest's corner radius base; its radius scale derives from this. */
 :root,
 [data-theme] {
-	--base-radius: 0.25rem;
+	--base-radius: 0.4rem;
+	--font-sans: 'Google Sans Flex', 'DM Sans', system-ui, sans-serif;
+	--font-heading: 'Google Sans Flex', 'DM Sans', system-ui, sans-serif;
+	--font-heading-weight: 1000;
 }
 
 :root {
@@ -115,7 +118,7 @@ body {
 	pointer-events: none;
 }
 
-.app-dropzone > * {
+.app-dropzone>* {
 	pointer-events: auto;
 }
 
@@ -153,40 +156,40 @@ body {
 /* backup */
 
 :root {
-    --tone-bg-0: linear-gradient(170deg, color-mix(in oklch, var(--color-neutral-8) 100%, transparent), 50%, color-mix(in oklch, var(--tone-1) 25%, transparent)),   linear-gradient(to top left, color-mix(in oklch, var(--tone-3) 95%, var(--tone-1)), var(--background-light));
-    --tone-bg-1: linear-gradient(170deg, color-mix(in oklch, var(--color-neutral-7) 100%, transparent), 55%, color-mix(in oklch, var(--tone-4) 15%, transparent)),
-      linear-gradient(to top left, color-mix(in oklch, var(--tone-1) 92%, var(--color-neutral-3)), var(--background-light));
+	--tone-bg-0: linear-gradient(170deg, color-mix(in oklch, var(--color-neutral-8) 100%, transparent), 50%, color-mix(in oklch, var(--tone-1) 25%, transparent)), linear-gradient(to top left, color-mix(in oklch, var(--tone-3) 95%, var(--tone-1)), var(--background-light));
+	--tone-bg-1: linear-gradient(170deg, color-mix(in oklch, var(--color-neutral-7) 100%, transparent), 55%, color-mix(in oklch, var(--tone-4) 15%, transparent)),
+		linear-gradient(to top left, color-mix(in oklch, var(--tone-1) 92%, var(--color-neutral-3)), var(--background-light));
 }
 
 .inspector-panel-header-textarea {
-    color: var(--color-neutral-0) !important;
-    font-size: 16px;
-    font-weight: 500;
-    letter-spacing: 0.5px;
+	color: var(--color-neutral-0) !important;
+	font-size: 16px;
+	font-weight: 500;
+	letter-spacing: 0.5px;
 }
 
 .inspector-panel-header-clip-type-text {
-    color: var(--color-neutral-0) !important;
-    font-weight: 1000;
-    margin-right: -3px;
+	color: var(--color-neutral-0) !important;
+	font-weight: 1000;
+	margin-right: -3px;
 }
 
 .inspector-panel-header-clip-text {
-    color: var(--color-neutral-5) !important;
+	color: var(--color-neutral-5) !important;
 
 }
 
 .inspector-panel-header-edit-icon {
-    color: var(--color-neutral-4) !important;
-    transform: scale(1.25);
+	color: var(--color-neutral-4) !important;
+	transform: scale(1.25);
 }
 
 .inspector-panel-header-swatch {
-    border: 2px solid var(--color-neutral-1);
+	border: 2px solid var(--color-neutral-1);
 }
 
 .inspector-panel-header-textarea-text {
-    font-weight: 1000 !important;
-    color: var(--color-neutral-0);
-    font-size: 16px;
+	font-weight: 1000 !important;
+	color: var(--color-neutral-0);
+	font-size: 16px;
 }

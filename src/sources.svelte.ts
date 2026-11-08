@@ -28,6 +28,7 @@ import type {
 	SpectrumT,
 	TrackImpulseT
 } from './engine/types'
+import { removeMappingsForModulator } from './mappings.svelte'
 import { app, getDetectedAnalysis } from './store.svelte'
 
 type SourcesStateT = {
@@ -314,6 +315,7 @@ export const addTracksFromMidi = (imports: MidiImportGroupT[], placement: MidiPl
 export const removeTrack = (trackId: string): void => {
 	recordHistory()
 	sources.tracks = sources.tracks.filter((track) => track.id !== trackId)
+	removeMappingsForModulator({ kind: 'emitter', trackId })
 	const wasArmed = sources.armedTrackId === trackId
 	if (wasArmed) sources.armedTrackId = null
 }

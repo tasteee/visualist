@@ -66,3 +66,8 @@
 	border-radius: var(--radius-xl);
 	background: var(--paper);
 }
+
+.toolbar-menu.isWide {
+	width: 34rem;
+	max-width: calc(100vw - var(--spacing-6));
+}

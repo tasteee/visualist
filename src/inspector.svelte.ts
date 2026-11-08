@@ -1,5 +1,5 @@
 // The toolbar menus in the top right corner. At most one is open.
-export type InspectorTabT = 'settings' | 'palette' | 'post' | 'export' | 'options'
+export type InspectorTabT = 'settings' | 'palette' | 'post' | 'export' | 'options' | 'state'
 
 type InspectorStateT = {
 	activeTab: InspectorTabT | null

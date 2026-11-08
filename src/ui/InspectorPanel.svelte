@@ -1,15 +1,22 @@
 <script lang="ts">
-	import { recordHistory, recordHistoryCoalesced } from '../automation.svelte'
-	import { getRowColor, setRowColor } from '../appearance.svelte'
-	import { PALETTE, pickColorForId } from '../engine/palette'
+	import EraserIcon from 'phosphor-svelte/lib/EraserIcon'
+	import { automation, recordHistory, recordHistoryCoalesced, renameLane, resetLane } from '../automation.svelte'
+	import { getLaneColor, getRowColor, setRowColor } from '../appearance.svelte'
+	import { getTargetControl } from '../engine/automation'
+	import { PALETTE, getRoleColor, pickColorForId } from '../engine/palette'
 	import { shadowStyles } from '../shadowStyles'
 	import type { ColorNameT } from '../engine/palette'
-	import type { ClipT, LayerT } from '../engine/types'
-	import { getSelectedClip, getSelectedLayer, renameLayer } from '../layers.svelte'
+	import type { AutomationLaneT, ClipT, ImpulseTrackT, LayerT } from '../engine/types'
+	import { getSelectedClip, getSelectedLayer, layerStore, renameLayer } from '../layers.svelte'
+	import { mappingsStore } from '../mappings.svelte'
+	import { findTrack, renameTrack } from '../sources.svelte'
 	import AudioControls from './AudioControls.svelte'
 	import ClipProperties from './ClipProperties.svelte'
+	import ImpulseTrackControls from './ImpulseTrackControls.svelte'
 	import InspectorTitle from './InspectorTitle.svelte'
 	import LayerEditor from './LayerEditor.svelte'
+	import ModulatorMappings from './ModulatorMappings.svelte'
+	import Section from './Section.svelte'
 	import './ClipProperties.css'
 	import './InspectorPanel.css'
 	import './RowInspector.css'
@@ -19,6 +26,13 @@
 	// clip never picks its layer, so only one of the two shows.
 	const pickedClip = $derived(getSelectedClip())
 	const layer = $derived(getSelectedLayer())
+	const selectedModulator = $derived(mappingsStore.selectedModulator)
+	const selectedEmitter = $derived(selectedModulator?.kind === 'emitter' ? findTrack(selectedModulator.trackId) : undefined)
+	const selectedLane = $derived(
+		selectedModulator?.kind === 'lane'
+			? automation.lanes.find((candidate) => candidate.id === selectedModulator.laneId)
+			: undefined
+	)
 
 	const KIND_LABELS: Record<string, string> = {
 		text: 'Text',
@@ -31,7 +45,6 @@
 	}
 
 	const readText = (event: Event): string => (event as CustomEvent<{ value: string }>).detail.value
-
 
 	// An empty name hands the clip back to its fallback.
 	const renameClip = (clip: ClipT, name: string) => {
@@ -84,12 +97,37 @@
 		setRowColor(target.id, PALETTE[(index + 1) % PALETTE.length].name)
 	}
 
-	const getKindLabel =(kind: string): string => KIND_LABELS[kind] ?? kind
+	const getKindLabel = (kind: string): string => KIND_LABELS[kind] ?? kind
+
+	const getEmitterTone = (track: ImpulseTrackT): ColorNameT => getRowColor(track.id, getRoleColor(track.role))
+
+	const handleCycleEmitterColor = (track: ImpulseTrackT) => {
+		recordHistory()
+		const index = PALETTE.findIndex((option) => option.name === getEmitterTone(track))
+		setRowColor(track.id, PALETTE[(index + 1) % PALETTE.length].name)
+	}
+
+	const getLaneTone = (lane: AutomationLaneT): ColorNameT => getLaneColor(lane, layerStore.layers as LayerT[])
+
+	const handleCycleLaneColor = (lane: AutomationLaneT) => {
+		recordHistory()
+		const index = PALETTE.findIndex((option) => option.name === getLaneTone(lane))
+		setRowColor(lane.id, PALETTE[(index + 1) % PALETTE.length].name)
+	}
+
+	const getLaneDisplayName = (lane: AutomationLaneT): string => {
+		const control = getTargetControl(lane.target, layerStore.layers as LayerT[])
+		return lane.name ?? control?.label ?? 'Automation'
+	}
 </script>
 
 {#if pickedClip !== undefined}
 	{@const clipTitle = pickedClip.clip.name.trim() || pickedClip.layer.name}
-	<aside class="inspector-panel" data-tone={pickedClip.clip.color ?? getLayerTone(pickedClip.layer)} aria-label="Clip properties">
+	<aside
+		class="inspector-panel"
+		data-tone={pickedClip.clip.color ?? getLayerTone(pickedClip.layer)}
+		aria-label="Clip properties"
+	>
 		<header class="inspector-panel-header">
 			<div class="inspector-panel-meta">
 				<button
@@ -100,12 +138,33 @@
 					title="Next color"
 					onclick={() => handleCycleColor(pickedClip.clip, getLayerTone(pickedClip.layer))}
 				></button>
-				<z-text class="inspector-panel-header-clip-type-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={1000}>{getKindLabel(pickedClip.layer.kind).toUpperCase()}</z-text>
-				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}>CLIP</z-text>
+				<z-text class="inspector-panel-header-clip-type-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={1000}
+					>{getKindLabel(pickedClip.layer.kind).toUpperCase()}</z-text
+				>
+				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}
+					>CLIP</z-text
+				>
 			</div>
-			<InspectorTitle size="xs" value={clipTitle} label="Rename clip" oncommit={(name) => renameClip(pickedClip.clip, name)} />
+			<InspectorTitle
+				size="xs"
+				value={clipTitle}
+				label="Rename clip"
+				oncommit={(name) => renameClip(pickedClip.clip, name)}
+			/>
 			<span style="display: flex; height: 4px"></span>
-			<z-textarea class="inspector-panel-header-textarea" use:shadowStyles={TEXTAREA_CSS} spellcheck="false" value={pickedClip.clip.text} rows={2} isAutoResize aria-label="Text" oninput={(event:any) => handleText(event, pickedClip.clip)} onchange={(event:any) => handleText(event, pickedClip.clip)}></z-textarea>
+			{#if pickedClip.layer.kind === 'text'}
+				<z-textarea
+					class="inspector-panel-header-textarea"
+					use:shadowStyles={TEXTAREA_CSS}
+					spellcheck="false"
+					value={pickedClip.clip.text}
+					rows={2}
+					isAutoResize
+					aria-label="Text"
+					oninput={(event: any) => handleText(event, pickedClip.clip)}
+					onchange={(event: any) => handleText(event, pickedClip.clip)}
+				></z-textarea>
+			{/if}
 
 			<div class="clip-properties-swatches inspector-panel-swatches" role="group" aria-label="Clip color">
 				{#each PALETTE as option (option.name)}
@@ -121,11 +180,11 @@
 					></button>
 				{/each}
 			</div>
-
 		</header>
 		<div class="inspector-panel-body">
 			{#key pickedClip.clip.id}
-				<ClipProperties layer={pickedClip.layer} clip={pickedClip.clip} />
+				{@const foo = console.log({ pickedClip })}
+				<ClipProperties layer={pickedClip.layer} clip={pickedClip?.clip} />
 			{/key}
 		</div>
 	</aside>
@@ -141,8 +200,11 @@
 					title="Next color"
 					onclick={() => handleCycleLayerColor(layer)}
 				></button>
-				<z-text class="inspector-panel-header-clip-type-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span">LAYER</z-text>
-				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}>{getKindLabel(layer.kind).toUpperCase()}</z-text>
+				<z-text class="inspector-panel-header-clip-type-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span">LAYER</z-text
+				>
+				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}
+					>{getKindLabel(layer.kind).toUpperCase()}</z-text
+				>
 			</div>
 			<InspectorTitle size="xs" value={layer.name} label="Rename layer" oncommit={(name) => renameLayer(layer.id, name)} />
 		</header>
@@ -153,6 +215,89 @@
 				{:else}
 					<LayerEditor {layer} />
 				{/if}
+			{/key}
+		</div>
+	</aside>
+{:else if selectedEmitter !== undefined}
+	{@const emitterTone = getEmitterTone(selectedEmitter)}
+	<aside class="inspector-panel" data-tone={emitterTone} aria-label="Emitter properties">
+		<header class="inspector-panel-header">
+			<div class="inspector-panel-meta">
+				<button
+					class="inspector-panel-cycle inspector-panel-header-swatch"
+					type="button"
+					data-tone={emitterTone}
+					aria-label="Emitter color: {emitterTone}. Click for the next color."
+					title="Next color"
+					onclick={() => handleCycleEmitterColor(selectedEmitter)}
+				></button>
+				<z-text class="inspector-panel-header-clip-type-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span"
+					>MODULATOR</z-text
+				>
+				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}
+					>EMITTER</z-text
+				>
+			</div>
+			<InspectorTitle
+				size="xs"
+				value={selectedEmitter.name}
+				label="Rename emitter"
+				oncommit={(name) => renameTrack(selectedEmitter.id, name)}
+			/>
+		</header>
+		<div class="inspector-panel-body">
+			{#key selectedEmitter.id}
+				<ModulatorMappings modulator={{ kind: 'emitter', trackId: selectedEmitter.id }} />
+				<Section title="Emitter">
+					<ImpulseTrackControls track={selectedEmitter} />
+				</Section>
+			{/key}
+		</div>
+	</aside>
+{:else if selectedLane !== undefined}
+	{@const laneTone = getLaneTone(selectedLane)}
+	{@const laneTitle = getLaneDisplayName(selectedLane)}
+	<aside class="inspector-panel" data-tone={laneTone} aria-label="Automation modulator properties">
+		<header class="inspector-panel-header">
+			<div class="inspector-panel-meta">
+				<button
+					class="inspector-panel-cycle inspector-panel-header-swatch"
+					type="button"
+					data-tone={laneTone}
+					aria-label="Lane color: {laneTone}. Click for the next color."
+					title="Next color"
+					onclick={() => handleCycleLaneColor(selectedLane)}
+				></button>
+				<z-text class="inspector-panel-header-clip-type-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span"
+					>MODULATOR</z-text
+				>
+				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}
+					>AUTOMATION</z-text
+				>
+			</div>
+			<InspectorTitle
+				size="xs"
+				value={laneTitle}
+				label="Rename automation lane"
+				oncommit={(name) => renameLane(selectedLane.id, name)}
+			/>
+		</header>
+		<div class="inspector-panel-body">
+			{#key selectedLane.id}
+				<ModulatorMappings modulator={{ kind: 'lane', laneId: selectedLane.id }} />
+				<Section title="Curve">
+					<z-button
+						size="sm"
+						kind="outline"
+						tone="neutral"
+						isFullWidth
+						isDisabled={selectedLane.points.length <= 1}
+						onclick={() => resetLane(selectedLane.id)}
+					>
+						<EraserIcon weight="bold" />
+						Reset points
+					</z-button>
+				</Section>
 			{/key}
 		</div>
 	</aside>

@@ -1,0 +1,104 @@
+.modulator-mappings-empty {
+	margin: 0;
+	font-size: var(--font-size-xs);
+	line-height: 1.45;
+	color: var(--muted);
+}
+
+.modulator-mappings-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-3);
+}
+
+.modulator-mapping-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-2);
+	padding: var(--spacing-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklch, var(--surface) 75%, var(--paper));
+}
+
+.modulator-mapping-card.isBypassed {
+	opacity: 0.55;
+}
+
+.modulator-mapping-header {
+	display: flex;
+	align-items: center;
+	gap: var(--spacing-2);
+}
+
+.modulator-mapping-select {
+	flex: 1;
+	min-width: 0;
+}
+
+.modulator-mapping-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 2px;
+}
+
+.modulator-mapping-mode {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--spacing-2);
+}
+
+.modulator-mapping-sublabel {
+	font-size: var(--font-size-xs);
+	font-weight: 600;
+	color: var(--secondary);
+}
+
+.modulator-mapping-envelope {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-2);
+	padding-top: var(--spacing-2);
+	border-top: 1px solid var(--border-subtle, var(--border));
+}
+
+.modulator-mapping-envelope-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.modulator-mapping-envelope-meta {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-2xs, 11px);
+	color: var(--muted);
+}
+
+.modulator-mapping-graph {
+	width: 100%;
+	height: 60px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklch, var(--color-neutral-9) 60%, var(--paper));
+	overflow: hidden;
+}
+
+.modulator-mapping-graph-area {
+	fill: color-mix(in oklch, var(--tone, var(--accent)) 22%, transparent);
+}
+
+.modulator-mapping-graph-line {
+	fill: none;
+	stroke: var(--tone, var(--accent));
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.modulator-mapping-graph-peak {
+	stroke: color-mix(in oklch, var(--tone, var(--accent)) 45%, transparent);
+	stroke-width: 1;
+	stroke-dasharray: 2 2;
+}

@@ -250,3 +250,26 @@ export const getOutputLatency = (): number => {
 	const baseLatency = context.baseLatency ?? 0
 	return Math.max(outputLatency, baseLatency)
 }
+
+// Plays a short percussive woodblock / click sound for the metronome.
+// Downbeats (beat 1 of a bar) are pitched higher and slightly louder.
+export const playMetronomeClick = (isDownbeat: boolean): void => {
+	const context = getAudioContext()
+	void context.resume()
+	const now = context.currentTime
+	const oscillator = context.createOscillator()
+	const gain = context.createGain()
+	oscillator.type = 'triangle'
+	const startFrequency = isDownbeat ? 1320 : 880
+	const endFrequency = isDownbeat ? 660 : 440
+	const peakGain = isDownbeat ? 0.28 : 0.16
+	oscillator.frequency.setValueAtTime(startFrequency, now)
+	oscillator.frequency.exponentialRampToValueAtTime(endFrequency, now + 0.032)
+	gain.gain.setValueAtTime(0.0001, now)
+	gain.gain.linearRampToValueAtTime(peakGain, now + 0.002)
+	gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.042)
+	oscillator.connect(gain)
+	gain.connect(context.destination)
+	oscillator.start(now)
+	oscillator.stop(now + 0.045)
+}

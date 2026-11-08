@@ -1,20 +1,16 @@
 <script lang="ts">
 	import { recordHistory } from '../automation.svelte'
-	import { clamp } from '../engine/settings'
-	import { MIN_CLIP_SECONDS } from '../engine/settings'
+	import { clamp, MIN_CLIP_SECONDS } from '../engine/settings'
+	import { getClipNeighborBounds } from '../engine/layers'
+	import { getVideoDuration } from '../engine/video'
 	import { formatPreciseTime, ratioToTime, snapToGrid, timeToPercent } from '../engine/timeline'
 	import type { TimelineGridT } from '../engine/timeline'
-<<<<<<< HEAD
 	import type { ClipT, LayerT } from '../engine/types'
-	
-	import { pickClip } from '../selection.svelte'
-	import { app, getAudioLayerBuffer, getAudioLayerPeaks } from '../store.svelte'
-=======
-	import type { LayerT } from '../engine/types'
+	import { applyMultiClipDragDelta, buildMultiClipDragSession } from '../layerEdit.svelte'
+	import type { MultiClipDragSessionT } from '../layerEdit.svelte'
 	import { layerStore } from '../layers.svelte'
-	import { pickLayer, readModifiers } from '../selection.svelte'
-	import { app, getAudioLayerBuffer, getAudioLayerPeaks, seekTo } from '../store.svelte'
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
+	import { pickClip, readModifiers } from '../selection.svelte'
+	import { app, getAudioLayerBuffer, getAudioLayerPeaks } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import './AudioClip.css'
 
@@ -36,6 +32,8 @@
 		grabOffset: number
 		startX: number
 		hasMoved: boolean
+		shouldSelectSingleOnUp: boolean
+		session: MultiClipDragSessionT | null
 	}
 
 	const props: AudioClipPropsT = $props()
@@ -66,6 +64,13 @@
 	const isDragging = $derived(drag !== null)
 	const rangeLabel = $derived(`${formatPreciseTime(startTime)} – ${formatPreciseTime(endTime)}`)
 
+	const getFileLength = (layerId: string): number => {
+		const audioLength = getAudioLayerBuffer(layerId)?.duration
+		if (audioLength !== undefined) return audioLength
+		const candidate = layerStore.layers.find((entry) => entry.id === layerId)
+		return getVideoDuration(candidate?.assetId ?? null)
+	}
+
 	const readTime = (event: PointerEvent): number => {
 		const track = root.closest<HTMLElement>('[data-track]')
 		if (track === null) return 0
@@ -85,36 +90,43 @@
 		if (!isPrimaryButton) return
 		event.stopPropagation()
 		root.setPointerCapture(event.pointerId)
-		pickClip(props.layer.id, props.clip.id)
-		drag = { mode, grabOffset: readTime(event) - startTime, startX: event.clientX, hasMoved: false }
+		const modifiers = readModifiers(event)
+		const isAdditive = modifiers.isToggle || modifiers.isRange
+		const isPartOfMultiSelect = props.isSelected && layerStore.selectedClips.length > 1 && !isAdditive && mode === 'move'
+		if (!isPartOfMultiSelect) pickClip(props.layer.id, props.clip.id, modifiers)
+		const session = mode === 'move' ? buildMultiClipDragSession(props.layer.id, props.clip.id, getFileLength) : null
+		drag = {
+			mode,
+			grabOffset: readTime(event) - startTime,
+			startX: event.clientX,
+			hasMoved: false,
+			shouldSelectSingleOnUp: isPartOfMultiSelect,
+			session
+		}
 	}
 
-	// A click on the waveform selects the clip and puts the playhead
-	// at that point in it, ready to slice.
-	const handleBodyDown = (event: PointerEvent) => {
-		const isPrimaryButton = event.button === 0
-		if (!isPrimaryButton) return
-		event.stopPropagation()
-		const orderedIds = [...layerStore.layers].reverse().map((candidate) => candidate.id)
-		pickLayer(props.layer.id, orderedIds, readModifiers(event))
-		const rawTime = readTime(event)
-		const shouldSnap = timeline.isSnapping && !event.shiftKey
-		seekTo(shouldSnap ? snapToGrid(rawTime, props.grid) : rawTime)
+	const getAudioClipEnd = (candidate: ClipT): number => {
+		if (candidate.endTime !== null) return candidate.endTime
+		return candidate.startTime + Math.max(0, fileLength - candidate.sourceOffset)
 	}
 
-	const moveClip = (event: PointerEvent, activeDrag: ClipDragT) => {
-		const length = endTime - startTime
-		const rawStart = Math.max(0, readTime(event) - activeDrag.grabOffset)
-		const nextStart = snapTime(rawStart, event)
-		props.clip.startTime = nextStart
-		const hasCut = props.clip.endTime !== null
-		if (hasCut) props.clip.endTime = nextStart + length
+	const getBounds = () => getClipNeighborBounds(props.layer.clips, props.clip.id, getAudioClipEnd, Number.POSITIVE_INFINITY)
+
+	const moveClipGroup = (event: PointerEvent, activeDrag: ClipDragT) => {
+		const session = activeDrag.session
+		if (session === null) return
+		const minAnchorStart = Math.max(0, session.anchorInitStart + session.minDelta)
+		const maxAnchorStart = Math.max(minAnchorStart, session.anchorInitStart + session.maxDelta)
+		const rawAnchorStart = clamp(readTime(event) - activeDrag.grabOffset, minAnchorStart, maxAnchorStart)
+		const snappedAnchorStart = clamp(snapTime(rawAnchorStart, event), minAnchorStart, maxAnchorStart)
+		applyMultiClipDragDelta(session, snappedAnchorStart - session.anchorInitStart)
 	}
 
 	// Trimming the start moves where in the file the clip begins, so
 	// the sound stays where it was on the timeline.
 	const trimStart = (event: PointerEvent) => {
-		const earliest = startTime - offset
+		const bounds = getBounds()
+		const earliest = Math.max(bounds.minStart, startTime - offset)
 		const latest = endTime - MIN_CLIP_SECONDS
 		const nextStart = clamp(snapTime(readTime(event), event), Math.max(0, earliest), latest)
 		const shift = nextStart - startTime
@@ -123,8 +135,10 @@
 	}
 
 	const trimEnd = (event: PointerEvent) => {
-		const nextEnd = clamp(snapTime(readTime(event), event), startTime + MIN_CLIP_SECONDS, naturalEnd)
-		const isAtNaturalEnd = nextEnd >= naturalEnd - 0.005
+		const bounds = getBounds()
+		const maxEnd = Math.min(naturalEnd, bounds.maxEnd)
+		const nextEnd = clamp(snapTime(readTime(event), event), startTime + MIN_CLIP_SECONDS, maxEnd)
+		const isAtNaturalEnd = nextEnd >= naturalEnd - 0.005 && bounds.maxEnd >= naturalEnd - 0.005
 		props.clip.endTime = isAtNaturalEnd ? null : nextEnd
 	}
 
@@ -137,13 +151,17 @@
 		// One undo step per drag, recorded when it really moves.
 		if (!activeDrag.hasMoved) recordHistory()
 		activeDrag.hasMoved = true
-		if (activeDrag.mode === 'move') return moveClip(event, activeDrag)
+		if (activeDrag.mode === 'move') return moveClipGroup(event, activeDrag)
 		if (activeDrag.mode === 'start') return trimStart(event)
 		trimEnd(event)
 	}
 
 	const handleUp = () => {
+		const activeDrag = drag
 		drag = null
+		if (activeDrag !== null && !activeDrag.hasMoved && activeDrag.shouldSelectSingleOnUp) {
+			pickClip(props.layer.id, props.clip.id)
+		}
 	}
 
 	// ---- Waveform ------------------------------------------
@@ -207,6 +225,8 @@
 	class:isSelected={props.isSelected}
 	class:isMuted
 	data-tone={props.clip.color ?? undefined}
+	data-layer-id={props.layer.id}
+	data-clip-id={props.clip.id}
 	class:isDragging
 	bind:this={root}
 	style:--clip-left="{leftPercent}%"
@@ -223,7 +243,7 @@
 			<span class="audio-clip-range">{rangeLabel}</span>
 		{/if}
 	</div>
-	<div class="audio-clip-wave" data-clip-control role="presentation" bind:this={wave} onpointerdown={handleBodyDown}>
+	<div class="audio-clip-wave" bind:this={wave}>
 		<canvas class="audio-clip-canvas" bind:this={canvas}></canvas>
 	</div>
 	<span class="audio-clip-edge isStart" data-clip-control role="presentation" onpointerdown={(event) => handleDown(event, 'start')}></span>

@@ -43,7 +43,7 @@
 	bottom: 0;
 	left: 0;
 	width: 2px;
-	background: var(--tone, var(--accent));
+	background: var(--color-neutral-7, var(--accent));
 	content: '';
 }
 
@@ -75,22 +75,24 @@
 	opacity: 0.45;
 }
 
-/* Trash and eye show only while the layer is hovered or focused. */
+/* Trash and eye show while the layer is hovered or focused;
+   when hidden, the slashed-eye icon stays visible as a reminder. */
 .timeline-layer-actions {
 	display: flex;
 	flex: none;
 	align-items: center;
 	gap: var(--spacing-3);
-	opacity: 0;
-	transition: opacity var(--motion-fast) ease;
 }
 
 .timeline-layer-actions z-tooltip {
 	display: inline-flex;
+	opacity: 0;
+	transition: opacity var(--motion-fast) ease;
 }
 
-.timeline-layer:hover .timeline-layer-actions,
-.timeline-layer:focus-within .timeline-layer-actions {
+.timeline-layer:hover .timeline-layer-actions z-tooltip,
+.timeline-layer:focus-within .timeline-layer-actions z-tooltip,
+.timeline-layer.isHidden .timeline-layer-actions z-tooltip:has(.isVisibility) {
 	opacity: 1;
 }
 

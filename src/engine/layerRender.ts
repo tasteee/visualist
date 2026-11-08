@@ -1,4 +1,4 @@
-import { getAsset } from './assets'
+import { checkIsAnimatedAsset, getAsset, getAssetCanvasAt } from './assets'
 import { getVideoFrame, getVideoSize } from './video'
 import type { FrameLayoutT } from './formats'
 import { LAYER_PARAMS, findClipAt, getClipTextAt, getBlendOperation, getTimeRangeLevel } from './layers'
@@ -6,7 +6,7 @@ import { getTinted } from './logoLayers'
 import { applyModulation } from './modulation'
 import { createRandom } from './rng'
 import { FLICKER_RATE, clamp } from './settings'
-import type { FxKindT, LayerT, LayerTransformT, PaletteSlotT, PaletteT, ShapeT, SignalsT, TextContentT } from './types'
+import type { FxKindT, LayerT, LayerTransformT, PaletteSlotT, PaletteT, ShapeT, SignalsT, TextContentT, TextFontT } from './types'
 
 // A drawable layer picture. width and height are in frame units,
 // the canvas itself may hold more pixels than that.
@@ -33,6 +33,7 @@ export type LayerStackInputT = {
 	signals: SignalsT
 	palette: PaletteT
 	frame: FrameLayoutT
+	songLength?: number
 	drawLogo: (context: CanvasRenderingContext2D) => void
 }
 
@@ -86,9 +87,25 @@ const getLayerSeed = (layerId: string): number => {
 
 // ---- Sources -------------------------------------------------
 
+const FONT_STACKS: Record<TextFontT, string> = {
+	'google-sans-flex': '"Google Sans Flex", "DM Sans", system-ui, sans-serif',
+	'dm-sans': '"Google Sans Flex", "DM Sans", system-ui, sans-serif',
+	'system-ui': 'system-ui, -apple-system, "Segoe UI", sans-serif',
+	serif: 'Georgia, "Times New Roman", serif',
+	monospace: '"JetBrains Mono", "Fira Code", Consolas, monospace',
+	display: 'Impact, "Arial Black", "Google Sans Flex", "DM Sans", sans-serif'
+}
+
+if (typeof document !== 'undefined' && 'fonts' in document) {
+	void document.fonts.ready.then(() => {
+		textCache.clear()
+	})
+}
+
 const setTextFont = (context: CanvasRenderingContext2D, content: TextContentT, size: number): void => {
 	const slant = content.isItalic ? 'italic ' : ''
-	context.font = `${slant}${content.weight} ${size}px "DM Sans", system-ui, sans-serif`
+	const family = FONT_STACKS[content.font ?? 'dm-sans'] ?? FONT_STACKS['dm-sans']
+	context.font = `${slant}${content.weight} ${size}px ${family}`
 	const tracking = content.isUppercase ? 0.08 : 0
 	context.letterSpacing = `${size * tracking}px`
 }
@@ -152,7 +169,7 @@ const getTextSource = (content: TextContentT, text: string, palette: PaletteT): 
 	if (isEmpty) return null
 	const color = getPaletteColor(palette, content.color)
 	const flags = [content.isUppercase, content.isLowercase, content.isItalic, content.isUnderline, content.isStrike].join(',')
-	const cacheKey = `${text}|${content.weight}|${flags}|${color}`
+	const cacheKey = `${text}|${content.font ?? 'dm-sans'}|${content.weight}|${flags}|${color}`
 	const cached = textCache.get(cacheKey)
 	if (cached !== undefined) return cached
 	const isCacheFull = textCache.size >= MAX_TEXT_CACHE
@@ -223,11 +240,14 @@ const getSvgTint = (layer: LayerT, palette: PaletteT): string | null => {
 	return getPaletteColor(palette, slot)
 }
 
-const getAssetSource = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT): LayerSourceT | null => {
+const getAssetSource = (layer: LayerT, palette: PaletteT, frame: FrameLayoutT, time = 0): LayerSourceT | null => {
 	const asset = getAsset(layer.assetId)
 	if (asset === null) return null
 	const tintColor = getSvgTint(layer, palette)
-	const canvas = tintColor === null ? asset.canvas : getTinted(asset.canvas, tintColor)
+	const activeClip = findClipAt(layer, time) ?? layer.clips[0]
+	const elapsed = activeClip === undefined ? time : Math.max(0, time - activeClip.startTime + activeClip.sourceOffset)
+	const frameCanvas = getAssetCanvasAt(asset, elapsed)
+	const canvas = tintColor === null ? frameCanvas : getTinted(frameCanvas, tintColor)
 	const longestPixelSide = Math.max(canvas.width, canvas.height)
 	const fitSide = getShortSide(frame) * ASSET_FIT_SHARE
 	const unitsPerPixel = fitSide / longestPixelSide
@@ -314,7 +334,12 @@ export const measureLayerSize = (layer: LayerT, palette: PaletteT, frame: FrameL
 }
 
 // Logo and video pictures change every frame.
-const checkIsDynamicKind = (kind: LayerT['kind']): boolean => kind === 'logo' || kind === 'video'
+const checkIsDynamicLayer = (layer: LayerT): boolean => {
+	const isLogoOrVideo = layer.kind === 'logo' || layer.kind === 'video'
+	if (isLogoOrVideo) return true
+	if (layer.kind === 'image') return checkIsAnimatedAsset(layer.assetId)
+	return false
+}
 
 const getLayerSource = (target: CanvasRenderingContext2D, layer: LayerT, input: LayerStackInputT): LayerSourceT | null => {
 	const isLogo = layer.kind === 'logo'
@@ -330,7 +355,7 @@ const getStaticSource = (layer: LayerT, input: LayerStackInputT): LayerSourceT |
 	const isVideo = layer.kind === 'video'
 	if (isVideo) return getVideoSource(layer, input)
 	const isText = layer.kind === 'text'
-	if (!isText) return getAssetSource(layer, input.palette, input.frame)
+	if (!isText) return getAssetSource(layer, input.palette, input.frame, input.time)
 	const content = layer.text
 	if (content === null) return null
 	return getTextSource(content, getClipTextAt(layer, input.time), input.palette)
@@ -487,7 +512,7 @@ const checkIsPlainLogo = (pass: LayerPassT): boolean => {
 
 const buildPass = (layer: LayerT, input: LayerStackInputT): LayerPassT | null => {
 	if (!layer.isVisible) return null
-	const timeLevel = getTimeRangeLevel(layer, input.time)
+	const timeLevel = getTimeRangeLevel(layer, input.time, input.songLength ?? Number.POSITIVE_INFINITY)
 	const isOutOfRange = timeLevel <= 0
 	if (isOutOfRange) return null
 	const transform = resolveTransform(layer, input.signals)
@@ -545,7 +570,7 @@ const drawGlow = (context: CanvasRenderingContext2D, source: LayerSourceT, pass:
 const drawSplit = (context: CanvasRenderingContext2D, source: LayerSourceT, pass: LayerPassT, palette: PaletteT): void => {
 	const amount = pass.fx.split
 	if (amount <= 0) return
-	const isDynamic = checkIsDynamicKind(pass.layer.kind)
+	const isDynamic = checkIsDynamicLayer(pass.layer)
 	const distance = source.width * 0.025 * amount + 2
 	const leftCopy = tintSource(source, palette.accent1, isDynamic, 1)
 	const rightCopy = tintSource(source, palette.accent2, isDynamic, 2)
@@ -731,7 +756,7 @@ export const planGpuLayer = (
 	return {
 		layer,
 		source,
-		isDynamic: checkIsDynamicKind(layer.kind),
+		isDynamic: checkIsDynamicLayer(layer),
 		offsetX: (pass.transform.x / 100) * input.frame.width + shake.x,
 		offsetY: (pass.transform.y / 100) * input.frame.height + shake.y,
 		rotation: pass.transform.rotation + shake.rotation,

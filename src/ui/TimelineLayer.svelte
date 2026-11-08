@@ -16,8 +16,7 @@
 	import type { GridLineT, TimelineGridT } from '../engine/timeline'
 	import type { LayerKindT } from '../engine/types'
 	import { clamp } from '../engine/settings'
-	import { ratioToTime, snapToGrid } from '../engine/timeline'
-	import { app, seekTo } from '../store.svelte'
+	import { app } from '../store.svelte'
 	import { timeline } from '../timeline.svelte'
 	import { getRowHeight, resetRowHeight, setRowHeight } from '../appearance.svelte'
 	import { recordHistory } from '../automation.svelte'
@@ -74,20 +73,6 @@
 	const canReorder = $derived(props.onreorderstart !== undefined)
 	const isDropBefore = $derived(props.dropEdge === 'before')
 	const isDropAfter = $derived(props.dropEdge === 'after')
-
-	// A click on empty space in a layer's row sets the playhead there.
-	// Clips and their handles keep their own clicks.
-	const handleTrackClick = (event: MouseEvent) => {
-		const target = event.target as Element
-		const isOnClip = target.closest('.layer-clip, .audio-clip, [data-clip-control]') !== null
-		if (isOnClip) return
-		const bounds = event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : null
-		if (bounds === null) return
-		const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
-		const rawTime = clamp(ratioToTime(ratio, view), 0, app.duration)
-		const shouldSnap = timeline.isSnapping && !event.shiftKey
-		seekTo(shouldSnap ? snapToGrid(rawTime, props.grid) : rawTime)
-	}
 
 	// Audio layers stretch to show more of their waveform.
 	const MIN_HEIGHT = 64
@@ -194,7 +179,7 @@
 			{/if}
 			{#if canToggleVisible}
 				<z-tooltip content={visibilityLabel} placement="top" openDelay={300}>
-					<z-button class="timeline-layer-action" isIcon size="sm" kind="ghost" tone="neutral" aria-label={visibilityLabel} aria-pressed={props.isHidden} onclick={props.ontogglevisible}>
+					<z-button class="timeline-layer-action isVisibility" class:isHidden={props.isHidden} isIcon size="sm" kind="ghost" tone="neutral" aria-label={visibilityLabel} aria-pressed={props.isHidden} onclick={props.ontogglevisible}>
 						{#if props.isHidden}
 							<EyeSlashIcon weight="bold" />
 						{:else}
@@ -206,7 +191,7 @@
 		</div>
 	</div>
 
-	<div class="timeline-layer-track" data-track="layer" role="presentation" onclick={handleTrackClick}>
+	<div class="timeline-layer-track" data-track="layer" role="presentation">
 		<svg class="timeline-layer-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
 			{#each gridLines as line (line.time)}
 				<line class="timeline-layer-gridline" class:isLabel={line.kind === 'label'} class:isSub={line.kind === 'sub'} x1={getGridX(line)} x2={getGridX(line)} y1="0" y2="100" />

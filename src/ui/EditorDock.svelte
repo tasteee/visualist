@@ -5,6 +5,7 @@
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import {
 		addLayerLane,
+		addModulationLane,
 		automation,
 		checkCanAddLayerLane,
 		getLanesInGroup,
@@ -16,23 +17,20 @@
 		selectAllPoints,
 		undo
 	} from '../automation.svelte'
-	import { getTargetControl } from '../engine/automation'
+	import { MODULATION_GROUP_ID, getTargetControl } from '../engine/automation'
 	import { getOutputLatency, getPlaybackTime } from '../engine/audio'
 	import { snapToStep } from '../engine/impulses'
+	import { clamp } from '../engine/settings'
 	import { getBandSourceId } from '../engine/sources'
-	import type { CompiledBandT } from '../engine/types'
-	import { buildGrid, ratioToTime } from '../engine/timeline'
-	import type { LayerT } from '../engine/types'
-	import { layerStore, moveLayer, moveLayerToFrontIndex, removeLayer, toggleLayerVisible } from '../layers.svelte'
+	import type { CompiledBandT, LayerT } from '../engine/types'
+	import { buildGrid, ratioToTime, snapToGrid } from '../engine/timeline'
+	import { checkIsClipInSelection, layerStore, moveLayer, moveLayerToFrontIndex, removeLayer, toggleLayerVisible } from '../layers.svelte'
+	import type { SelectedClipRefT } from '../layers.svelte'
 	import { help } from '../help.svelte'
 	import { rowInspector } from '../rowInspector.svelte'
-		import type { RowRefT } from '../rowLayout.svelte'
-	import { checkHasSelection, clearSelection, deleteSelection, pickLayer, readModifiers } from '../selection.svelte'
-<<<<<<< HEAD
-	import { copySelectedLayers, duplicateSelectedLayers, pasteLayers, sliceSelectedLayers, toggleSelectedLayersActive } from '../layerEdit.svelte'
-=======
+	import type { RowRefT } from '../rowLayout.svelte'
+	import { checkHasSelection, clearSelection, deleteSelection, pickClipsInBox, pickEmitterTrack, pickLane, pickLayer, readModifiers } from '../selection.svelte'
 	import { copySelectedLayers, cutSelectedLayers, duplicateSelectedLayers, nudgeSelectedLayerTimes, pasteLayers, sliceSelectedLayers, toggleSelectedLayersActive } from '../layerEdit.svelte'
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 	import { nudgeSelectedLayers } from '../stage.svelte'
 	import {
 		addEmptyTrack,
@@ -46,18 +44,12 @@
 	import { getRowColor } from '../appearance.svelte'
 	import { pickColorForId } from '../engine/palette'
 	import type { ColorNameT } from '../engine/palette'
-<<<<<<< HEAD
 	import { openAddLayerMenu, openGridMenu } from '../timelineMenus.svelte'
-	import { app, getAnalysis, getAudioLayerBuffer, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
+	import { app, getAnalysis, getAudioLayerBuffer, goToBeginning, seekTo, toggleLoop, toggleMetronome } from '../store.svelte'
 	import { getVideoDuration } from '../engine/video'
 	import type { ImpulseMoveT } from '../sources.svelte'
-=======
-	import { openGridMenu } from '../timelineMenus.svelte'
-	import { app, getAnalysis, goToBeginning, seekTo, toggleLoop } from '../store.svelte'
-		import type { ImpulseMoveT } from '../sources.svelte'
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 	import {
-			DEFAULT_HEADER_WIDTH,
+		DEFAULT_HEADER_WIDTH,
 		MAX_HEADER_WIDTH,
 		fitView,
 		followPlayhead,
@@ -130,22 +122,44 @@
 		startHeight: number
 	}
 
+	type MarqueeDragT = {
+		startClientX: number
+		startClientY: number
+		currentClientX: number
+		currentClientY: number
+		isAdditive: boolean
+		initialClips: SelectedClipRefT[]
+		hasMoved: boolean
+		clickedTrack: HTMLElement | null
+	}
+
+	type MarqueeRectT = {
+		left: number
+		top: number
+		width: number
+		height: number
+	}
+
 	const DOCK_TOP_CLEARANCE_PX = 140
 	const WHEEL_LINE_PX = 16
 	const WHEEL_ZOOM_RATE = 0.0025
 	const PINCH_ZOOM_RATE = 0.01
 	const RESIZE_KEY_PX = 24
 	const REORDER_START_PX = 4
+	const MARQUEE_START_PX = 3
 	const ZOOMING_ZONES = ['ruler', 'overview']
 
 	let dock: HTMLDivElement
 	let frame: HTMLDivElement
+	let lanesElement: HTMLDivElement
 	let editor = $state<PointEditorT | null>(null)
 	let impulseEditor = $state<ImpulseEditorT | null>(null)
 	let patternEditor = $state<PatternEditorT | null>(null)
 	let resizeDrag: ResizeDragT | null = null
 	let reorder = $state<ReorderDragT | null>(null)
 	let dropMarker = $state<DropMarkerT | null>(null)
+	let marqueeDrag: MarqueeDragT | null = null
+	let marqueeRect = $state<MarqueeRectT | null>(null)
 	let shouldSkipSelect = false
 	const loopLabel = $derived(app.isLoopEnabled ? 'Loop on (L)' : 'Loop off (L)')
 	const canPlay = $derived(app.hasAudio && !app.isRecording && !app.isAnalyzing)
@@ -332,6 +346,93 @@
 
 	const handleFramePointerLeave = () => setHoverTime(null)
 
+	// ---- Timeline marquee select & click-to-deselect --------
+
+	const checkIsInteractiveTarget = (target: EventTarget | null): boolean => {
+		if (!(target instanceof Element)) return false
+		return target.closest('.layer-clip, .audio-clip, [data-clip-control], .timeline-layer-header, .timeline-layer-resize, button') !== null
+	}
+
+	const updateMarqueeSelection = (activeMarquee: MarqueeDragT) => {
+		const lanesBounds = lanesElement.getBoundingClientRect()
+		const minClientX = Math.min(activeMarquee.startClientX, activeMarquee.currentClientX)
+		const maxClientX = Math.max(activeMarquee.startClientX, activeMarquee.currentClientX)
+		const minClientY = Math.min(activeMarquee.startClientY, activeMarquee.currentClientY)
+		const maxClientY = Math.max(activeMarquee.startClientY, activeMarquee.currentClientY)
+
+		marqueeRect = {
+			left: minClientX - lanesBounds.left + lanesElement.scrollLeft,
+			top: minClientY - lanesBounds.top + lanesElement.scrollTop,
+			width: maxClientX - minClientX,
+			height: maxClientY - minClientY
+		}
+
+		const clipElements = Array.from(lanesElement.querySelectorAll<HTMLElement>('.layer-clip[data-layer-id][data-clip-id], .audio-clip[data-layer-id][data-clip-id]'))
+		const hits: SelectedClipRefT[] = []
+		for (const clipElement of clipElements) {
+			const rect = clipElement.getBoundingClientRect()
+			const isIntersecting = rect.right >= minClientX && rect.left <= maxClientX && rect.bottom >= minClientY && rect.top <= maxClientY
+			if (!isIntersecting) continue
+			const layerId = clipElement.dataset.layerId
+			const clipId = clipElement.dataset.clipId
+			if (layerId === undefined || clipId === undefined) continue
+			hits.push({ layerId, clipId })
+		}
+		const baseClips = activeMarquee.isAdditive ? activeMarquee.initialClips : []
+		pickClipsInBox([...baseClips, ...hits], false)
+	}
+
+	const handleLanesPointerDown = (event: PointerEvent) => {
+		if (isModulation || event.button !== 0) return
+		if (checkIsInteractiveTarget(event.target)) return
+		const modifiers = readModifiers(event)
+		const isAdditive = modifiers.isToggle || modifiers.isRange
+		const clickedTrack = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-track="layer"]') : null
+		lanesElement.setPointerCapture(event.pointerId)
+		marqueeDrag = {
+			startClientX: event.clientX,
+			startClientY: event.clientY,
+			currentClientX: event.clientX,
+			currentClientY: event.clientY,
+			isAdditive,
+			initialClips: [...layerStore.selectedClips],
+			hasMoved: false,
+			clickedTrack
+		}
+	}
+
+	const handleLanesPointerMove = (event: PointerEvent) => {
+		const activeMarquee = marqueeDrag
+		if (activeMarquee === null) return
+		activeMarquee.currentClientX = event.clientX
+		activeMarquee.currentClientY = event.clientY
+		const travel = Math.abs(event.clientX - activeMarquee.startClientX) + Math.abs(event.clientY - activeMarquee.startClientY)
+		const hasStarted = activeMarquee.hasMoved || travel >= MARQUEE_START_PX
+		if (!hasStarted) return
+		activeMarquee.hasMoved = true
+		updateMarqueeSelection(activeMarquee)
+	}
+
+	const handleLanesPointerUp = (event: PointerEvent) => {
+		const activeMarquee = marqueeDrag
+		marqueeDrag = null
+		marqueeRect = null
+		if (activeMarquee === null || activeMarquee.hasMoved) return
+		if (!activeMarquee.isAdditive) clearSelection()
+		if (activeMarquee.clickedTrack !== null) {
+			const bounds = activeMarquee.clickedTrack.getBoundingClientRect()
+			const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
+			const rawTime = clamp(ratioToTime(ratio, timeline.view), 0, app.duration)
+			const shouldSnap = timeline.isSnapping && !event.shiftKey
+			seekTo(shouldSnap ? snapToGrid(rawTime, grid) : rawTime)
+		}
+	}
+
+	const handleLanesPointerCancel = () => {
+		marqueeDrag = null
+		marqueeRect = null
+	}
+
 	const checkIsTapKey = (event: KeyboardEvent): boolean => {
 		const isPlainKey = !event.metaKey && !event.ctrlKey && !event.altKey
 		const isT = event.key.toLowerCase() === 't'
@@ -381,6 +482,7 @@
 		if (key === 'f') return toggleFollowing()
 		if (key === 's') return toggleSnapping()
 		if (key === 'l') return toggleLoop()
+		if (key === 'm') return toggleMetronome()
 		if (key === 'home') return goToBeginning()
 	}
 
@@ -395,10 +497,10 @@
 		clearSelection()
 	}
 
-	// Cmd/Ctrl with C, V or D acts on the selected layers.
+	// Cmd/Ctrl with C, V or D acts on the selected clips or layers.
 	const handleClipboardKey = (event: KeyboardEvent, key: string): boolean => {
 		if (key === 'c') {
-			const didCopy = copySelectedLayers()
+			const didCopy = copySelectedLayers(getFileLength)
 			if (didCopy) event.preventDefault()
 			return didCopy
 		}
@@ -408,24 +510,18 @@
 			return didPaste
 		}
 		if (key === 'x') {
-			const didCut = cutSelectedLayers()
+			const didCut = cutSelectedLayers(getFileLength)
 			if (didCut) event.preventDefault()
 			return didCut
 		}
-		if (key === 'e') {
-			const didSlice = sliceSelectedLayers(app.currentTime)
-			if (didSlice) event.preventDefault()
-			return didSlice
-		}
 		if (key === 'd') {
-			const didDuplicate = duplicateSelectedLayers()
+			const didDuplicate = duplicateSelectedLayers(getFileLength)
 			if (didDuplicate) event.preventDefault()
 			return didDuplicate
 		}
 		return false
 	}
 
-<<<<<<< HEAD
 	// How long a clip's file is, for audio and for video.
 	const getFileLength = (layerId: string): number => {
 		const audioLength = getAudioLayerBuffer(layerId)?.duration
@@ -435,9 +531,6 @@
 	}
 
 	// Zero deactivates the selected clips, like Ableton. With nothing
-=======
-	// Zero deactivates the selected layers, like Ableton. With nothing
->>>>>>> efdd8bd797e097491433b1c9e61b132ce85b3685
 	// selected it fits the timeline.
 	const handleZeroKey = (event: KeyboardEvent) => {
 		const didToggle = toggleSelectedLayersActive()
@@ -466,15 +559,14 @@
 
 	// ---- Arrow keys ----------------------------------------
 	//
-	// With impulses or points selected, arrows nudge them. With a
-	// stage layer selected, they nudge its position (a channel
-	// that is automated stays put). With nothing selected, Left
+	// With impulses or points selected, arrows nudge them. With
+	// clips or layers selected, Left/Right nudge clip times and
+	// Up/Down nudge layer position. With nothing selected, Left
 	// and Right step the playhead by one visible grid division.
 
 	const POINT_VALUE_STEP = 0.05
 	const IMPULSE_STEP = 0.01
 	const IMPULSE_FINE_STEP = 0.001
-	const FINE_VALUE_STEP = 0.01
 	const FINE_TIME_STEP = 0.01
 	const LAYER_STEP_PERCENT = 1
 	const FINE_LAYER_STEP_PERCENT = 0.1
@@ -534,11 +626,13 @@
 	}
 
 	// Left and right move the selected clips along the timeline, one
-	// visible marker at a time. Up and down move them on the stage.
+	// visible marker at a time. Up and down move selected layers on the stage.
 	const nudgeLayers = (event: KeyboardEvent, direction: ArrowDirectionT): boolean => {
+		const hasClips = layerStore.selectedClips.length > 0
 		const hasLayers = layerStore.selectedLayerIds.length > 0
-		if (!hasLayers) return false
+		if (!hasClips && !hasLayers) return false
 		if (direction.horizontal !== 0) return nudgeLayerTimes(event, direction.horizontal)
+		if (!hasLayers) return false
 		const step = event.shiftKey ? FINE_LAYER_STEP_PERCENT : LAYER_STEP_PERCENT
 		return nudgeSelectedLayers(0, -direction.vertical * step)
 	}
@@ -547,7 +641,7 @@
 		const isSnapped = timeline.isSnapping && !event.shiftKey
 		const step = isSnapped ? grid.snapStep : FINE_TIME_STEP
 		const gridOffset = isSnapped ? grid.beatOffset : null
-		return nudgeSelectedLayerTimes({ direction: horizontal, step, gridOffset })
+		return nudgeSelectedLayerTimes({ direction: horizontal, step, gridOffset }, getFileLength)
 	}
 
 	// One visible grid division left or right of the playhead.
@@ -593,12 +687,10 @@
 		toggleTriggersCollapsed()
 	}
 
-	// Only a clip picked on its own is lit. Selecting its layer does not
+	// Only a clip in selectedClips is lit. Selecting its layer does not
 	// select its clips.
-	const checkIsClipSelected = (layer: LayerT, clipId: string, isLayerSelected: boolean): boolean => {
-		void isLayerSelected
-		const picked = layerStore.selectedClip
-		return picked !== null && picked.layerId === layer.id && picked.clipId === clipId
+	const checkIsClipSelected = (layer: LayerT, clipId: string): boolean => {
+		return checkIsClipInSelection(layer.id, clipId)
 	}
 
 	const handleAddLayerClick = (event: Event) => {
@@ -606,7 +698,14 @@
 	}
 
 	const handleAddTrack = () => {
-		addEmptyTrack()
+		const trackId = addEmptyTrack()
+		pickEmitterTrack(trackId)
+	}
+
+	const handleAddModulationLane = () => {
+		const laneId = addModulationLane()
+		pickLane(laneId, getLaneIdsInGroup(MODULATION_GROUP_ID), { isRange: false, isToggle: false })
+		revealLane(laneId)
 	}
 
 
@@ -774,7 +873,7 @@
 			ondblclick={resetHeaderWidth}
 		></button>
 		<z-row class="editor-row isRuler">
-			<z-row style="height: 54px; padding-left: var(--spacing-3); padding-right: var(--spacing-2)" aligns-y="center" aligns-x="evenly" gap="3">
+			<z-row style="height: 38px; padding-left: var(--spacing-3); padding-right: var(--spacing-2)" aligns-y="center" aligns-x="evenly" gap="3">
 			<z-tooltip content={loopLabel} placement="right">
 				<z-button isIcon size="sm" kind={app.isLoopEnabled ? 'soft' : 'ghost'} tone="neutral" isDisabled={!canPlay} aria-pressed={app.isLoopEnabled} aria-label="Loop" {...press(toggleLoop)}>
 					<RepeatIcon weight="bold" />
@@ -799,14 +898,17 @@
 			<TimeRuler {grid} />
 		</z-row>
 
-		<div class="editor-lanes" role="presentation" oncontextmenu={handleLanesContextMenu}>
+		<div
+			class="editor-lanes"
+			bind:this={lanesElement}
+			role="presentation"
+			oncontextmenu={handleLanesContextMenu}
+			onpointerdown={handleLanesPointerDown}
+			onpointermove={handleLanesPointerMove}
+			onpointerup={handleLanesPointerUp}
+			onpointercancel={handleLanesPointerCancel}
+		>
 			{#if isModulation}
-				{#each sources.tracks as track (track.id)}
-					<ImpulseLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} onedit={openImpulseEditor} />
-				{/each}
-				{#each sources.bands as band (band.id)}
-					<BandLane {band} compiled={findCompiledBand(band.id)} {grid} siblingTrackIds={trackIdsInOrder} />
-				{/each}
 				<div class="editor-mod-row">
 					<div class="editor-mod-header">
 						<span class="editor-mod-title">Emitters</span>
@@ -817,6 +919,26 @@
 						</z-tooltip>
 					</div>
 				</div>
+				{#each sources.tracks as track (track.id)}
+					<ImpulseLane {track} {grid} siblingTrackIds={trackIdsInOrder} onpattern={openPatternEditor} onedit={openImpulseEditor} />
+				{/each}
+				{#each sources.bands as band (band.id)}
+					<BandLane {band} compiled={findCompiledBand(band.id)} {grid} siblingTrackIds={trackIdsInOrder} />
+				{/each}
+
+				<div class="editor-mod-row">
+					<div class="editor-mod-header">
+						<span class="editor-mod-title">Automation</span>
+						<z-tooltip content="Add an automation modulator lane" placement="top" openDelay={300}>
+							<z-button isIcon size="sm" kind="ghost" tone="neutral" aria-label="Add an automation modulator lane" onclick={handleAddModulationLane}>
+								<PlusIcon weight="bold" />
+							</z-button>
+						</z-tooltip>
+					</div>
+				</div>
+				{#each getLanesInGroup(MODULATION_GROUP_ID) as lane (lane.id)}
+					<AutomationLane {lane} {grid} siblingLaneIds={getLaneIdsInGroup(MODULATION_GROUP_ID)} onedit={openEditor} />
+				{/each}
 
 				{#each layersFrontToBack as layer (layer.id)}
 					{@const laneIds = getLaneIdsInGroup(layer.id)}
@@ -862,9 +984,9 @@
 					{#snippet track()}
 						{#each layer.clips as clip (clip.id)}
 							{#if layer.kind === 'audio'}
-								<AudioClip {layer} {clip} {grid} isSelected={checkIsClipSelected(layer, clip.id, isSelected)} />
+								<AudioClip {layer} {clip} {grid} isSelected={checkIsClipSelected(layer, clip.id)} />
 							{:else}
-								<LayerClip {layer} {clip} {grid} isSelected={checkIsClipSelected(layer, clip.id, isSelected)} />
+								<LayerClip {layer} {clip} {grid} isSelected={checkIsClipSelected(layer, clip.id)} />
 							{/if}
 						{/each}
 					{/snippet}
@@ -872,10 +994,17 @@
 			{/each}
 			{/if}
 
+			{#if marqueeRect !== null}
+				<div
+					class="editor-marquee"
+					style="left: {marqueeRect.left}px; top: {marqueeRect.top}px; width: {marqueeRect.width}px; height: {marqueeRect.height}px;"
+				></div>
+			{/if}
+
 			<div class="editor-add-row">
 				<div class="editor-add-cell"></div>
 				<div class="editor-add-fill">
-					<span class="editor-add-hint">{isModulation ? 'Press + on a layer to automate one of its controls, or add an emitter to trigger them.' : 'Drag a clip to move it. Drag its edges to trim. Press Ctrl+E to slice at the playhead. Press 0 to turn a selected clip off.'}</span>
+					<span class="editor-add-hint">{isModulation ? 'Press + on a layer to automate one of its controls, or add an emitter to trigger them.' : 'Drag a clip to move it. Drag across empty space to marquee-select multiple clips. Press Ctrl+E to slice at the playhead. Press 0 to turn selected clips off.'}</span>
 				</div>
 			</div>
 		</div>
@@ -884,7 +1013,7 @@
 			<div class="editor-overview-label">
 				<span class="editor-help">{help.text}</span>
 			</div>
-			<OverviewBar />
+			<OverviewBar {grid} />
 		</div>
 	</div>
 
