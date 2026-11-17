@@ -90,8 +90,8 @@
 			<Segmented label="Make tracks" options={GROUPING_OPTIONS} value={midiImport.grouping} onchange={handleGroupingChange} />
 			<div class="midi-import-timing">
 				<Segmented label="Timing" options={TIMING_OPTIONS} value={midiImport.timing} onchange={handleTimingChange} />
-				<z-field label="Offset (ms)">
-					<z-number-input value={midiImport.offsetMs} min={-5000} max={5000} step={1} hasStepperButtons onchange={handleOffsetChange}></z-number-input>
+				<z-field label="Offset (ms)" is-horizontal size="sm">
+					<z-number-input value={midiImport.offsetMs} min={-5000} max={5000} step={1} hasStepperButtons size="sm" onchange={handleOffsetChange}></z-number-input>
 				</z-field>
 			</div>
 			<p class="midi-import-note">{tempoNote}</p>

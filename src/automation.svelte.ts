@@ -610,8 +610,13 @@ export type PointMoveT = {
 // Moves several points as one gesture. Each keeps its place in
 // the order, so the group can not fold over a neighbor.
 export const movePoints = (laneId: string, moves: PointMoveT[], duration: number): void => {
+	const lane = findLane(laneId)
+	if (lane === undefined || moves.length === 0) return
 	const sortedMoves = [...moves].sort((first, second) => first.time - second.time)
-	for (const move of sortedMoves) movePoint(laneId, move.pointId, move.time, move.value, duration)
+	const firstPoint = lane.points.find((point) => point.id === sortedMoves[0].pointId)
+	const isMovingLater = firstPoint !== undefined && sortedMoves[0].time > firstPoint.time
+	const orderedMoves = isMovingLater ? sortedMoves.reverse() : sortedMoves
+	for (const move of orderedMoves) movePoint(laneId, move.pointId, move.time, move.value, duration)
 }
 
 export const setPointBend = (laneId: string, pointId: string, bend: number): void => {
@@ -644,6 +649,129 @@ export const deleteSelectedPoints = (): void => {
 	const doomedIds = new Set(automation.selectedPointIds)
 	lane.points = lane.points.filter((point) => !doomedIds.has(point.id))
 	clearPointSelection()
+}
+
+let copiedPoints = $state<AutomationPointT[]>([])
+
+export const getCopiedPoints = (): AutomationPointT[] => copiedPoints
+export const clearCopiedPoints = (): void => {
+	copiedPoints = []
+}
+
+export const copySelectedPoints = (): boolean => {
+	const laneId = automation.selectedPointLaneId
+	if (laneId === null) return false
+	const lane = findLane(laneId)
+	if (lane === undefined) return false
+	const selectedIds = new Set(automation.selectedPointIds)
+	const selectedPoints = lane.points.filter((point) => selectedIds.has(point.id))
+	if (selectedPoints.length === 0) return false
+	copiedPoints = selectedPoints.map((point) => ({ ...point }))
+	return true
+}
+
+const insertCopiedPoints = (laneId: string, startTime: number, duration: number): boolean => {
+	const lane = findLane(laneId)
+	if (lane === undefined || copiedPoints.length === 0) return false
+	const firstTime = copiedPoints[0].time
+	const lastTime = copiedPoints[copiedPoints.length - 1].time
+	const latestStart = duration - (lastTime - firstTime)
+	if (latestStart < 0) return false
+	let clampedStart = clamp(startTime, 0, latestStart)
+	const hasCollision = (candidateStart: number): boolean => {
+		const candidateTimes = copiedPoints.map((point) => candidateStart + point.time - firstTime)
+		return candidateTimes.some((candidateTime) => lane.points.some((point) => Math.abs(point.time - candidateTime) < MIN_POINT_GAP))
+	}
+	for (const point of lane.points) {
+		if (!hasCollision(clampedStart)) break
+		clampedStart = point.time + MIN_POINT_GAP
+		if (clampedStart > latestStart) return false
+	}
+	if (hasCollision(clampedStart)) return false
+	const pastedPoints = copiedPoints.map((point): AutomationPointT => ({
+		id: createPointId(),
+		time: clampedStart + point.time - firstTime,
+		value: point.value,
+		bend: point.bend
+	}))
+	recordHistory()
+	lane.points = [...lane.points, ...pastedPoints].sort((first, second) => first.time - second.time)
+	selectPoints(laneId, pastedPoints.map((point) => point.id), pastedPoints[0].id)
+	return true
+}
+
+export const pasteSelectedPoints = (time: number, duration: number): boolean => {
+	const laneId = automation.selectedPointLaneId
+	if (laneId === null) return false
+	return insertCopiedPoints(laneId, time, duration)
+}
+
+export const duplicateSelectedPoints = (duration: number): boolean => {
+	const didCopy = copySelectedPoints()
+	if (!didCopy) return false
+	const firstTime = copiedPoints[0].time
+	const lastTime = copiedPoints[copiedPoints.length - 1].time
+	const duplicateStart = lastTime + MIN_POINT_GAP
+	const canFitAfter = duplicateStart + lastTime - firstTime <= duration
+	const startTime = canFitAfter ? duplicateStart : firstTime + MIN_POINT_GAP
+	const laneId = automation.selectedPointLaneId
+	if (laneId === null) return false
+	return insertCopiedPoints(laneId, startTime, duration)
+}
+
+export const AutomationPattern = {
+	wave: 'wave',
+	peak: 'peak',
+	rampUp: 'rampUp',
+	rampDown: 'rampDown',
+	square: 'square',
+	easeIn: 'easeIn',
+	easeOut: 'easeOut',
+	smoothRise: 'smoothRise',
+	smoothFall: 'smoothFall',
+	stabs: 'stabs'
+} as const
+
+export type AutomationPatternT = (typeof AutomationPattern)[keyof typeof AutomationPattern]
+
+const getPatternValues = (pattern: AutomationPatternT): number[] => {
+	if (pattern === AutomationPattern.wave) return [0, 0.15, 0.5, 0.85, 1, 0.85, 0.5, 0.15, 0]
+	if (pattern === AutomationPattern.peak) return [0, 1, 0]
+	if (pattern === AutomationPattern.rampUp) return [0, 1]
+	if (pattern === AutomationPattern.rampDown) return [1, 0]
+	if (pattern === AutomationPattern.square) return [0, 1, 1, 0, 0]
+	if (pattern === AutomationPattern.easeIn) return [0, 0.02, 0.1, 0.3, 0.6, 1]
+	if (pattern === AutomationPattern.easeOut) return [0, 0.4, 0.7, 0.9, 0.98, 1]
+	if (pattern === AutomationPattern.smoothRise) return [0, 0.02, 0.1, 0.5, 0.9, 0.98, 1]
+	if (pattern === AutomationPattern.smoothFall) return [1, 0.98, 0.9, 0.5, 0.1, 0.02, 0]
+	return [0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0]
+}
+
+const getPatternPositions = (pattern: AutomationPatternT, count: number): number[] => {
+	if (pattern === AutomationPattern.square) return [0, 0.02, 0.48, 0.5, 1]
+	if (pattern === AutomationPattern.stabs) return [0, 0.02, 0.12, 0.14, 0.25, 0.27, 0.37, 0.39, 0.5, 0.52, 0.62, 0.64, 0.75, 0.77, 0.87, 1]
+	const lastIndex = count - 1
+	return Array.from({ length: count }, (_, index) => index / lastIndex)
+}
+
+export const applyAutomationPattern = (laneId: string, startTime: number, endTime: number, pattern: AutomationPatternT): boolean => {
+	const lane = findLane(laneId)
+	if (lane === undefined) return false
+	const span = endTime - startTime
+	if (span <= MIN_POINT_GAP) return false
+	const values = getPatternValues(pattern)
+	const positions = getPatternPositions(pattern, values.length)
+	const generatedPoints = values.map((value, index): AutomationPointT => ({
+		id: createPointId(),
+		time: startTime + span * positions[index],
+		value,
+		bend: 0
+	}))
+	recordHistory()
+	const outsidePoints = lane.points.filter((point) => point.time < startTime || point.time > endTime)
+	lane.points = [...outsidePoints, ...generatedPoints].sort((first, second) => first.time - second.time)
+	selectPoints(laneId, generatedPoints.map((point) => point.id), generatedPoints[0].id)
+	return true
 }
 
 export const clampLanesToDuration = (duration: number): void => {

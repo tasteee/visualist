@@ -5,6 +5,8 @@
 	import GearSixIcon from 'phosphor-svelte/lib/GearSixIcon'
 	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
 	import {
+		AutomationPattern,
+		applyAutomationPattern,
 		automation,
 		checkIsPointSelected,
 		deletePoint,
@@ -17,8 +19,9 @@
 		setPointBend,
 		toggleLaneBypassed
 	} from '../automation.svelte'
-	import type { PointMoveT } from '../automation.svelte'
+	import type { AutomationPatternT, PointMoveT } from '../automation.svelte'
 	import {
+		MIN_POINT_GAP,
 		PATH_WIDTH,
 		buildAreaPath,
 		buildLinePath,
@@ -86,13 +89,15 @@
 	// button comes up. A drag draws a selection box instead.
 	type MarqueeT = {
 		startX: number
-		startY: number
-		startPosition: PlotPositionT
-		currentPosition: PlotPositionT
+		startTime: number
+		currentTime: number
 		isAdditive: boolean
 		isActive: boolean
-		clickPosition: PlotPositionT
+		clickTime: number
 	}
+
+	type TimeSelectionT = { start: number; end: number }
+	type PatternMenuT = { x: number; y: number }
 
 	// An Alt-drag on a segment previews its bow, and stores it
 	// once, when the button comes up.
@@ -116,6 +121,9 @@
 	let plot = $state<HTMLDivElement | undefined>(undefined)
 	let pointDrag = $state<PointDragT | null>(null)
 	let marquee = $state<MarqueeT | null>(null)
+	let timeSelection = $state<TimeSelectionT | null>(null)
+	let patternMenu = $state<PatternMenuT | null>(null)
+	let patternMenuRoot = $state<HTMLDivElement | undefined>(undefined)
 	let bendDrag = $state<BendDragT | null>(null)
 	let hoveredPointId = $state<string | null>(null)
 
@@ -192,14 +200,12 @@
 	})
 
 	const isMarqueeShown = $derived(marquee !== null && marquee.isActive)
-	const marqueeLeftTime = $derived(marquee === null ? 0 : Math.min(marquee.startPosition.time, marquee.currentPosition.time))
-	const marqueeRightTime = $derived(marquee === null ? 0 : Math.max(marquee.startPosition.time, marquee.currentPosition.time))
-	const marqueeTopValue = $derived(marquee === null ? 0 : Math.max(marquee.startPosition.value, marquee.currentPosition.value))
-	const marqueeBottomValue = $derived(marquee === null ? 0 : Math.min(marquee.startPosition.value, marquee.currentPosition.value))
+	const marqueeLeftTime = $derived(marquee === null ? 0 : Math.min(marquee.startTime, marquee.currentTime))
+	const marqueeRightTime = $derived(marquee === null ? 0 : Math.max(marquee.startTime, marquee.currentTime))
 	const marqueeLeft = $derived(timeToPercent(marqueeLeftTime, view))
 	const marqueeWidth = $derived(timeToPercent(marqueeRightTime, view) - marqueeLeft)
-	const marqueeTop = $derived((1 - marqueeTopValue) * 100)
-	const marqueeHeight = $derived((marqueeTopValue - marqueeBottomValue) * 100)
+	const selectionLeft = $derived(timeSelection === null ? 0 : timeToPercent(timeSelection.start, view))
+	const selectionWidth = $derived(timeSelection === null ? 0 : timeToPercent(timeSelection.end, view) - selectionLeft)
 
 	const pillPointId = $derived(pointDrag === null ? hoveredPointId : pointDrag.anchorPointId)
 	const pillPoint = $derived(points.find((point) => point.id === pillPointId))
@@ -351,6 +357,8 @@
 	const handlePointDown = (event: PointerEvent, pointId: string) => {
 		const point = findPoint(pointId)
 		if (point === undefined) return
+		timeSelection = null
+		patternMenu = null
 		const modifiers = readModifiers(event)
 		const isPicking = modifiers.isRange || modifiers.isToggle
 		startPointDrag(event, point, isPicking ? modifiers : null)
@@ -379,21 +387,22 @@
 	const startMarquee = (event: PointerEvent) => {
 		const track = event.currentTarget as HTMLElement
 		track.setPointerCapture(event.pointerId)
-		const startPosition = readRawPosition(event.clientX, event.clientY)
+		const startTime = readRawPosition(event.clientX, event.clientY).time
+		timeSelection = null
+		patternMenu = null
 		marquee = {
 			startX: event.clientX,
-			startY: event.clientY,
-			startPosition,
-			currentPosition: startPosition,
+			startTime,
+			currentTime: startTime,
 			isAdditive: event.shiftKey,
 			isActive: false,
-			clickPosition: readSnappedPosition(event)
+			clickTime: readSnappedPosition(event).time
 		}
 	}
 
 	const handleTrackDown = (event: PointerEvent) => {
 		const isPrimaryButton = event.button === 0
-		const canEdit = hasControl && duration > 0 && !isFolded
+		const canEdit = duration > 0 && !isFolded
 		if (!isPrimaryButton || !canEdit) return
 		const pointId = readPointId(event.target)
 		const isOnPoint = pointId !== null
@@ -434,9 +443,21 @@
 		if (!activeDrag.hasMoved) recordHistory()
 		activeDrag.hasMoved = true
 		const position = readDragPosition(event)
-		const timeDelta = position.time - activeDrag.anchorStartTime
+		const requestedTimeDelta = position.time - activeDrag.anchorStartTime
+		const selectedStarts = Array.from(activeDrag.starts.values())
+		const earliestTime = Math.min(...selectedStarts.map((start) => start.time))
+		const latestTime = Math.max(...selectedStarts.map((start) => start.time))
+		const unselectedPoints = points.filter((point) => !activeDrag.starts.has(point.id))
+		const precedingPoint = unselectedPoints.filter((point) => point.time < earliestTime).at(-1)
+		const followingPoint = unselectedPoints.find((point) => point.time > latestTime)
+		const minimumTime = precedingPoint === undefined ? 0 : precedingPoint.time + MIN_POINT_GAP
+		const maximumTime = followingPoint === undefined ? duration : followingPoint.time - MIN_POINT_GAP
+		const timeDelta = clamp(requestedTimeDelta, minimumTime - earliestTime, maximumTime - latestTime)
 		const freeDelta = -dy / activeDrag.plotHeight
-		const valueDelta = resolveValueDelta(event, activeDrag, freeDelta)
+		const requestedValueDelta = resolveValueDelta(event, activeDrag, freeDelta)
+		const lowestValue = Math.min(...selectedStarts.map((start) => start.value))
+		const highestValue = Math.max(...selectedStarts.map((start) => start.value))
+		const valueDelta = clamp(requestedValueDelta, -lowestValue, 1 - highestValue)
 		activeDrag.lastValueDelta = valueDelta
 		const moves = buildMoves(activeDrag, timeDelta, valueDelta)
 		const isMovingLater = timeDelta > 0
@@ -456,10 +477,9 @@
 
 	const moveMarquee = (event: PointerEvent, activeMarquee: MarqueeT) => {
 		const dx = event.clientX - activeMarquee.startX
-		const dy = event.clientY - activeMarquee.startY
-		const isNowActive = activeMarquee.isActive || checkIsPastThreshold(dx, dy)
+		const isNowActive = activeMarquee.isActive || checkIsPastThreshold(dx, 0)
 		activeMarquee.isActive = isNowActive
-		activeMarquee.currentPosition = readRawPosition(event.clientX, event.clientY)
+		activeMarquee.currentTime = readRawPosition(event.clientX, event.clientY).time
 	}
 
 	const handleTrackMove = (event: PointerEvent) => {
@@ -472,24 +492,49 @@
 	}
 
 	const finishMarquee = (activeMarquee: MarqueeT) => {
-		const first = activeMarquee.startPosition
-		const second = activeMarquee.currentPosition
-		const leftTime = Math.min(first.time, second.time)
-		const rightTime = Math.max(first.time, second.time)
-		const topValue = Math.max(first.value, second.value)
-		const bottomValue = Math.min(first.value, second.value)
-		const boxedPoints = points.filter((point) => {
-			const isInTime = point.time >= leftTime && point.time <= rightTime
-			const isInValue = point.value >= bottomValue && point.value <= topValue
-			return isInTime && isInValue
-		})
+		const leftTime = Math.min(activeMarquee.startTime, activeMarquee.currentTime)
+		const rightTime = Math.max(activeMarquee.startTime, activeMarquee.currentTime)
+		timeSelection = { start: leftTime, end: rightTime }
+		const boxedPoints = points.filter((point) => point.time >= leftTime && point.time <= rightTime)
 		const boxedIds = boxedPoints.map((point) => point.id)
 		pickPointsInBox(props.lane.id, boxedIds, activeMarquee.isAdditive)
 	}
 
 	// A click on empty plot sets the playhead there.
 	const seekToClick = (activeMarquee: MarqueeT) => {
-		seekTo(activeMarquee.clickPosition.time)
+		seekTo(activeMarquee.clickTime)
+	}
+
+	const handleTrackContextMenu = (event: MouseEvent) => {
+		const selectedRange = timeSelection
+		if (selectedRange === null || isFolded || !hasControl) return
+		const clickTime = readRawPosition(event.clientX, event.clientY).time
+		const isInsideRange = clickTime >= selectedRange.start && clickTime <= selectedRange.end
+		if (!isInsideRange) return
+		event.preventDefault()
+		event.stopPropagation()
+		patternMenu = { x: event.clientX, y: event.clientY }
+	}
+
+	const handlePatternPick = (pattern: AutomationPatternT) => {
+		const selectedRange = timeSelection
+		if (selectedRange === null) return
+		const didApply = applyAutomationPattern(props.lane.id, selectedRange.start, selectedRange.end, pattern)
+		if (!didApply) return
+		patternMenu = null
+		timeSelection = null
+	}
+
+	const handleWindowPointerDown = (event: PointerEvent) => {
+		const isInsideLane = root.contains(event.target as Node)
+		const isInsideMenu = patternMenuRoot?.contains(event.target as Node)
+		if (!isInsideLane && !isInsideMenu) timeSelection = null
+		if (patternMenu === null) return
+		if (!isInsideMenu) patternMenu = null
+	}
+
+	const handleWindowKeyDown = (event: KeyboardEvent) => {
+		if (event.key === 'Escape') patternMenu = null
 	}
 
 	// A double-click on empty plot places a point, level with the one
@@ -571,6 +616,8 @@
 	}
 </script>
 
+<svelte:window onpointerdown={handleWindowPointerDown} onkeydown={handleWindowKeyDown} />
+
 <div
 	class="automation-lane"
 	class:isFolded
@@ -628,6 +675,7 @@
 		onpointermove={handleTrackMove}
 		onpointerup={handleTrackUp}
 		onpointercancel={handleTrackCancel}
+		oncontextmenu={handleTrackContextMenu}
 		ondblclick={handleTrackDoubleClick}
 	>
 		<svg class="automation-lane-grid" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
@@ -637,6 +685,9 @@
 		</svg>
 
 		<div class="automation-lane-plot" bind:this={plot}>
+			{#if timeSelection !== null && !isMarqueeShown}
+				<span class="automation-lane-marquee isSelectedRange" style:--lane-x="{selectionLeft}%" style:--marquee-width="{selectionWidth}%"></span>
+			{/if}
 			{#if hasControl}
 				<svg class="automation-lane-graph" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
 					<path class="automation-lane-area" d={areaPath} />
@@ -668,7 +719,7 @@
 				{/each}
 
 				{#if isMarqueeShown}
-					<span class="automation-lane-marquee" style:--lane-x="{marqueeLeft}%" style:--lane-y="{marqueeTop}%" style:--marquee-width="{marqueeWidth}%" style:--marquee-height="{marqueeHeight}%"></span>
+					<span class="automation-lane-marquee" style:--lane-x="{marqueeLeft}%" style:--marquee-width="{marqueeWidth}%"></span>
 				{/if}
 
 				{#if pillPoint !== undefined}
@@ -700,3 +751,21 @@
 
 	<RowResizer rowId={props.lane.id} kind="lane" label={laneName} siblings={siblingRows} />
 </div>
+
+{#if patternMenu !== null}
+	<div class="automation-pattern-menu" role="menu" aria-label="Automation patterns" bind:this={patternMenuRoot} style:--menu-x="{patternMenu.x}px" style:--menu-y="{patternMenu.y}px">
+		<span class="automation-pattern-menu-title">Insert shape in selected time</span>
+		<div class="automation-pattern-grid">
+			<button type="button" role="menuitem" aria-label="Smooth wave" title="Smooth wave" onclick={() => handlePatternPick(AutomationPattern.wave)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 25 C9 25 10 3 20 3 S31 25 38 25" /></svg></button>
+			<button type="button" role="menuitem" aria-label="Triangle peak" title="Triangle peak" onclick={() => handlePatternPick(AutomationPattern.peak)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 25 L20 3 L38 25" /></svg></button>
+			<button type="button" role="menuitem" aria-label="Ramp down" title="Ramp down" onclick={() => handlePatternPick(AutomationPattern.rampDown)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 3 L38 25" /></svg></button>
+			<button type="button" role="menuitem" aria-label="Ramp up" title="Ramp up" onclick={() => handlePatternPick(AutomationPattern.rampUp)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 25 L38 3" /></svg></button>
+			<button type="button" role="menuitem" aria-label="Square pulse" title="Square pulse" onclick={() => handlePatternPick(AutomationPattern.square)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 25 V3 H20 V25 H38" /></svg></button>
+			<button type="button" role="menuitem" aria-label="Ease in" title="Ease in" onclick={() => handlePatternPick(AutomationPattern.easeIn)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 25 C25 25 35 20 38 3" /></svg></button>
+			<button type="button" role="menuitem" aria-label="Ease out" title="Ease out" onclick={() => handlePatternPick(AutomationPattern.easeOut)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 25 C5 8 15 3 38 3" /></svg></button>
+			<button type="button" role="menuitem" aria-label="Smooth rise" title="Smooth rise" onclick={() => handlePatternPick(AutomationPattern.smoothRise)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 25 C13 25 13 3 38 3" /></svg></button>
+			<button type="button" role="menuitem" aria-label="Smooth fall" title="Smooth fall" onclick={() => handlePatternPick(AutomationPattern.smoothFall)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 3 C25 3 25 25 38 25" /></svg></button>
+			<button type="button" role="menuitem" aria-label="Sharp stabs" title="Sharp stabs" onclick={() => handlePatternPick(AutomationPattern.stabs)}><svg viewBox="0 0 40 28" aria-hidden="true"><path d="M2 25 L8 3 L13 25 H19 L25 3 L30 25 H38" /></svg></button>
+		</div>
+	</div>
+{/if}

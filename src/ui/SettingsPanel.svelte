@@ -1,8 +1,17 @@
 <script lang="ts">
+	import ArrowCounterClockwiseIcon from 'phosphor-svelte/lib/ArrowCounterClockwiseIcon'
 	import CaretLeftIcon from 'phosphor-svelte/lib/CaretLeftIcon'
 	import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon'
 	import CrosshairSimpleIcon from 'phosphor-svelte/lib/CrosshairSimpleIcon'
-	import { app, nudgeDownbeat, resetDownbeat, setBpm, setDownbeatAt, setProjectDuration, setProjectName } from '../store.svelte'
+	import {
+		app,
+		nudgeDownbeat,
+		resetDownbeat,
+		setBpm,
+		setDownbeatAt,
+		setProjectDuration,
+		setProjectName
+	} from '../store.svelte'
 	import ControlSlider from './ControlSlider.svelte'
 	import Section from './Section.svelte'
 	import './SettingsPanel.css'
@@ -33,55 +42,101 @@
 	}
 </script>
 
-<div class="settings-panel">
-	<Section title="Project" description="Used for saving and for the name of an export. It never shows in the picture.">
-		<z-field label="Project name">
-			<z-input value={app.projectName} placeholder="Untitled project" aria-label="Project name" onchange={handleNameInput} oninput={handleNameInput}></z-input>
-		</z-field>
-		<z-field label="Duration (seconds)">
-			<z-number-input value={app.projectDuration} min={5} max={3600} step={5} hasStepperButtons isFullWidth aria-label="Project duration in seconds" oninput={handleDurationChange} onchange={handleDurationChange}></z-number-input>
-		</z-field>
-	</Section>
+<Section title="Project">
+	<z-field label="Name" is-horizontal>
+		<z-input
+			value={app.projectName}
+			placeholder="untitled-project"
+			aria-label="Project Name"
+			onchange={handleNameInput}
+			oninput={handleNameInput}
+		></z-input>
+	</z-field>
+	<z-field label="Duration" is-horizontal>
+		<z-number-input
+			value={app.projectDuration}
+			min={5}
+			max={3600}
+			step={5}
+			hasStepperButtons
+			aria-label="Project duration in seconds"
+			oninput={handleDurationChange}
+			onchange={handleDurationChange}
+		></z-number-input>
+	</z-field>
+</Section>
 
-	<Section title="Tempo" description="The grid and the beat lines follow this.">
-		<div class="settings-tempo">
-			<div class="settings-bpm">
-				<z-field label="BPM">
-					<z-number-input value={app.bpm} min={40} max={240} step={0.1} hasStepperButtons isFullWidth oninput={handleBpmChange} onchange={handleBpmChange}></z-number-input>
-				</z-field>
+<Section title="Tempo">
+	<div class="settings-tempo">
+		<z-field label="BPM" is-horizontal>
+			<z-number-input
+				value={app.bpm}
+				min={40}
+				max={240}
+				step={0.1}
+				hasStepperButtons
+				oninput={handleBpmChange}
+				onchange={handleBpmChange}
+			></z-number-input>
+		</z-field>
+
+		<div class="settings-downbeat">
+			<div class="settings-downbeat-text">
+				<span class="settings-downbeat-label">Downbeat</span>
+				<span class="settings-downbeat-value">{downbeatLabel}</span>
 			</div>
-
-			<div class="settings-downbeat">
-				<div class="settings-downbeat-text">
-					<span class="settings-downbeat-label">Downbeat</span>
-					<span class="settings-downbeat-value">{downbeatLabel}</span>
-				</div>
-				<div class="settings-downbeat-actions">
-					<z-tooltip content="5 ms earlier" placement="top" openDelay={300}>
-						<z-button isIcon size="sm" kind="outline" tone="neutral" aria-label="Move downbeat 5 ms earlier" isDisabled={!canSetDownbeat} onclick={handleNudgeEarlier}>
-							<CaretLeftIcon weight="bold" />
+			<div class="settings-downbeat-actions">
+				{#if app.beatOffset !== 0}
+					<z-tooltip content="Reset downbeat to 0.000 s" placement="top" openDelay={300}>
+						<z-button
+							isIcon
+							size="sm"
+							kind="ghost"
+							tone="neutral"
+							aria-label="Reset downbeat to 0.000 s"
+							onclick={handleResetDownbeat}
+						>
+							<ArrowCounterClockwiseIcon weight="bold" />
 						</z-button>
 					</z-tooltip>
-					<z-tooltip content="5 ms later" placement="top" openDelay={300}>
-						<z-button isIcon size="sm" kind="outline" tone="neutral" aria-label="Move downbeat 5 ms later" isDisabled={!canSetDownbeat} onclick={handleNudgeLater}>
-							<CaretRightIcon weight="bold" />
-						</z-button>
-					</z-tooltip>
-					<z-tooltip content="Park the playhead on a clear bar 1, then click" placement="top" openDelay={300}>
-						<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canSetDownbeat} onclick={handleSetDownbeat}>
-							<CrosshairSimpleIcon weight="bold" />
-							At playhead
-						</z-button>
-					</z-tooltip>
-					{#if app.beatOffset !== 0}
-						<z-button size="sm" kind="ghost" tone="neutral" onclick={handleResetDownbeat}>0.000 s</z-button>
-					{/if}
-				</div>
+				{/if}
+				<z-tooltip content="5 ms earlier" placement="top" openDelay={300}>
+					<z-button
+						isIcon
+						size="sm"
+						kind="outline"
+						tone="neutral"
+						aria-label="Move downbeat 5 ms earlier"
+						isDisabled={!canSetDownbeat}
+						onclick={handleNudgeEarlier}
+					>
+						<CaretLeftIcon weight="bold" />
+					</z-button>
+				</z-tooltip>
+				<z-tooltip content="5 ms later" placement="top" openDelay={300}>
+					<z-button
+						isIcon
+						size="sm"
+						kind="outline"
+						tone="neutral"
+						aria-label="Move downbeat 5 ms later"
+						isDisabled={!canSetDownbeat}
+						onclick={handleNudgeLater}
+					>
+						<CaretRightIcon weight="bold" />
+					</z-button>
+				</z-tooltip>
+				<z-tooltip content="Park the playhead on a clear bar 1, then click" placement="top" openDelay={300}>
+					<z-button size="sm" kind="outline" tone="neutral" isDisabled={!canSetDownbeat} onclick={handleSetDownbeat}>
+						<CrosshairSimpleIcon weight="bold" />
+						At playhead
+					</z-button>
+				</z-tooltip>
 			</div>
 		</div>
-	</Section>
+	</div>
+</Section>
 
-	<Section title="Response" description="How strongly everything that follows the music reacts.">
-		<ControlSlider controlKey="reactivity" label="Reactivity" />
-	</Section>
-</div>
+<Section title="Response">
+	<ControlSlider controlKey="reactivity" label="Reactivity" />
+</Section>

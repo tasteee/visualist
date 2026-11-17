@@ -106,8 +106,8 @@
 	// project if one was saved.
 	const bootApp = async () => {
 		await startApp()
-		startProjectWatchers()
 		await restoreProject()
+		startProjectWatchers()
 	}
 
 	onMount(() => {
@@ -125,7 +125,7 @@
 
 <svelte:window onkeydown={handleKeyDown} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop} />
 
-<main class="app-shell" class:isStageFocused={uiState.isStageFocused} style:--editor-dock-height="{timeline.dockHeight}px" tabindex="-1" bind:this={shell}>
+<main class="app-shell" class:isStageFocused={uiState.isStageFocused} class:isMapping={timeline.mode === 'mapping'} style:--editor-dock-height="{timeline.dockHeight}px" tabindex="-1" bind:this={shell}>
 	<!-- A strict vertical split: the workspace on top, the editor below.
 	     The editor never covers the workspace. Dragging the divider
 	     between them gives one pane the height the other loses, and the
@@ -151,7 +151,7 @@
 		{/if}
 	</div>
 
-	{#if !uiState.isUiHidden && app.hasAudio}
+	{#if !uiState.isUiHidden}
 		<div class="app-bottom" class:isFolded={uiState.isDockFolded}>
 			<DockToolbar />
 			<EditorDock />

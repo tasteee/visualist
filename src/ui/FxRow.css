@@ -1,11 +1,25 @@
-.fx-row {
+.fx-row-card {
 	display: flex;
-	align-items: flex-start;
-	gap: var(--spacing-2);
+	flex-direction: column;
+	gap: var(--spacing-3);
 	padding: var(--spacing-3);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: var(--bg);
+}
+
+.fx-row {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--spacing-2);
+}
+
+.fx-row-options {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-3);
+	padding-top: var(--spacing-3);
+	border-top: 1px solid var(--border);
 }
 
 .fx-row-slider {

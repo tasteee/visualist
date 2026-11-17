@@ -15,7 +15,6 @@
 	import ImpulseTrackControls from './ImpulseTrackControls.svelte'
 	import InspectorTitle from './InspectorTitle.svelte'
 	import LayerEditor from './LayerEditor.svelte'
-	import ModulatorMappings from './ModulatorMappings.svelte'
 	import Section from './Section.svelte'
 	import './ClipProperties.css'
 	import './InspectorPanel.css'
@@ -80,12 +79,12 @@
 
 	// The textarea's own look lives in its shadow root.
 	const TEXTAREA_CSS = `
-		.field { color: var(--color-neutral-0); font-size: 16px; font-weight: 500; letter-spacing: 0.5px; border-color: var(--color-neutral-3) !important; }
+		.field { font-size: 16px; font-weight: 500; letter-spacing: 0.5px; border-color: var(--color-neutral-3) !important; }
 		.field:hover { border-color: var(--color-neutral-5); }
 		.field.is-focused { background: color-mix(in srgb, var(--color-neutral-5) 5%, transparent); border-color: var(--color-neutral-3) !important; }
 		.field:focus-within { border-color: var(--color-neutral-3) !important; outline-offset: 0px; background: color-mix(in srgb, var(--color-neutral-5) 20%, transparent); outline: 0px solid var(--color-neutral-5); }
 		/* The typed text itself (.inspector-panel-header-textarea-text). */
-		textarea { font-weight: 600 !important; color: var(--color-neutral-0); font-size: 16px; }
+		textarea { font-size: 16px; }
 	`
 
 	// A layer's color is its row color, or the one its id picks.
@@ -129,7 +128,7 @@
 		aria-label="Clip properties"
 	>
 		<header class="inspector-panel-header">
-			<div class="inspector-panel-meta">
+			<z-row alignsY="center" gap="2" class="inspector-panel-meta">
 				<button
 					class="inspector-panel-cycle inspector-panel-header-swatch"
 					type="button"
@@ -144,7 +143,7 @@
 				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}
 					>CLIP</z-text
 				>
-			</div>
+			</z-row>
 			<InspectorTitle
 				size="xs"
 				value={clipTitle}
@@ -166,7 +165,13 @@
 				></z-textarea>
 			{/if}
 
-			<div class="clip-properties-swatches inspector-panel-swatches" role="group" aria-label="Clip color">
+			<!-- <z-row
+				gap="1"
+				doesWrap
+				class="clip-properties-swatches inspector-panel-swatches"
+				role="group"
+				aria-label="Clip color"
+			>
 				{#each PALETTE as option (option.name)}
 					<button
 						class="row-inspector-swatch"
@@ -179,7 +184,7 @@
 						onclick={() => handleClipColor(pickedClip.clip, option.name)}
 					></button>
 				{/each}
-			</div>
+			</z-row> -->
 		</header>
 		<div class="inspector-panel-body">
 			{#key pickedClip.clip.id}
@@ -191,7 +196,7 @@
 {:else if layer !== undefined}
 	<aside class="inspector-panel" data-tone={getLayerTone(layer)} aria-label="Layer properties">
 		<header class="inspector-panel-header">
-			<div class="inspector-panel-meta">
+			<z-row alignsY="center" gap="2" class="inspector-panel-meta">
 				<button
 					class="inspector-panel-cycle inspector-panel-header-swatch"
 					type="button"
@@ -205,13 +210,18 @@
 				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}
 					>{getKindLabel(layer.kind).toUpperCase()}</z-text
 				>
-			</div>
-			<InspectorTitle size="xs" value={layer.name} label="Rename layer" oncommit={(name) => renameLayer(layer.id, name)} />
+			</z-row>
+			<InspectorTitle value={layer.name} label="Rename layer" oncommit={(name) => renameLayer(layer.id, name)} />
 		</header>
 		<div class="inspector-panel-body">
 			{#key layer.id}
 				{#if layer.kind === 'audio'}
-					<AudioControls layerId={layer.id} />
+					<Section title="General">
+						<z-field label="Name" is-horizontal>
+							<z-input value={layer.name} oninput={(e: any) => renameLayer(layer.id, e.detail.value)}></z-input>
+						</z-field>
+						<AudioControls layerId={layer.id} />
+					</Section>
 				{:else}
 					<LayerEditor {layer} />
 				{/if}
@@ -222,7 +232,7 @@
 	{@const emitterTone = getEmitterTone(selectedEmitter)}
 	<aside class="inspector-panel" data-tone={emitterTone} aria-label="Emitter properties">
 		<header class="inspector-panel-header">
-			<div class="inspector-panel-meta">
+			<z-row alignsY="center" gap="2" class="inspector-panel-meta">
 				<button
 					class="inspector-panel-cycle inspector-panel-header-swatch"
 					type="button"
@@ -237,7 +247,7 @@
 				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}
 					>EMITTER</z-text
 				>
-			</div>
+			</z-row>
 			<InspectorTitle
 				size="xs"
 				value={selectedEmitter.name}
@@ -247,7 +257,6 @@
 		</header>
 		<div class="inspector-panel-body">
 			{#key selectedEmitter.id}
-				<ModulatorMappings modulator={{ kind: 'emitter', trackId: selectedEmitter.id }} />
 				<Section title="Emitter">
 					<ImpulseTrackControls track={selectedEmitter} />
 				</Section>
@@ -259,7 +268,7 @@
 	{@const laneTitle = getLaneDisplayName(selectedLane)}
 	<aside class="inspector-panel" data-tone={laneTone} aria-label="Automation modulator properties">
 		<header class="inspector-panel-header">
-			<div class="inspector-panel-meta">
+			<z-row alignsY="center" gap="2" class="inspector-panel-meta">
 				<button
 					class="inspector-panel-cycle inspector-panel-header-swatch"
 					type="button"
@@ -274,7 +283,7 @@
 				<z-text class="inspector-panel-header-clip-text" use:shadowStyles={TEXT_CSS} size="xs" tag="span" weight={800}
 					>AUTOMATION</z-text
 				>
-			</div>
+			</z-row>
 			<InspectorTitle
 				size="xs"
 				value={laneTitle}
@@ -284,7 +293,6 @@
 		</header>
 		<div class="inspector-panel-body">
 			{#key selectedLane.id}
-				<ModulatorMappings modulator={{ kind: 'lane', laneId: selectedLane.id }} />
 				<Section title="Curve">
 					<z-button
 						size="sm"

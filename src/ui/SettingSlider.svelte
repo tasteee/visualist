@@ -83,34 +83,59 @@
 	const handleReveal = () => props.onreveal?.()
 </script>
 
-<div class="setting-slider" class:isDisabled={props.isDisabled && !isAutomated} class:isAutomated class:isModulated class:canModulate>
-	<div class="setting-slider-header">
-		<span class="setting-slider-label">{props.label}</span>
-		{#if isAutomated}
-			<z-tooltip content={AUTOMATED_TOOLTIP} placement="left" openDelay={200}>
-				<button class="setting-slider-badge" data-tone={automationColor} type="button" aria-label="{props.label}: {badgeLabel}. Click to inspect." onclick={handleReveal}>
-					<LightningIcon weight="fill" />
-					{badgeLabel}
+<z-column
+	gap="1"
+	isFullWidth
+	class="setting-slider"
+	class:isDisabled={props.isDisabled && !isAutomated}
+	class:isAutomated
+	class:isModulated
+	class:canModulate
+>
+	<z-row alignsY="center" alignsX="between" gap="2" isFullWidth class="setting-slider-header">
+		<z-text size="sm" weight={500} class="setting-slider-label">{props.label}</z-text>
+		<z-row alignsY="center" gap="1" style="flex: none;">
+			{#if isAutomated}
+				<z-tooltip content={AUTOMATED_TOOLTIP} placement="left" openDelay={200}>
+					<button
+						class="setting-slider-badge"
+						data-tone={automationColor}
+						type="button"
+						aria-label="{props.label}: {badgeLabel}. Click to inspect."
+						onclick={handleReveal}
+					>
+						<LightningIcon weight="fill" />
+						{badgeLabel}
+					</button>
+				</z-tooltip>
+			{/if}
+			{#if canAutomate}
+				<z-tooltip content={automateLabel} placement="left" openDelay={300}>
+					<button class="setting-slider-automate" type="button" aria-label={automateLabel} onclick={handleAutomate}>
+						<LightningIcon weight="bold" />
+					</button>
+				</z-tooltip>
+			{/if}
+			{#if canModulate}
+				<button
+					class="setting-slider-mod"
+					class:isActive={modulation !== null}
+					class:isOpen={isModOpen}
+					type="button"
+					aria-label={modAriaLabel}
+					aria-expanded={isModOpen}
+					onclick={handleModToggle}
+				>
+					<WaveSineIcon weight="bold" />
+					{#if modulation !== null}
+						<z-text size="xs" class="setting-slider-mod-label">{modLabel}</z-text>
+					{/if}
 				</button>
-			</z-tooltip>
-		{/if}
-		{#if canAutomate}
-			<z-tooltip content={automateLabel} placement="left" openDelay={300}>
-				<button class="setting-slider-automate" type="button" aria-label={automateLabel} onclick={handleAutomate}>
-					<LightningIcon weight="bold" />
-				</button>
-			</z-tooltip>
-		{/if}
-		{#if canModulate}
-			<button class="setting-slider-mod" class:isActive={modulation !== null} class:isOpen={isModOpen} type="button" aria-label={modAriaLabel} aria-expanded={isModOpen} onclick={handleModToggle}>
-				<WaveSineIcon weight="bold" />
-				{#if modulation !== null}
-					<span class="setting-slider-mod-label">{modLabel}</span>
-				{/if}
-			</button>
-		{/if}
-		<span class="setting-slider-value" data-tone={automationColor}>{valueLabel}</span>
-	</div>
+			{/if}
+			<z-text size="xs" weight={600} class="setting-slider-value" data-tone={automationColor}>{valueLabel}</z-text>
+		</z-row>
+	</z-row>
+
 	<z-tooltip content={tooltipText} isDisabled={!hasHint} placement="left" openDelay={400}>
 		<z-slider
 			aria-label={props.label}
@@ -123,12 +148,14 @@
 			onchange={handleInput}
 		></z-slider>
 	</z-tooltip>
+
 	{#if isModulated}
 		<div class="setting-slider-meter" aria-hidden="true">
 			<span class="setting-slider-meter-fill" style:width={liveStyle}></span>
 		</div>
 	{/if}
+
 	{#if canModulate && isModOpen}
 		<ModEditor label={props.label} {modulation} onchange={handleModChange} />
 	{/if}
-</div>
+</z-column>

@@ -18,7 +18,7 @@
 	import { press } from './press'
 	import './Toolbar.css'
 
-	// Menus for the project as a whole, floating in the top right.
+	// Menus for the project as a whole, floating below their triggering button.
 	// Row and layer controls live in each row's own popover.
 	type ToolbarItemT = {
 		tab: InspectorTabT
@@ -35,8 +35,36 @@
 	]
 
 	let root: HTMLDivElement
+	let menuElement = $state<HTMLDivElement>()
+	const buttonElements: Record<string, HTMLElement> = $state({})
+	let menuPositionStyle = $state('')
 
 	const activeTab = $derived(inspector.activeTab)
+
+	const updateMenuPosition = () => {
+		if (!activeTab || !buttonElements[activeTab] || !root) {
+			menuPositionStyle = ''
+			return
+		}
+		const btn = buttonElements[activeTab]
+		const rootRect = root.getBoundingClientRect()
+		const btnRect = btn.getBoundingClientRect()
+		const menuWidth = menuElement ? menuElement.offsetWidth : activeTab === 'state' ? 544 : 344
+		const gap = 8
+
+		const btnLeftRelativeToRoot = btnRect.left - rootRect.left
+		const maxLeft = rootRect.width - menuWidth - gap
+		const left = Math.max(gap, Math.min(btnLeftRelativeToRoot, maxLeft))
+
+		menuPositionStyle = `left: ${Math.round(left)}px; right: auto;`
+	}
+
+	$effect(() => {
+		if (activeTab) {
+			updateMenuPosition()
+			requestAnimationFrame(updateMenuPosition)
+		}
+	})
 
 	const close = () => {
 		closeInspectorTab()
@@ -62,11 +90,16 @@
 			event.preventDefault()
 			close()
 		}
+		const handleResize = () => {
+			if (activeTab) updateMenuPosition()
+		}
 		window.addEventListener('pointerdown', handlePointerDown, true)
 		window.addEventListener('keydown', handleKeyDown)
+		window.addEventListener('resize', handleResize)
 		return () => {
 			window.removeEventListener('pointerdown', handlePointerDown, true)
 			window.removeEventListener('keydown', handleKeyDown)
+			window.removeEventListener('resize', handleResize)
 		}
 	})
 </script>
@@ -74,7 +107,14 @@
 <div class="toolbar" bind:this={root}>
 	<div class="toolbar-bar" role="toolbar" aria-label="Project menus">
 		{#each ITEMS as item (item.tab)}
-			<z-button size="sm" kind={activeTab === item.tab ? 'soft' : 'ghost'} tone="neutral" aria-pressed={activeTab === item.tab} {...press(() => toggleInspectorTab(item.tab))}>
+			<z-button
+				bind:this={buttonElements[item.tab]}
+				size="sm"
+				kind={activeTab === item.tab ? 'soft' : 'ghost'}
+				tone="neutral"
+				aria-pressed={activeTab === item.tab}
+				{...press(() => toggleInspectorTab(item.tab))}
+			>
 				{#if item.tab === 'settings'}
 					<FadersIcon weight="bold" />
 				{/if}
@@ -99,7 +139,14 @@
 	</div>
 
 	{#if activeTab !== null}
-		<div class="toolbar-menu" class:isWide={activeTab === 'state'} role="dialog" aria-label="{activeTab} menu">
+		<div
+			bind:this={menuElement}
+			class="toolbar-menu"
+			class:isWide={activeTab === 'state'}
+			style={menuPositionStyle}
+			role="dialog"
+			aria-label="{activeTab} menu"
+		>
 			{#if activeTab === 'settings'}
 				<SettingsPanel />
 			{/if}

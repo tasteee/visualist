@@ -3,7 +3,7 @@ import { clampView, getViewEnd, panView, zoomView } from './engine/timeline'
 import type { GridDivisionT, TimelineViewT } from './engine/timeline'
 import { app } from './store.svelte'
 
-export type EditorModeT = 'staging' | 'modulation'
+export type EditorModeT = 'staging' | 'modulation' | 'mapping'
 
 type TimelineStateT = {
 	// Staging places clips. Modulation holds the lanes and emitters

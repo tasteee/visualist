@@ -1,0 +1,89 @@
+.mappingWorkspace {
+	display: grid;
+	grid-template-columns: var(--inspector-width) minmax(0, 1fr);
+	flex: 1;
+	min-height: 0;
+	background: var(--paper);
+}
+
+.mappingWorkspaceSources {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-1);
+	padding: var(--spacing-4);
+	overflow: auto;
+	border-right: 1px solid var(--border);
+}
+
+.mappingWorkspaceHeading,
+.mappingWorkspaceEyebrow,
+.mappingWorkspaceSourceKind {
+	color: var(--muted);
+	font-size: var(--font-size-xs);
+	font-weight: 600;
+}
+
+.mappingWorkspaceHeading {
+	padding: var(--spacing-2);
+}
+
+.mappingWorkspaceSource {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--spacing-1);
+	width: 100%;
+	padding: var(--spacing-3);
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--foreground);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.mappingWorkspaceSource:hover,
+.mappingWorkspaceSource.isSelected {
+	border-color: var(--border);
+	background: var(--surface);
+}
+
+.mappingWorkspaceContent {
+	min-width: 0;
+	padding: var(--spacing-6);
+	overflow: auto;
+}
+
+.mappingWorkspaceContentHeader {
+	margin-bottom: var(--spacing-5);
+}
+
+.mappingWorkspaceContentHeader h2,
+.mappingWorkspaceEmpty h2 {
+	margin: var(--spacing-2) 0;
+}
+
+.mappingWorkspaceEmpty {
+	margin: var(--spacing-8) auto;
+	max-width: 32rem;
+	color: var(--secondary);
+}
+
+.mappingWorkspaceContent .modulator-mappings-list {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+}
+
+@media (max-width: 700px) {
+	.mappingWorkspace {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
+	}
+
+	.mappingWorkspaceSources {
+		flex-direction: row;
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+	}
+}

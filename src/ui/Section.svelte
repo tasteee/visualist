@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { CaretRightIcon } from 'phosphor-svelte'
 	import type { Snippet } from 'svelte'
 	import './controls.css'
 
@@ -10,21 +11,31 @@
 	}
 
 	const props: SectionPropsT = $props()
+	let isExpanded = $state(true)
+	const caretClass = $derived(isExpanded ? 'panel-section-caret isExpanded' : 'panel-section-caret')
+	const handleToggle = (): void => {
+		isExpanded = !isExpanded
+	}
 </script>
 
-<section class="panel-section">
-	<header class="panel-section-header">
-		<div class="panel-section-heading">
-			<h3 class="panel-section-title">{props.title}</h3>
-			{#if props.description}
-				<p class="panel-section-description">{props.description}</p>
-			{/if}
-		</div>
+<section class="panel-section" class:isExpanded>
+	<div class="panel-section-header">
+		<button class="panel-section-toggle" type="button" aria-expanded={isExpanded} onclick={handleToggle}>
+			<span class="panel-section-title">{props.title.toUpperCase()}</span>
+			<CaretRightIcon class={caretClass} weight="bold" />
+		</button>
 		{#if props.action}
-			{@render props.action()}
+			<div class="panel-section-action">
+				{@render props.action()}
+			</div>
 		{/if}
-	</header>
-	<div class="panel-section-body">
-		{@render props.children()}
 	</div>
+	{#if isExpanded && props.description}
+		<p class="panel-section-description">{props.description}</p>
+	{/if}
+	{#if isExpanded}
+		<div class="panel-section-body">
+			{@render props.children()}
+		</div>
+	{/if}
 </section>

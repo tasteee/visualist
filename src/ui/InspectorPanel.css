@@ -17,24 +17,17 @@
 /* Identity: what kind of thing this is and what it is called. */
 .inspector-panel-header {
 	--inspector-title-color: var(--color-neutral-0);
-}
-
-.inspector-panel-header {
 	display: flex;
 	flex: none;
 	flex-direction: column;
 	gap: var(--spacing-1);
-	padding: var(--spacing-4) var(--spacing-4) var(--spacing-3);
-	border-bottom: 1px solid var(--border);
-	/*background: linear-gradient(to bottom, color-mix(in oklch, var(--accent-alt) 7%, var(--paper)), var(--paper));*/
-	background: linear-gradient(170deg, color-mix(in oklch, var(--color-neutral-9) 100%, transparent), 55%, color-mix(in oklch, var(--tone-4) 8%, transparent)),
-  linear-gradient(to top left, color-mix(in oklch, var(--tone-5) 85%, var(--color-neutral-8)), var(--background-light));
+	padding: var(--spacing-4) var(--spacing-3) var(--spacing-3);
+	border-bottom: 1px solid var(--color-neutral-3);
 }
 
 .inspector-panel-meta {
 	display: flex;
 	align-items: center;
-	/*justify-content: space-between;*/
 	gap: var(--spacing-2);
 }
 
@@ -51,7 +44,7 @@
 	flex: 1;
 	flex-direction: column;
 	min-height: 0;
-	padding: 0 var(--spacing-4) var(--spacing-5);
+	padding: var(--spacing-1) var(--spacing-2) var(--spacing-4);
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	scrollbar-gutter: stable;
@@ -60,27 +53,18 @@
 /* Sections inside the panel: tighter rhythm, a small accent tick on
    each heading so the groups scan quickly. */
 .inspector-panel .panel-section {
-	gap: var(--spacing-3);
-	padding: var(--spacing-4) 0;
+	padding: 2px 0;
 }
 
 .inspector-panel .panel-section-title {
 	display: flex;
 	align-items: center;
 	gap: var(--spacing-2);
-	color: var(--secondary);
-}
-
-.inspector-panel .panel-section-title::before {
-	width: 3px;
-	height: 0.8em;
-	border-radius: 2px;
-	background: var(--accent-alt);
-	content: '';
 }
 
 .inspector-panel .panel-section-body {
-	gap: var(--spacing-3);
+	gap: var(--spacing-2);
+	padding: var(--spacing-1) 0.375rem var(--spacing-2);
 }
 
 .inspector-panel .panel-section-description {
@@ -96,14 +80,13 @@
 .inspector-panel-cycle {
 	flex: none;
 	margin-right: 2px;
-    margin-top: 0.5px;
-	width: var(--spacing-2);
-	height: var(--spacing-2);
+	margin-top: 0.5px;
+	width: var(--spacing-3);
+	height: var(--spacing-3);
 	padding: 0;
-	box-shadow: -0.5px 0px 12px 1px var(--tone-8);
 	border: 2px solid var(--color-neutral-1);
 	border-radius: 50%;
-	background: var(--tone, transparent);
+	background: var(--color-neutral-7);
 	cursor: pointer;
 	transition:
 		background-color 350 ease,
@@ -127,4 +110,3 @@
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 2px;
 }
-

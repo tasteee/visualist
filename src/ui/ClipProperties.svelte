@@ -2,9 +2,11 @@
 	import TextItalicIcon from 'phosphor-svelte/lib/TextItalicIcon'
 	import TextStrikethroughIcon from 'phosphor-svelte/lib/TextStrikethroughIcon'
 	import TextUnderlineIcon from 'phosphor-svelte/lib/TextUnderlineIcon'
+	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import { getLaneColor, getRowColor } from '../appearance.svelte'
 	import { automation, recordHistory, recordHistoryCoalesced, revealLane } from '../automation.svelte'
-	import { TEXT_FONT_OPTIONS, TEXT_WEIGHT_OPTIONS, createClipTransform } from '../engine/layers'
+	import { FX_SPECS, TEXT_FONT_OPTIONS, TEXT_WEIGHT_OPTIONS, createClipTransform, createFx } from '../engine/layers'
+	import { SHADER_EFFECT_KINDS } from '../engine/shaderEffects'
 	import { evaluateMappedValue } from '../engine/mappings'
 	import { PALETTE, getRoleColor } from '../engine/palette'
 	import type { ColorNameT } from '../engine/palette'
@@ -24,6 +26,7 @@
 	import { app } from '../store.svelte'
 	import { setEditorMode } from '../timeline.svelte'
 	import ColorPicker from './ColorPicker.svelte'
+	import FxRow from './FxRow.svelte'
 	import Section from './Section.svelte'
 	import SettingSlider from './SettingSlider.svelte'
 	import './ClipProperties.css'
@@ -84,6 +87,7 @@
 	const fallbackName = $derived(
 		isText && props.clip.text.trim().length > 0 ? props.clip.text.replace(/\s+/g, ' ').trim() : props.layer.name
 	)
+
 	const readText = (event: Event): string => (event as CustomEvent<{ value: string }>).detail.value
 
 	const handleName = (event: Event) => {
@@ -163,6 +167,31 @@
 		props.clip.transform = createClipTransform()
 	}
 
+	const handleAddFoil = () => {
+		recordHistory()
+		props.clip.fx = [...props.clip.fx, createFx('foil')]
+	}
+
+	const handleAddHexGlitch = () => {
+		recordHistory()
+		props.clip.fx = [...props.clip.fx, createFx('hexGlitch')]
+	}
+
+	const handleAddShader = (kind: (typeof SHADER_EFFECT_KINDS)[number]) => {
+		recordHistory()
+		props.clip.fx = [...props.clip.fx, createFx(kind)]
+	}
+
+	const shaderSpecs = FX_SPECS.filter((spec) => SHADER_EFFECT_KINDS.some((kind) => kind === spec.kind))
+
+	const handleRemoveClipFx = (effectId: string) => {
+		recordHistory()
+		props.clip.fx = props.clip.fx.filter((effect) => effect.id !== effectId)
+	}
+
+	const hasClipFoil = $derived(props.clip.fx.some((effect) => effect.kind === 'foil'))
+	const hasClipHexGlitch = $derived(props.clip.fx.some((effect) => effect.kind === 'hexGlitch'))
+
 	const getKind = (isOn: boolean): string => (isOn ? 'soft' : 'outline')
 	const getTone = (isOn: boolean): string => (isOn ? 'primary' : 'neutral')
 
@@ -232,31 +261,42 @@
 		{#if isText && style !== null}
 			<!-- <z-textarea value={props.clip.text} rows={2} isAutoResize aria-label="Text" oninput={handleText} onchange={handleText}></z-textarea> -->
 
-			<z-field label="Font" is-horizontal style="width: 100%">
-				<z-select value={style.font ?? 'dm-sans'} options={TEXT_FONT_OPTIONS} aria-label="Font family" onchange={handleFont}
+			<z-field label="Font" is-horizontal size="sm">
+				<z-select
+					value={style.font ?? 'dm-sans'}
+					options={TEXT_FONT_OPTIONS}
+					aria-label="Font family"
+					size="sm"
+					onchange={handleFont}
 				></z-select>
 			</z-field>
 
-			<div class="clip-properties-row">
-				<z-field label="Weight" is-horizontal style="width: 100%">
-					<z-number-input
-						style="margin-left: auto;"
-						value={Number(style.weight)}
-						min={MIN_WEIGHT}
-						max={MAX_WEIGHT}
-						step={WEIGHT_STEP}
-						size="sm"
-						aria-label="Font weight"
-						oninput={handleWeight}
-						onchange={handleWeight}
-						has-stepper-buttons
-					></z-number-input></z-field
-				>
-			</div>
+			<z-field label="Weight" is-horizontal size="sm">
+				<z-number-input
+					value={Number(style.weight)}
+					min={MIN_WEIGHT}
+					max={MAX_WEIGHT}
+					step={WEIGHT_STEP}
+					size="sm"
+					is-full-width
+					aria-label="Font weight"
+					oninput={handleWeight}
+					onchange={handleWeight}
+					has-stepper-buttons
+				></z-number-input>
+			</z-field>
 
-			<ColorPicker value={style.color} label="Text color" onchange={handleTextColor} />
+			<z-field label="Color" is-horizontal size="sm">
+				<ColorPicker value={style.color} label="Text color" onchange={handleTextColor} />
+			</z-field>
 
-			<div class="layer-editor-styles clip-properties-styles" role="group" aria-label="Text style">
+			<z-row
+				gap="1"
+				alignsY="center"
+				class="layer-editor-styles clip-properties-styles"
+				role="group"
+				aria-label="Text style"
+			>
 				<z-button
 					size="sm"
 					kind={getKind(style.isStrike)}
@@ -287,7 +327,7 @@
 				>
 					<TextItalicIcon weight="bold" />
 				</z-button>
-				<span class="clip-properties-case">
+				<z-button-group class="clip-properties-case">
 					<z-button
 						size="sm"
 						kind={getKind(style.isUppercase)}
@@ -304,11 +344,11 @@
 						aria-pressed={style.isLowercase}
 						onclick={() => handleToggle('isLowercase')}>aa</z-button
 					>
-				</span>
-			</div>
+				</z-button-group>
+			</z-row>
 		{/if}
 
-		<Section title="Fades" description="Smoothly ramp this clip in at its start or out at its end.">
+		<Section title="Fades">
 			<SettingSlider
 				label="Fade in"
 				value={props.clip.fadeIn ?? 0}
@@ -328,6 +368,43 @@
 				onchange={handleFadeOut}
 			/>
 		</Section>
+		{#if !isAudio}
+			<Section title="Clip effects">
+				{#each props.clip.fx as effect (effect.id)}
+					<FxRow
+						layerId={props.layer.id}
+						clipId={props.clip.id}
+						fx={effect}
+						onremove={() => handleRemoveClipFx(effect.id)}
+					/>
+				{/each}
+				{#if !hasClipFoil}
+					<z-button size="sm" kind="outline" tone="neutral" isFullWidth onclick={handleAddFoil}>
+						<PlusIcon weight="bold" /> Holographic foil
+					</z-button>
+				{/if}
+				{#if !hasClipHexGlitch}
+					<z-button size="sm" kind="outline" tone="neutral" isFullWidth onclick={handleAddHexGlitch}>
+						<PlusIcon weight="bold" /> Hex glitch
+					</z-button>
+				{/if}
+				{#each shaderSpecs as shaderSpec (shaderSpec.kind)}
+					{@const isAdded = props.clip.fx.some((effect) => effect.kind === shaderSpec.kind)}
+					{#if !isAdded}
+						<z-button
+							size="sm"
+							kind="outline"
+							tone="neutral"
+							isFullWidth
+							onclick={() => handleAddShader(shaderSpec.kind as (typeof SHADER_EFFECT_KINDS)[number])}
+						>
+							<PlusIcon weight="bold" />
+							{shaderSpec.label}
+						</z-button>
+					{/if}
+				{/each}
+			</Section>
+		{/if}
 	{:else}
 		<Section title="Transform">
 			{#each TRANSFORM_SPECS as spec (spec.key)}

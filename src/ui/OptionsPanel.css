@@ -1,0 +1,23 @@
+.projectFileActions,
+.projectFileConfirm {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-2);
+}
+
+.projectFileConfirm {
+	padding: var(--spacing-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--paper-soft);
+}
+
+.projectFileConfirm p {
+	margin: 0;
+	color: var(--secondary);
+	font-size: var(--font-size-small);
+}
+
+.projectFileInput {
+	display: none;
+}

@@ -11,12 +11,12 @@ import { copyVideo } from './engine/video'
 // Copy, paste, duplicate and deactivate for the selected clips or layers,
 // the way clips behave in an audio editor.
 
-type ClipboardEntryT = {
+export type ClipboardEntryT = {
 	layer: LayerT
 	sourceId: string
 }
 
-type ClipClipboardEntryT = {
+export type ClipClipboardEntryT = {
 	layerId: string
 	clip: ClipT
 	length: number
@@ -43,8 +43,15 @@ export type MultiClipDragSessionT = {
 	items: MultiClipDragItemT[]
 }
 
-let clipboard: ClipboardEntryT[] = []
-let clipClipboard: ClipClipboardEntryT[] = []
+let clipboard = $state<ClipboardEntryT[]>([])
+let clipClipboard = $state<ClipClipboardEntryT[]>([])
+
+export const getLayerClipboard = (): ClipboardEntryT[] => clipboard
+export const getClipClipboard = (): ClipClipboardEntryT[] => clipClipboard
+export const clearLayerClipboards = (): void => {
+	clipboard = []
+	clipClipboard = []
+}
 
 const getSelectedLayers = (): LayerT[] => {
 	const selected = layerStore.layers.filter((layer) => layerStore.selectedLayerIds.includes(layer.id))

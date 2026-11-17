@@ -4,7 +4,8 @@
 	import PauseIcon from 'phosphor-svelte/lib/PauseIcon'
 	import PlayIcon from 'phosphor-svelte/lib/PlayIcon'
 	import TerminalWindowIcon from 'phosphor-svelte/lib/TerminalWindowIcon'
-	import { buildAppStateSnapshot, selectStateSection } from '../stateSnapshot.svelte'
+	import TrashIcon from 'phosphor-svelte/lib/TrashIcon'
+	import { buildAppStateSnapshot, clearAllClipboards, selectStateSection } from '../stateSnapshot.svelte'
 	import type { AppStateSnapshotT, StateSectionKeyT } from '../stateSnapshot.svelte'
 	import Section from './Section.svelte'
 	import './StatePanel.css'
@@ -22,7 +23,8 @@
 		{ key: 'mappings', label: 'Mappings' },
 		{ key: 'sources', label: 'Emitters' },
 		{ key: 'automation', label: 'Lanes' },
-		{ key: 'timeline', label: 'Timeline' }
+		{ key: 'timeline', label: 'Timeline' },
+		{ key: 'clipboard', label: 'Clipboard' }
 	]
 
 	let activeSection = $state<StateSectionKeyT>('all')
@@ -56,9 +58,14 @@
 		console.log('[VISUALIST State Snapshot]', displayedValue)
 		toaster.show({ title: 'Logged state to browser console (window.__visualist)', tone: 'info' })
 	}
+
+	const handleClearClipboard = () => {
+		clearAllClipboards()
+		toaster.show({ title: 'Cleared virtual clipboard', tone: 'neutral' })
+	}
 </script>
 
-<Section title="State Inspector" description="Live reactive state of the app. Also accessible anytime in DevTools via window.__visualist.getState().">
+<Section title="State Inspector">
 	<div class="state-panel">
 		<div class="state-panel-controls">
 			<div class="state-panel-sections" role="tablist" aria-label="State sections">
@@ -76,6 +83,13 @@
 			</div>
 
 			<div class="state-panel-actions">
+				{#if activeSection === 'clipboard'}
+					<z-button size="xs" kind="ghost" tone="danger" onclick={handleClearClipboard}>
+						<TrashIcon weight="bold" />
+						Clear
+					</z-button>
+				{/if}
+
 				<z-button
 					size="xs"
 					kind={isFrozen ? 'soft' : 'outline'}

@@ -34,7 +34,7 @@
 	const handleModeChange = (event: Event) => {
 		const detail = (event as CustomEvent<{ value?: string | string[] }>).detail
 		const value = Array.isArray(detail.value) ? detail.value[0] : detail.value
-		if (value === 'staging' || value === 'modulation') return setEditorMode(value as EditorModeT)
+		if (value === 'staging' || value === 'modulation' || value === 'mapping') return setEditorMode(value as EditorModeT)
 		// A toggle group lets the pressed item be released. A mode always stays on.
 		const items = modes?.querySelectorAll<HTMLElement & { value?: string; isPressed?: boolean }>('z-toggle-button-group-item') ?? []
 		for (const item of items) item.isPressed = item.value === timeline.mode
@@ -45,6 +45,7 @@
 	<z-toggle-button-group bind:this={modes} class="transport-bar-modes" name="editor-mode" size="sm" kind="soft" aria-label="Editor mode" onchange={handleModeChange}>
 		<z-toggle-button-group-item value="staging" isPressed={timeline.mode === 'staging'}>Staging</z-toggle-button-group-item>
 		<z-toggle-button-group-item value="modulation" isPressed={timeline.mode === 'modulation'}>Modulation</z-toggle-button-group-item>
+		<z-toggle-button-group-item value="mapping" isPressed={timeline.mode === 'mapping'}>Map</z-toggle-button-group-item>
 	</z-toggle-button-group>
 
 	<span class="transport-bar-divider"></span>

@@ -73,11 +73,11 @@
 		</div>
 
 		<div class="automation-popover-fields">
-			<z-field label="Strength">
-				<z-number-input value={Number(impulse.strength.toFixed(2))} min={0} max={1} step={STRENGTH_STEP} isFullWidth onchange={handleStrengthChange}></z-number-input>
+			<z-field label="Strength" is-horizontal size="sm">
+				<z-number-input value={Number(impulse.strength.toFixed(2))} min={0} max={1} step={STRENGTH_STEP} size="sm" hasStepperButtons onchange={handleStrengthChange}></z-number-input>
 			</z-field>
-			<z-field label="Time (s)">
-				<z-number-input value={Number(impulse.time.toFixed(2))} min={0} max={app.duration} step={TIME_STEP} isFullWidth onchange={handleTimeChange}></z-number-input>
+			<z-field label="Time (s)" is-horizontal size="sm">
+				<z-number-input value={Number(impulse.time.toFixed(2))} min={0} max={app.duration} step={TIME_STEP} size="sm" hasStepperButtons onchange={handleTimeChange}></z-number-input>
 			</z-field>
 		</div>
 

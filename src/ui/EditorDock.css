@@ -61,6 +61,10 @@
 	overflow: hidden;
 }
 
+.editor-frame.isHidden {
+	display: none;
+}
+
 .editor-row {
 	display: grid;
 	flex: none;

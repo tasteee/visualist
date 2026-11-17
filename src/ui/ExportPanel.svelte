@@ -69,54 +69,129 @@
 	}
 </script>
 
-<Section title="Format" description={formatDescription}>
+<Section title="Format">
 	<FormatPicker value={app.settings.aspectRatio} isDisabled={app.isRecording} onchange={handleFormat} />
 </Section>
 
-<Section title="Resolution" description="Locked while recording.">
-	<Segmented label="Resolution" options={resolutionOptions} value={app.settings.resolution} isDisabled={app.isRecording} onchange={handleResolution} />
+<Section title="Resolution">
+	<Segmented
+		label="Resolution"
+		options={resolutionOptions}
+		value={app.settings.resolution}
+		isDisabled={app.isRecording}
+		onchange={handleResolution}
+	/>
 </Section>
 
-<Section title="Frame rate" description="60 fps is best effort on slower machines.">
-	<Segmented label="Frame rate" options={FRAME_RATE_OPTIONS} value={String(app.settings.frameRate)} isDisabled={app.isRecording} onchange={handleFrameRate} />
+<Section title="Frame rate">
+	<Segmented
+		label="Frame rate"
+		options={FRAME_RATE_OPTIONS}
+		value={String(app.settings.frameRate)}
+		isDisabled={app.isRecording}
+		onchange={handleFrameRate}
+	/>
 </Section>
 
-<Section title="Audio fade" description="Seconds. Applies to the exported sound.">
-	<div class="export-pair">
-		<z-field label="Fade in">
-			<z-number-input value={app.settings.audioFadeIn} min={0} max={MAX_FADE_SECONDS} step={0.1} isFullWidth isDisabled={app.isRecording} onchange={(event: Event) => handleFadeChange('audioFadeIn', event)}></z-number-input>
+<Section title="Audio fade">
+	<z-row aligns-x="between" gap="6">
+		<z-field label="Fade in" is-horizontal size="md">
+			<z-number-input
+				is-full-width
+				value={app.settings.audioFadeIn}
+				min={0}
+				max={MAX_FADE_SECONDS}
+				step={0.1}
+				hasStepperButtons
+				size="md"
+				style="margin-left: auto;"
+				isDisabled={app.isRecording}
+				onchange={(event: Event) => handleFadeChange('audioFadeIn', event)}
+			></z-number-input>
 		</z-field>
-		<z-field label="Fade out">
-			<z-number-input value={app.settings.audioFadeOut} min={0} max={MAX_FADE_SECONDS} step={0.1} isFullWidth isDisabled={app.isRecording} onchange={(event: Event) => handleFadeChange('audioFadeOut', event)}></z-number-input>
+		<z-field label="Fade out" is-horizontal size="md">
+			<z-number-input
+				is-full-width
+				value={app.settings.audioFadeOut}
+				min={0}
+				max={MAX_FADE_SECONDS}
+				step={0.1}
+				hasStepperButtons
+				size="md"
+				value-suffix="s"
+				style="margin-left: auto;"
+				isDisabled={app.isRecording}
+				onchange={(event: Event) => handleFadeChange('audioFadeOut', event)}
+			></z-number-input>
 		</z-field>
-	</div>
+	</z-row>
 </Section>
 
-<Section title="Video fade" description="Seconds. Fades the picture to the background color.">
-	<div class="export-pair">
-		<z-field label="Fade in">
-			<z-number-input value={app.settings.videoFadeIn} min={0} max={MAX_FADE_SECONDS} step={0.1} isFullWidth isDisabled={app.isRecording} onchange={(event: Event) => handleFadeChange('videoFadeIn', event)}></z-number-input>
+<Section title="Video fade">
+	<z-row aligns-x="between" gap="6">
+		<z-field label="Fade in" is-horizontal size="md">
+			<z-number-input
+				is-full-width
+				value={app.settings.videoFadeIn}
+				min={0}
+				max={MAX_FADE_SECONDS}
+				step={0.1}
+				hasStepperButtons
+				size="md"
+				style="margin-left: auto;"
+				isDisabled={app.isRecording}
+				onchange={(event: Event) => handleFadeChange('videoFadeIn', event)}
+			></z-number-input>
 		</z-field>
-		<z-field label="Fade out">
-			<z-number-input value={app.settings.videoFadeOut} min={0} max={MAX_FADE_SECONDS} step={0.1} isFullWidth isDisabled={app.isRecording} onchange={(event: Event) => handleFadeChange('videoFadeOut', event)}></z-number-input>
+		<z-field label="Fade out" is-horizontal size="md">
+			<z-number-input
+				is-full-width
+				value={app.settings.videoFadeOut}
+				min={0}
+				max={MAX_FADE_SECONDS}
+				step={0.1}
+				hasStepperButtons
+				size="md"
+				style="margin-left: auto;"
+				isDisabled={app.isRecording}
+				onchange={(event: Event) => handleFadeChange('videoFadeOut', event)}
+			></z-number-input>
 		</z-field>
-	</div>
+	</z-row>
 </Section>
 
 <Section title="File">
 	<dl class="export-facts">
-		<div class="export-fact"><dt>Format</dt><dd>{formatLabel}</dd></div>
-		<div class="export-fact"><dt>Size</dt><dd>{outputSizeLabel} · {formatPreset.value}</dd></div>
-		<div class="export-fact"><dt>Bitrate</dt><dd>16 Mbps video · 256 kbps audio</dd></div>
-		<div class="export-fact"><dt>Range</dt><dd>{rangeLabel}</dd></div>
-		<div class="export-fact"><dt>Length</dt><dd>{lengthLabel}</dd></div>
-		<div class="export-fact"><dt>Name</dt><dd>{app.hasSong ? `${app.projectName}-visualizer` : '–'}</dd></div>
+		<div class="export-fact">
+			<dt>Format</dt>
+			<dd>{formatLabel}</dd>
+		</div>
+		<div class="export-fact">
+			<dt>Size</dt>
+			<dd>{outputSizeLabel} · {formatPreset.value}</dd>
+		</div>
+		<div class="export-fact">
+			<dt>Bitrate</dt>
+			<dd>16 Mbps video · 256 kbps audio</dd>
+		</div>
+		<div class="export-fact">
+			<dt>Range</dt>
+			<dd>{rangeLabel}</dd>
+		</div>
+		<div class="export-fact">
+			<dt>Length</dt>
+			<dd>{lengthLabel}</dd>
+		</div>
+		<div class="export-fact">
+			<dt>Name</dt>
+			<dd>{app.hasSong ? `${app.projectName}-visualizer` : '–'}</dd>
+		</div>
 	</dl>
 </Section>
 
 <Section title="Record">
 	<z-button
-		size="lg"
+		size="md"
 		kind={app.isRecording ? 'outline' : 'solid'}
 		tone={app.isRecording ? 'danger' : 'primary'}
 		isFullWidth
@@ -126,5 +201,7 @@
 		<RecordIcon weight="fill" />
 		{app.isRecording ? 'Cancel recording' : 'Record video'}
 	</z-button>
-	<p class="export-note">{realTimeNote} Keep this tab in the foreground until it finishes, and the file downloads on its own.</p>
+	<p class="export-note">
+		{realTimeNote} Keep this tab in the foreground until it finishes, and the file downloads on its own.
+	</p>
 </Section>

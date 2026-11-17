@@ -408,6 +408,87 @@
 	border-color: color-mix(in oklab, var(--lane-tone) 55%, transparent);
 }
 
+.automation-lane-marquee {
+	position: absolute;
+	top: calc(-1 * var(--spacing-3));
+	bottom: calc(-1 * var(--spacing-3));
+	left: var(--lane-x);
+	z-index: 2;
+	width: var(--marquee-width);
+	border: 1px solid color-mix(in oklab, var(--lane-tone) 70%, transparent);
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--lane-tone) 12%, transparent);
+	pointer-events: none;
+}
+
+.automation-lane-marquee.isSelectedRange {
+	background: color-mix(in oklab, var(--lane-tone) 9%, transparent);
+}
+
+.automation-pattern-menu {
+	--menu-width: calc(var(--spacing-8) * 5 + var(--spacing-1) * 6);
+	position: fixed;
+	top: clamp(var(--spacing-2), var(--menu-y), calc(100vh - var(--spacing-8) * 3));
+	left: clamp(var(--spacing-2), var(--menu-x), calc(100vw - var(--menu-width) - var(--spacing-2)));
+	z-index: 45;
+	display: flex;
+	flex-direction: column;
+	min-width: var(--menu-width);
+	padding: var(--spacing-1);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--popover);
+	color: var(--popover-foreground);
+}
+
+.automation-pattern-menu-title {
+	padding: var(--spacing-1) var(--spacing-2) var(--spacing-2);
+	color: var(--muted);
+	font-size: var(--font-size-0);
+	font-weight: var(--font-weight-semibold);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.automation-pattern-grid {
+	display: grid;
+	grid-template-columns: repeat(5, var(--spacing-8));
+	gap: var(--spacing-1);
+}
+
+.automation-pattern-menu button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--spacing-8);
+	height: var(--spacing-8);
+	padding: var(--spacing-1);
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--foreground);
+	font: inherit;
+	font-size: var(--font-size-small);
+	text-align: left;
+	cursor: pointer;
+}
+
+.automation-pattern-menu button svg {
+	width: 100%;
+	height: 100%;
+	fill: none;
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 2;
+}
+
+.automation-pattern-menu button:hover,
+.automation-pattern-menu button:focus-visible {
+	background: var(--paper-soft);
+	outline: none;
+}
+
 .automation-lane-pill {
 	position: absolute;
 	top: var(--lane-y);

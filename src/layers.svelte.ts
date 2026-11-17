@@ -66,7 +66,7 @@ const normalizeClips = (stored: Partial<LayerT>): ClipT[] => {
 	const legacyText = (stored.text as { text?: string } | null | undefined)?.text ?? ''
 	const layerKind = stored.kind ?? 'text'
 	const hasClips = Array.isArray(stored.clips) && stored.clips.length > 0
-	if (hasClips) return (stored.clips as Partial<ClipT>[]).map((clip) => createClip({ text: legacyText, ...clip, kind: layerKind }))
+	if (hasClips) return (stored.clips as Partial<ClipT>[]).map((clip) => createClip({ text: legacyText, ...clip, kind: layerKind, fx: Array.isArray(clip.fx) ? clip.fx : [] }))
 	const legacy = stored as LegacyClipFieldsT
 	return [
 		createClip({

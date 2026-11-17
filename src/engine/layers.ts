@@ -1,4 +1,5 @@
 import { clamp } from './settings'
+import { SHADER_EFFECT_KINDS } from './shaderEffects'
 import type {
 	BlendModeT,
 	ClipT,
@@ -72,7 +73,21 @@ export const FX_SPECS: FxSpecT[] = [
 	{ kind: 'glitch', label: 'Glitch', hint: 'Slices the layer into sliding strips.', min: 0, max: 1, step: 0.01, defaultAmount: 0.4 },
 	{ kind: 'shake', label: 'Shake', hint: 'Jitters the position each flicker.', min: 0, max: 1, step: 0.01, defaultAmount: 0.3 },
 	{ kind: 'flicker', label: 'Flicker', hint: 'Randomly drops the layer out.', min: 0, max: 1, step: 0.01, defaultAmount: 0.3 },
-	{ kind: 'blur', label: 'Blur', hint: 'Softens the layer.', min: 0, max: 1, step: 0.01, defaultAmount: 0.3 }
+	{ kind: 'blur', label: 'Blur', hint: 'Softens the layer.', min: 0, max: 1, step: 0.01, defaultAmount: 0.3 },
+	{ kind: 'foil', label: 'Holographic foil', hint: 'Diffracted color that shifts with the light.', min: 0, max: 1, step: 0.01, defaultAmount: 0.7 },
+	{ kind: 'hexGlitch', label: 'Hex glitch', hint: 'Animated hexagonal distortion with bloom and vignette.', min: 0, max: 1, step: 0.01, defaultAmount: 0.65 },
+	{ kind: 'tunnelwisp', label: 'Tunnelwisp', hint: 'Glowing gyroid cave with a mirrored waterline.', min: 0, max: 1, step: 0.01, defaultAmount: 0.7 },
+	{ kind: 'fractalMirror', label: 'Fractal mirror', hint: 'Animated inversion fractal from the supplied shader.', min: 0, max: 1, step: 0.01, defaultAmount: 0.7 },
+	{ kind: 'plasma', label: 'Electric plasma', hint: 'Flowing interference color.', min: 0, max: 1, step: 0.01, defaultAmount: 0.65 },
+	{ kind: 'kaleidoscope', label: 'Kaleidoscope', hint: 'Mirrors the source into rotating radial sectors.', min: 0, max: 1, step: 0.01, defaultAmount: 0.8 },
+	{ kind: 'liquidChrome', label: 'Liquid chrome', hint: 'Metallic flowing highlights on the source.', min: 0, max: 1, step: 0.01, defaultAmount: 0.65 },
+	{ kind: 'scanlines', label: 'Signal scan', hint: 'CRT lines, rolling sweep, and channel separation.', min: 0, max: 1, step: 0.01, defaultAmount: 0.7 },
+	{ kind: 'prism', label: 'Prism shards', hint: 'Angular facets split the source into color channels.', min: 0, max: 1, step: 0.01, defaultAmount: 0.7 },
+	{ kind: 'halftone', label: 'Halftone', hint: 'Turns source luminance into animated print dots.', min: 0, max: 1, step: 0.01, defaultAmount: 0.75 },
+	{ kind: 'ripple', label: 'Echo rings', hint: 'Concentric waves bend the source outward.', min: 0, max: 1, step: 0.01, defaultAmount: 0.75 },
+	{ kind: 'pixelate', label: 'Pixel mosaic', hint: 'Animated pixel blocks and stepped color.', min: 0, max: 1, step: 0.01, defaultAmount: 0.8 },
+	{ kind: 'aurora', label: 'Aurora veil', hint: 'Soft luminous ribbons drift across the source.', min: 0, max: 1, step: 0.01, defaultAmount: 0.65 },
+	{ kind: 'contour', label: 'Topographic', hint: 'Animated contour bands trace the source.', min: 0, max: 1, step: 0.01, defaultAmount: 0.7 }
 ]
 
 export const BLEND_OPTIONS: OptionT<BlendModeT>[] = [
@@ -142,6 +157,7 @@ export const createClip = (clip: Partial<ClipT> = {}): ClipT => ({
 	color: null,
 	text: '',
 	textStyle: {},
+	fx: [],
 	...clip,
 	transform: { ...createClipTransform(), ...clip.transform }
 })
@@ -208,7 +224,11 @@ export const createAudioLayer = (assetId: string, name: string): LayerT => {
 
 export const createFx = (kind: FxKindT): LayerFxT => {
 	const spec = findFxSpec(kind)
-	return { id: crypto.randomUUID(), kind, amount: spec.defaultAmount, modulation: null }
+	const foil = kind === 'foil' ? { colorA: 'accent-1', colorB: 'accent-2', scale: 1, speed: 1 } : undefined
+	const hexGlitch = kind === 'hexGlitch' ? { tint: 'accent-1', scale: 1, speed: 1, bloom: 0.45, vignette: 0.5 } : undefined
+	const isShader = SHADER_EFFECT_KINDS.some((shaderKind) => shaderKind === kind)
+	const shader = isShader ? { tint: 'accent-1', scale: 1, speed: 1 } : undefined
+	return { id: crypto.randomUUID(), kind, amount: spec.defaultAmount, modulation: null, foil, hexGlitch, shader }
 }
 
 // A new project has no layers at all.

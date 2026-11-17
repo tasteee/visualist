@@ -37,7 +37,7 @@
 	const handleDecayChange = (value: number) => setTrackDecay(props.track.id, value)
 </script>
 
-<z-field label="Role">
+<z-field label="Role" is-horizontal size="sm">
 	<z-select size="sm" value={props.track.role} options={IMPULSE_ROLE_OPTIONS} aria-label="Role" onchange={handleRoleChange}></z-select>
 </z-field>
 <Segmented label="Shape" options={SHAPE_OPTIONS} value={props.track.shape} onchange={handleShapeChange} />

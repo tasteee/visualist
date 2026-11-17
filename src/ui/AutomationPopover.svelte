@@ -88,11 +88,11 @@
 		</div>
 
 		<div class="automation-popover-fields">
-			<z-field label="Value">
-				<z-number-input value={controlValue} min={valueMin} max={valueMax} step={valueStep} isFullWidth onchange={handleValueChange}></z-number-input>
+			<z-field label="Value" is-horizontal size="sm">
+				<z-number-input value={controlValue} min={valueMin} max={valueMax} step={valueStep} size="sm" hasStepperButtons onchange={handleValueChange}></z-number-input>
 			</z-field>
-			<z-field label="Time (s)">
-				<z-number-input value={Number(point.time.toFixed(2))} min={0} max={app.duration} step={0.1} isFullWidth onchange={handleTimeChange}></z-number-input>
+			<z-field label="Time (s)" is-horizontal size="sm">
+				<z-number-input value={Number(point.time.toFixed(2))} min={0} max={app.duration} step={0.1} size="sm" hasStepperButtons onchange={handleTimeChange}></z-number-input>
 			</z-field>
 		</div>
 

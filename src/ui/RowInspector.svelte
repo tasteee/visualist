@@ -24,7 +24,6 @@
 	import BandControls from './BandControls.svelte'
 	import ImpulseTrackControls from './ImpulseTrackControls.svelte'
 	import LayerEditor from './LayerEditor.svelte'
-	import ModulatorMappings from './ModulatorMappings.svelte'
 	import RenameField from './RenameField.svelte'
 	import './RowInspector.css'
 
@@ -280,7 +279,7 @@
 
 			{#if lane !== undefined}
 				{#if targetOptions.length > 0}
-					<z-field label="Controls">
+					<z-field label="Controls" is-horizontal size="sm">
 						<z-select
 							size="sm"
 							value={targetValue}
@@ -291,7 +290,6 @@
 						></z-select>
 					</z-field>
 				{/if}
-				<ModulatorMappings modulator={{ kind: 'lane', laneId: lane.id }} />
 				<div class="row-inspector-actions">
 					<z-button size="sm" kind="outline" tone="neutral" isDisabled={pointCount <= 1} onclick={handleResetLane}>
 						<EraserIcon weight="bold" />
@@ -301,7 +299,6 @@
 			{/if}
 
 			{#if track !== undefined}
-				<ModulatorMappings modulator={{ kind: 'emitter', trackId: track.id }} />
 				<ImpulseTrackControls {track} />
 			{/if}
 

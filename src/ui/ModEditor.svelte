@@ -43,9 +43,9 @@
 	const handleRemove = () => props.onchange(null)
 </script>
 
-<div class="mod-editor" role="group" aria-label="Modulate {props.label}">
-	<div class="mod-editor-row">
-		<span class="mod-editor-label">Follow</span>
+<z-column gap="2" isFullWidth class="mod-editor" role="group" aria-label="Modulate {props.label}">
+	<z-row alignsY="center" gap="2" isFullWidth class="mod-editor-row">
+		<z-text size="xs" weight={500} class="mod-editor-label">Follow</z-text>
 		<z-select class="mod-editor-source" value={sourceValue} options={sourceOptions} size="sm" aria-label="Modulation source" onchange={handleSourceChange}></z-select>
 		{#if hasModulation}
 			<z-tooltip content="Remove modulation" placement="left" openDelay={300}>
@@ -54,14 +54,14 @@
 				</z-button>
 			</z-tooltip>
 		{/if}
-	</div>
+	</z-row>
 	{#if hasModulation}
-		<div class="mod-editor-amount">
-			<div class="mod-editor-amount-header">
-				<span class="mod-editor-label">Depth</span>
-				<span class="mod-editor-amount-value">{amountLabel}</span>
-			</div>
+		<z-column gap="1" isFullWidth class="mod-editor-amount">
+			<z-row alignsY="center" alignsX="between" isFullWidth class="mod-editor-amount-header">
+				<z-text size="xs" color="muted" class="mod-editor-label">Depth</z-text>
+				<z-text size="xs" color="muted" class="mod-editor-amount-value">{amountLabel}</z-text>
+			</z-row>
 			<z-slider aria-label="Modulation depth" value={amountValue} min={-1} max={1} step={0.01} oninput={handleAmountChange} onchange={handleAmountChange}></z-slider>
-		</div>
+		</z-column>
 	{/if}
-</div>
+</z-column>

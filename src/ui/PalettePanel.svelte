@@ -31,17 +31,28 @@
 	const hasColors = $derived(palette.colors.length > 0)
 </script>
 
-<Section title="Stage" description="The color behind everything. Layers choose their own colors from the palette below.">
+<Section title="Stage">
 	<ColorRow label="Background" value={app.settings.background} onchange={(value) => (app.settings.background = value)} />
 </Section>
 
-<Section title="Colors" description="Click a color to change it. Layers that use it follow. A deleted color shows as white where it was used.">
+<Section title="Colors">
 	<div class="palette-grid">
 		{#each palette.colors as color (color.id)}
 			<label class="palette-swatch" title="{color.name} · {color.value}">
-				<input class="palette-swatch-input" type="color" value={color.value} aria-label="Change {color.name}" oninput={(event) => handleInput(event, color.id)} />
+				<input
+					class="palette-swatch-input"
+					type="color"
+					value={color.value}
+					aria-label="Change {color.name}"
+					oninput={(event) => handleInput(event, color.id)}
+				/>
 				<span class="palette-swatch-fill" style:background={color.value}></span>
-				<button class="palette-swatch-remove" type="button" aria-label="Delete {color.name}" onclick={(event) => handleRemove(event, color.id)}>
+				<button
+					class="palette-swatch-remove"
+					type="button"
+					aria-label="Delete {color.name}"
+					onclick={(event) => handleRemove(event, color.id)}
+				>
 					<XIcon weight="bold" />
 				</button>
 			</label>

@@ -6,7 +6,10 @@ import { getTinted } from './logoLayers'
 import { applyModulation } from './modulation'
 import { createRandom } from './rng'
 import { FLICKER_RATE, clamp } from './settings'
-import type { FxKindT, LayerT, LayerTransformT, PaletteSlotT, PaletteT, ShapeT, SignalsT, TextContentT, TextFontT } from './types'
+import { renderFoil } from './foilShader'
+import { renderHexGlitch } from './hexGlitchShader'
+import { renderShaderEffect, SHADER_EFFECT_KINDS } from './shaderEffects'
+import type { FoilSettingsT, FxKindT, HexGlitchSettingsT, LayerFxT, LayerT, LayerTransformT, PaletteSlotT, PaletteT, ShaderFxSettingsT, ShapeT, SignalsT, TextContentT, TextFontT } from './types'
 
 // A drawable layer picture. width and height are in frame units,
 // the canvas itself may hold more pixels than that.
@@ -479,17 +482,86 @@ export const resolveLayerDepth = (layer: LayerT, signals: SignalsT): number => {
 	return clamp(applyModulation(base, spec, modulation, signals), spec.min, spec.max)
 }
 
-const createEmptyFx = (): ResolvedFxT => ({ glow: 0, split: 0, glitch: 0, shake: 0, flicker: 0, blur: 0 })
+const createEmptyFx = (): ResolvedFxT => ({ glow: 0, split: 0, glitch: 0, shake: 0, flicker: 0, blur: 0, foil: 0, hexGlitch: 0, tunnelwisp: 0, fractalMirror: 0, plasma: 0, kaleidoscope: 0, liquidChrome: 0, scanlines: 0, prism: 0, halftone: 0, ripple: 0, pixelate: 0, aurora: 0, contour: 0 })
 
 // Two copies of one FX add up, capped at full strength.
-const resolveFx = (layer: LayerT, signals: SignalsT): ResolvedFxT => {
+const resolveFx = (layer: LayerT, signals: SignalsT, time: number): ResolvedFxT => {
 	const resolved = createEmptyFx()
 	const range = { min: 0, max: 1 }
-	for (const fx of layer.fx) {
+	const activeClip = findClipAt(layer, time)
+	const effects = [...layer.fx, ...(activeClip?.fx ?? [])]
+	for (const fx of effects) {
 		const amount = applyModulation(fx.amount, range, fx.modulation, signals)
 		resolved[fx.kind] = clamp(resolved[fx.kind] + amount, 0, 1)
 	}
 	return resolved
+}
+
+const getFoilEffect = (layer: LayerT, time: number): LayerFxT | undefined => {
+	const activeClip = findClipAt(layer, time)
+	const clipEffect = activeClip?.fx.find((effect) => effect.kind === 'foil')
+	if (clipEffect !== undefined) return clipEffect
+	return layer.fx.find((effect) => effect.kind === 'foil')
+}
+
+const resolveEffectColor = (color: string, palette: PaletteT): string => {
+	if (color.startsWith('#')) return color
+	return palette.colors[color] ?? palette.accent1
+}
+
+const applyFoilToSource = (source: LayerSourceT, pass: LayerPassT, input: LayerStackInputT): LayerSourceT => {
+	const amount = pass.fx.foil
+	if (amount <= 0) return source
+	const effect = getFoilEffect(pass.layer, input.time)
+	if (effect === undefined) return source
+	const defaults: FoilSettingsT = { colorA: 'accent-1', colorB: 'accent-2', scale: 1, speed: 1 }
+	const settings = effect.foil ?? defaults
+	const firstColor = resolveEffectColor(settings.colorA, input.palette)
+	const secondColor = resolveEffectColor(settings.colorB, input.palette)
+	const canvas = renderFoil(source.canvas, pass.layer.id, input.time, amount, settings, firstColor, secondColor)
+	return { ...source, canvas }
+}
+
+const getHexGlitchEffect = (layer: LayerT, time: number): LayerFxT | undefined => {
+	const activeClip = findClipAt(layer, time)
+	const clipEffect = activeClip?.fx.find((effect) => effect.kind === 'hexGlitch')
+	if (clipEffect !== undefined) return clipEffect
+	return layer.fx.find((effect) => effect.kind === 'hexGlitch')
+}
+
+const applyHexGlitchToSource = (source: LayerSourceT, pass: LayerPassT, input: LayerStackInputT): LayerSourceT => {
+	const amount = pass.fx.hexGlitch
+	if (amount <= 0) return source
+	const effect = getHexGlitchEffect(pass.layer, input.time)
+	if (effect === undefined) return source
+	const defaults: HexGlitchSettingsT = { tint: 'accent-1', scale: 1, speed: 1, bloom: 0.45, vignette: 0.5 }
+	const settings = effect.hexGlitch ?? defaults
+	const tint = resolveEffectColor(settings.tint, input.palette)
+	const canvas = renderHexGlitch(source.canvas, pass.layer.id, input.time, amount, settings, tint)
+	return { ...source, canvas }
+}
+
+const applyShaderEffects = (source: LayerSourceT, pass: LayerPassT, input: LayerStackInputT): LayerSourceT => {
+	const foiled = applyFoilToSource(source, pass, input)
+	let result = applyHexGlitchToSource(foiled, pass, input)
+	const activeClip = findClipAt(pass.layer, input.time)
+	const effects = [...pass.layer.fx, ...(activeClip?.fx ?? [])]
+	const appliedKinds = new Set<FxKindT>()
+	for (const effect of effects) {
+		const isShader = SHADER_EFFECT_KINDS.some((kind) => kind === effect.kind)
+		if (!isShader) continue
+		const kind = effect.kind as (typeof SHADER_EFFECT_KINDS)[number]
+		if (appliedKinds.has(kind)) continue
+		const amount = pass.fx[kind]
+		if (amount <= 0) continue
+		const defaults: ShaderFxSettingsT = { tint: 'accent-1', scale: 1, speed: 1 }
+		const settings = effect.shader ?? defaults
+		const tint = resolveEffectColor(settings.tint, input.palette)
+		const canvas = renderShaderEffect(result.canvas, `${pass.layer.id}:${effect.id}`, input.time, amount, kind, settings, tint)
+		result = { ...result, canvas }
+		appliedKinds.add(kind)
+	}
+	return result
 }
 
 const checkHasFx = (fx: ResolvedFxT): boolean => Object.values(fx).some((amount) => amount > 0)
@@ -519,7 +591,7 @@ const buildPass = (layer: LayerT, input: LayerStackInputT): LayerPassT | null =>
 	const alpha = clamp(transform.opacity, 0, 1) * timeLevel
 	const isInvisible = alpha <= 0
 	if (isInvisible) return null
-	const fx = resolveFx(layer, input.signals)
+	const fx = resolveFx(layer, input.signals, input.time)
 	const seed = getLayerSeed(layer.id)
 	const flickerStep = Math.floor(input.time * FLICKER_RATE)
 	return { layer, transform, fx, alpha, seed, flickerStep }
@@ -620,8 +692,9 @@ const moveToLayer = (context: CanvasRenderingContext2D, pass: LayerPassT, frame:
 // The logo canvas covers the whole frame, so it moves around the
 // frame center rather than around its own picture.
 const drawPass = (context: CanvasRenderingContext2D, pass: LayerPassT, input: LayerStackInputT): void => {
-	const source = getLayerSource(context, pass.layer, input)
-	if (source === null) return
+	const originalSource = getLayerSource(context, pass.layer, input)
+	if (originalSource === null) return
+	const source = applyShaderEffects(originalSource, pass, input)
 	const pixelScale = getPixelScale(context)
 
 	context.save()
@@ -733,8 +806,9 @@ export const planGpuLayer = (
 	const pass = buildPass(layer, input)
 	if (pass === null) return null
 	const isLogo = layer.kind === 'logo'
-	const source = isLogo ? paintGpuLogo(input, pixelWidth, pixelHeight) : getStaticSource(layer, input)
-	if (source === null) return null
+	const originalSource = isLogo ? paintGpuLogo(input, pixelWidth, pixelHeight) : getStaticSource(layer, input)
+	if (originalSource === null) return null
+	const source = applyShaderEffects(originalSource, pass, input)
 
 	const pixelScale = pixelWidth / input.frame.width
 	const shake = getShake(pass, input.frame)
@@ -756,7 +830,7 @@ export const planGpuLayer = (
 	return {
 		layer,
 		source,
-		isDynamic: checkIsDynamicLayer(layer),
+		isDynamic: checkIsDynamicLayer(layer) || pass.fx.foil > 0 || pass.fx.hexGlitch > 0 || SHADER_EFFECT_KINDS.some((kind) => pass.fx[kind] > 0),
 		offsetX: (pass.transform.x / 100) * input.frame.width + shake.x,
 		offsetY: (pass.transform.y / 100) * input.frame.height + shake.y,
 		rotation: pass.transform.rotation + shake.rotation,

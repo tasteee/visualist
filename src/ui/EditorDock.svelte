@@ -4,12 +4,14 @@
 	import MagnetStraightIcon from 'phosphor-svelte/lib/MagnetStraightIcon'
 	import PlusIcon from 'phosphor-svelte/lib/PlusIcon'
 	import {
-		addLayerLane,
 		addModulationLane,
 		automation,
-		checkCanAddLayerLane,
+		clearPointSelection,
+		copySelectedPoints,
+		duplicateSelectedPoints,
 		getLanesInGroup,
 		movePoints,
+		pasteSelectedPoints,
 		recordHistory,
 		recordHistoryCoalesced,
 		redo,
@@ -80,6 +82,7 @@
 	import TimelineMenus from './TimelineMenus.svelte'
 	import TimeRuler from './TimeRuler.svelte'
 	import TransportBar from './TransportBar.svelte'
+	import MappingWorkspace from './MappingWorkspace.svelte'
 	import { checkIsTextEntry, checkIsTyping } from './keyboard'
 	import './EditorDock.css'
 	import { RepeatIcon } from 'phosphor-svelte'
@@ -433,6 +436,18 @@
 		marqueeRect = null
 	}
 
+	const handleWindowPointerDown = (event: PointerEvent) => {
+		const hasSelectedPoints = automation.selectedPointIds.length > 0
+		if (!hasSelectedPoints) return
+		const target = event.target
+		const isElement = target instanceof Element
+		const pointElement = isElement ? target.closest<HTMLElement>('[data-point-id]') : null
+		const pointId = pointElement?.dataset.pointId
+		const isPoint = pointId !== undefined
+		if (isPoint) return
+		clearPointSelection()
+	}
+
 	const checkIsTapKey = (event: KeyboardEvent): boolean => {
 		const isPlainKey = !event.metaKey && !event.ctrlKey && !event.altKey
 		const isT = event.key.toLowerCase() === 't'
@@ -499,6 +514,29 @@
 
 	// Cmd/Ctrl with C, V or D acts on the selected clips or layers.
 	const handleClipboardKey = (event: KeyboardEvent, key: string): boolean => {
+		const hasPointSelection = automation.selectedPointIds.length > 0
+		if (hasPointSelection && key === 'c') {
+			const didCopy = copySelectedPoints()
+			if (didCopy) event.preventDefault()
+			return didCopy
+		}
+		if (hasPointSelection && key === 'd') {
+			const didDuplicate = duplicateSelectedPoints(app.duration)
+			if (didDuplicate) event.preventDefault()
+			return didDuplicate
+		}
+		if (key === 'v' && automation.selectedPointLaneId !== null) {
+			const didPaste = pasteSelectedPoints(app.currentTime, app.duration)
+			if (didPaste) event.preventDefault()
+			return didPaste
+		}
+		if (hasPointSelection && key === 'x') {
+			const didCopy = copySelectedPoints()
+			if (!didCopy) return false
+			deleteSelection()
+			event.preventDefault()
+			return true
+		}
 		if (key === 'c') {
 			const didCopy = copySelectedLayers(getFileLength)
 			if (didCopy) event.preventDefault()
@@ -750,12 +788,6 @@
 		impulseEditor = null
 	}
 
-	const handleAddLayerLane = (layerId: string) => {
-		const laneId = addLayerLane(layerId)
-		if (laneId === null) return
-		revealLane(laneId)
-	}
-
 	// ---- Reordering layers by dragging their header ----------
 
 	const readOtherGroups = (layerId: string): HTMLElement[] => {
@@ -841,7 +873,7 @@
 
 </script>
 
-<svelte:window onkeydown={handleKeyDown} />
+<svelte:window onkeydown={handleKeyDown} onpointerdown={handleWindowPointerDown} />
 
 <div class="editor-dock" bind:this={dock} style:--editor-header-width="{timeline.headerWidth}px">
 	<button
@@ -859,7 +891,10 @@
 
 	<TransportBar />
 
-	<div class="editor-frame" id="editor-timeline" bind:this={frame} role="presentation" onpointermove={handleFramePointerMove} onpointerleave={handleFramePointerLeave}>
+	{#if timeline.mode === 'mapping'}
+		<MappingWorkspace />
+	{/if}
+	<div class="editor-frame" class:isHidden={timeline.mode === 'mapping'} id="editor-timeline" bind:this={frame} role="presentation" onpointermove={handleFramePointerMove} onpointerleave={handleFramePointerLeave}>
 		<button
 			class="editor-header-resize"
 			type="button"
@@ -940,26 +975,6 @@
 					<AutomationLane {lane} {grid} siblingLaneIds={getLaneIdsInGroup(MODULATION_GROUP_ID)} onedit={openEditor} />
 				{/each}
 
-				{#each layersFrontToBack as layer (layer.id)}
-					{@const laneIds = getLaneIdsInGroup(layer.id)}
-					{@const canAddLane = layer.kind !== 'audio' && checkCanAddLayerLane(layer.id)}
-					<div class="editor-mod-row" data-tone={getLayerColor(layer)}>
-						<div class="editor-mod-header">
-							<span class="editor-mod-swatch"></span>
-							<span class="editor-mod-title">{layer.name}</span>
-							<z-tooltip content={canAddLane ? `Automate a ${layer.name} control` : `${layer.name} has no more controls to automate`} placement="top" openDelay={300}>
-								<z-button isIcon size="sm" kind="ghost" tone="neutral" aria-label="Automate a {layer.name} control" isDisabled={!canAddLane} onclick={() => handleAddLayerLane(layer.id)}>
-									<PlusIcon weight="bold" />
-								</z-button>
-							</z-tooltip>
-						</div>
-					</div>
-					<div class="editor-layer-lanes" role="presentation">
-						{#each getLanesInGroup(layer.id) as lane (lane.id)}
-							<AutomationLane {lane} {grid} isNested siblingLaneIds={laneIds} onedit={openEditor} />
-						{/each}
-					</div>
-				{/each}
 			{:else}
 			{#each layersFrontToBack as layer (layer.id)}
 				{@const isSelected = layerStore.selectedLayerIds.includes(layer.id)}
@@ -1004,7 +1019,7 @@
 			<div class="editor-add-row">
 				<div class="editor-add-cell"></div>
 				<div class="editor-add-fill">
-					<span class="editor-add-hint">{isModulation ? 'Press + on a layer to automate one of its controls, or add an emitter to trigger them.' : 'Drag a clip to move it. Drag across empty space to marquee-select multiple clips. Press Ctrl+E to slice at the playhead. Press 0 to turn selected clips off.'}</span>
+					<span class="editor-add-hint">{isModulation ? 'Create an emitter or automation lane, then map it to a layer or clip property.' : 'Drag a clip to move it. Drag across empty space to marquee-select multiple clips. Press Ctrl+E to slice at the playhead. Press 0 to turn selected clips off.'}</span>
 				</div>
 			</div>
 		</div>

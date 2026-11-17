@@ -114,14 +114,16 @@
 	}
 </script>
 
-<Section title="Mappings" description="Route this modulator (0–100%) to any layer, clip, effect, or stage control.">
+<Section title="Mappings">
 	<z-button size="sm" kind="soft" tone="primary" isFullWidth isDisabled={!canAdd} onclick={handleAddMapping}>
 		<PlusIcon weight="bold" />
 		Add Mapping
 	</z-button>
 
 	{#if mappings.length === 0}
-		<p class="modulator-mappings-empty">No mappings yet. Add a mapping to drive any parameter with signed additive influence.</p>
+		<p class="modulator-mappings-empty">
+			No mappings yet. Add a mapping to drive any parameter with signed additive influence.
+		</p>
 	{/if}
 
 	<div class="modulator-mappings-list">
@@ -142,7 +144,15 @@
 					></z-select>
 					<div class="modulator-mapping-actions">
 						<z-tooltip content={mapping.isBypassed ? 'Enable mapping' : 'Bypass mapping'} placement="top">
-							<z-button isIcon size="sm" kind="ghost" tone="neutral" aria-label={mapping.isBypassed ? 'Enable mapping' : 'Bypass mapping'} aria-pressed={mapping.isBypassed} onclick={() => handleBypass(mapping)}>
+							<z-button
+								isIcon
+								size="sm"
+								kind="ghost"
+								tone="neutral"
+								aria-label={mapping.isBypassed ? 'Enable mapping' : 'Bypass mapping'}
+								aria-pressed={mapping.isBypassed}
+								onclick={() => handleBypass(mapping)}
+							>
 								{#if mapping.isBypassed}
 									<EyeSlashIcon weight="bold" />
 								{:else}
@@ -151,7 +161,14 @@
 							</z-button>
 						</z-tooltip>
 						<z-tooltip content="Remove mapping" placement="top">
-							<z-button isIcon size="sm" kind="ghost" tone="danger" aria-label="Remove mapping" onclick={() => handleRemove(mapping)}>
+							<z-button
+								isIcon
+								size="sm"
+								kind="ghost"
+								tone="danger"
+								aria-label="Remove mapping"
+								onclick={() => handleRemove(mapping)}
+							>
 								<TrashIcon weight="bold" />
 							</z-button>
 						</z-tooltip>
@@ -182,9 +199,16 @@
 					<div class="modulator-mapping-envelope">
 						<div class="modulator-mapping-envelope-header">
 							<span class="modulator-mapping-sublabel">One-Shot AD Envelope</span>
-							<span class="modulator-mapping-envelope-meta">{mapping.envelope.attackMs}ms + {mapping.envelope.decayMs}ms</span>
+							<span class="modulator-mapping-envelope-meta"
+								>{mapping.envelope.attackMs}ms + {mapping.envelope.decayMs}ms</span
+							>
 						</div>
-						<svg class="modulator-mapping-graph" viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}" preserveAspectRatio="none" aria-hidden="true">
+						<svg
+							class="modulator-mapping-graph"
+							viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}"
+							preserveAspectRatio="none"
+							aria-hidden="true"
+						>
 							<path class="modulator-mapping-graph-area" d={buildEnvelopeAreaPath(mapping.envelope)} />
 							<line class="modulator-mapping-graph-peak" x1={peakX} x2={peakX} y1="4" y2={SVG_HEIGHT} />
 							<path class="modulator-mapping-graph-line" d={buildEnvelopeLinePath(mapping.envelope)} />

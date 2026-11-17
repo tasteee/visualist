@@ -195,31 +195,42 @@
 
 <div class="layer-editor">
 	{#if isText && props.layer.text !== null}
-		<Section title="Typography" description="Default style inherited by clips on this layer unless overridden.">
-			<z-field label="Font" is-horizontal>
+		<Section title="Typography">
+			<z-field label="Font" is-horizontal size="sm">
 				<z-select
 					value={props.layer.text.font ?? 'dm-sans'}
 					options={TEXT_FONT_OPTIONS}
 					aria-label="Font family"
+					size="sm"
 					onchange={handleLayerFont}
 				></z-select>
 			</z-field>
-			<z-field label="Weight" is-horizontal>
+			<z-field label="Weight!!!" is-horizontal size="sm">
 				<z-number-input
 					value={Number(props.layer.text.weight)}
 					min={MIN_WEIGHT}
 					max={MAX_WEIGHT}
 					step={WEIGHT_STEP}
-					size="md"
+					size="sm"
 					aria-label="Font weight"
 					oninput={handleLayerWeight}
 					onchange={handleLayerWeight}
 					has-stepper-buttons
+					is-full-width
 				></z-number-input>
 			</z-field>
-			<ColorPicker value={props.layer.text.color} label="Text color" onchange={handleLayerTextColor} />
 
-			<div class="layer-editor-styles clip-properties-styles" role="group" aria-label="Text style">
+			<z-field label="Color" is-horizontal size="sm">
+				<ColorPicker value={props.layer.text.color} label="Text color" onchange={handleLayerTextColor} />
+			</z-field>
+
+			<z-row
+				gap="1"
+				alignsY="center"
+				class="layer-editor-styles clip-properties-styles"
+				role="group"
+				aria-label="Text style"
+			>
 				<z-button
 					size="sm"
 					kind={getStyleButtonKind(props.layer.text.isStrike)}
@@ -250,7 +261,7 @@
 				>
 					<TextItalicIcon weight="bold" />
 				</z-button>
-				<span class="clip-properties-case">
+				<z-button-group class="clip-properties-case">
 					<z-button
 						size="sm"
 						kind={getStyleButtonKind(props.layer.text.isUppercase)}
@@ -267,25 +278,25 @@
 						aria-pressed={props.layer.text.isLowercase}
 						onclick={() => handleLayerStyleToggle('isLowercase')}>aa</z-button
 					>
-				</span>
-			</div>
+				</z-button-group>
+			</z-row>
 		</Section>
 	{/if}
 
-	<Section title="Transform" description="Modulate any value to move it with the music.">
+	<Section title="Transform">
 		{#each getLayerParams(props.layer.kind) as param (param.key)}
 			<LayerParamSlider layer={props.layer} paramKey={param.key} />
 		{/each}
 	</Section>
 
-	<Section title="Blend and timing" description={timingDescription}>
-		<z-field label="Blend">
+	<Section title="Blend and timing">
+		<z-field label="Blend" is-horizontal>
 			<z-select value={props.layer.blend} options={BLEND_OPTIONS} aria-label="Blend mode" onchange={handleBlendChange}
 			></z-select>
 		</z-field>
 	</Section>
 
-	<Section title="Effects" description="Stacked in order. Each one can follow the music.">
+	<Section title="Effects">
 		{#if hasFx}
 			<div class="layer-editor-fx-list">
 				{#each props.layer.fx as fx (fx.id)}
@@ -293,13 +304,13 @@
 				{/each}
 			</div>
 		{/if}
-		<div class="layer-editor-fx-add" role="group" aria-label="Add an effect">
+		<z-row gap="2" doesWrap isFullWidth class="layer-editor-fx-add" role="group" aria-label="Add an effect">
 			{#each FX_SPECS as spec (spec.kind)}
 				<z-button size="sm" kind="outline" tone="neutral" onclick={() => handleAddFx(spec.kind)}>
 					<PlusIcon weight="bold" />
 					{spec.label}
 				</z-button>
 			{/each}
-		</div>
+		</z-row>
 	</Section>
 </div>

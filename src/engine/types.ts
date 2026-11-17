@@ -291,13 +291,39 @@ export type LayerTransformT = {
 
 export type LayerParamKeyT = keyof LayerTransformT
 
-export type FxKindT = 'glow' | 'split' | 'glitch' | 'shake' | 'flicker' | 'blur'
+export type ShaderFxKindT = 'tunnelwisp' | 'fractalMirror' | 'plasma' | 'kaleidoscope' | 'liquidChrome' | 'scanlines' | 'prism' | 'halftone' | 'ripple' | 'pixelate' | 'aurora' | 'contour'
+
+export type FxKindT = 'glow' | 'split' | 'glitch' | 'shake' | 'flicker' | 'blur' | 'foil' | 'hexGlitch' | ShaderFxKindT
+
+export type ShaderFxSettingsT = {
+	tint: string
+	scale: number
+	speed: number
+}
+
+export type FoilSettingsT = {
+	colorA: string
+	colorB: string
+	scale: number
+	speed: number
+}
+
+export type HexGlitchSettingsT = {
+	tint: string
+	scale: number
+	speed: number
+	bloom: number
+	vignette: number
+}
 
 export type LayerFxT = {
 	id: string
 	kind: FxKindT
 	amount: number
 	modulation: ModulationT | null
+	foil?: FoilSettingsT
+	hexGlitch?: HexGlitchSettingsT
+	shader?: ShaderFxSettingsT
 }
 
 // The words themselves live on each clip. This is how they look.
@@ -351,6 +377,7 @@ export type ClipT = {
 	// How this clip adds to the layer's own transform: position and
 	// rotation add to it, scale and opacity multiply it.
 	transform: ClipTransformT
+	fx: LayerFxT[]
 }
 
 export type ClipTransformT = {

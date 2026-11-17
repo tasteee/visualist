@@ -95,12 +95,18 @@ const readSavedProject = (): SavedProjectT | null => {
 	}
 }
 
-const writeSavedProject = (project: SavedProjectT): void => {
+const writeSavedProject = (project: SavedProjectT): boolean => {
 	try {
 		window.localStorage.setItem(STORAGE_KEY, JSON.stringify(project))
+		return true
 	} catch {
-		return
+		return false
 	}
+}
+
+export const saveProjectNow = (): boolean => {
+	const snapshot = buildSnapshot()
+	return writeSavedProject(snapshot)
 }
 
 const pickGridDivision = (value: unknown): GridDivisionT => {
@@ -162,7 +168,7 @@ export const restoreProject = async (): Promise<void> => {
 	const project = readSavedProject()
 	if (project === null) return
 	await migrateLegacySong(project)
-	if (!app.hasAudio || app.isAnalyzing) return
+	if (app.isAnalyzing) return
 	applySongState(project)
 	applyEditorState(project)
 	await applyViewState(project)
@@ -174,7 +180,7 @@ export const startProjectWatchers = (): void => {
 	$effect.root(() => {
 		$effect(() => {
 			const snapshot = buildSnapshot()
-			if (!app.hasAudio || app.isAnalyzing) return
+			if (app.isAnalyzing) return
 			writeSavedProject(snapshot)
 		})
 	})

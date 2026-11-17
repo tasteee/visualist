@@ -39,7 +39,7 @@
 		if (!isEditing || input === undefined) return
 		isEditing = false
 		const next = input.value.trim().slice(0, nameLimit)
-		if (isCancelled || next === '' && props.value === '') {
+		if (isCancelled || (next === '' && props.value === '')) {
 			input.value = props.value
 		} else if (next !== props.value) {
 			props.oncommit(next)
@@ -70,29 +70,36 @@
 	})
 </script>
 
-<div class="inspector-title">
-	<z-tooltip class="inspector-title-tip" content={props.value} isDisabled={isEditing || !isOverflowing} placement="bottom" openDelay={300} onpointerenter={measure}>
-	<input
-		bind:this={input}
-		class="inspector-title-input is-{props.size ?? 'xs'}"
-		class:isEditing
-		type="text"
-		value={props.value}
-		readonly={!isEditing}
-		tabindex={isEditing ? 0 : -1}
-		maxlength={nameLimit}
-		aria-label={props.label}
-		onblur={finish}
-		onkeydown={handleKeyDown}
-		style="pointer-events: none"
-	/>
+<z-row alignsY="center" gap="2" isFullWidth class="inspector-title">
+	<z-tooltip
+		class="inspector-title-tip"
+		content={props.value}
+		isDisabled={isEditing || !isOverflowing}
+		placement="bottom"
+		openDelay={300}
+		onpointerenter={measure}
+	>
+		<input
+			bind:this={input}
+			class="inspector-title-input"
+			class:isEditing
+			type="text"
+			value={props.value}
+			readonly={!isEditing}
+			tabindex={isEditing ? 0 : -1}
+			maxlength={nameLimit}
+			aria-label={props.label}
+			onblur={finish}
+			onkeydown={handleKeyDown}
+			style="pointer-events: none"
+		/>
 	</z-tooltip>
 	<z-tooltip content="Rename" placement="top" openDelay={300}>
 		<z-button size="sm" kind="ghost" tone="neutral" aria-label={props.label} onclick={handleEdit}>
 			<PencilSimpleIcon class="inspector-panel-header-edit-icon" weight="bold" />
 		</z-button>
 	</z-tooltip>
-</div>
+</z-row>
 
 <style>
 	.inspector-title {
@@ -118,31 +125,14 @@
 		border-bottom: 1px solid transparent;
 		border-radius: 0;
 		background: transparent;
-		color: var(--inspector-title-color, var(--foreground));
+		color: var(--foreground);
 		font-family: var(--font-heading, inherit);
 		font-variation-settings: var(--font-heading-settings, normal);
-		font-weight: var(--font-heading-weight, 1000);
+		font-weight: 500;
 		text-overflow: ellipsis;
 		outline: none;
 		cursor: default;
-	}
-
-	.inspector-title-input.is-md {
-		font-size: calc(var(--base-font-size, 16px) * 2.5);
-		line-height: 1.3;
-		letter-spacing: calc(var(--base-font-size, 16px) * -0.03375 * var(--font-heading-tracking-scale, 1));
-	}
-
-	.inspector-title-input.is-sm {
-		font-size: calc(var(--base-font-size, 16px) * 2);
-		line-height: 1.25;
-		letter-spacing: calc(var(--base-font-size, 16px) * -0.03 * var(--font-heading-tracking-scale, 1));
-	}
-
-	.inspector-title-input.is-xs {
-		font-size: calc(var(--base-font-size, 16px) * 1.5);
-		line-height: 1.333333;
-		letter-spacing: calc(var(--base-font-size, 16px) * -0.00625 * var(--font-heading-tracking-scale, 1));
+		font-size: var(--font-size-4);
 	}
 
 	/* Editing shows only a thin underline and a caret. */

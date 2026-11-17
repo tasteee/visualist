@@ -1,7 +1,9 @@
-import { automation } from './automation.svelte'
+import { automation, clearCopiedPoints, getCopiedPoints } from './automation.svelte'
 import { applyLayerAutomationOnly } from './engine/automation'
 import { applyMappingsToLayers } from './engine/mappings'
-import type { ImpulseTrackT, LayerT } from './engine/types'
+import type { AutomationPointT, ImpulseTrackT, LayerT } from './engine/types'
+import { clearLayerClipboards, getClipClipboard, getLayerClipboard } from './layerEdit.svelte'
+import type { ClipClipboardEntryT, ClipboardEntryT } from './layerEdit.svelte'
 import { layerStore } from './layers.svelte'
 import { mappingsStore } from './mappings.svelte'
 import { sources } from './sources.svelte'
@@ -10,7 +12,16 @@ import { app, getAudioLayerBuffer } from './store.svelte'
 import { timeline } from './timeline.svelte'
 import { uiState } from './uiState.svelte'
 
-export type StateSectionKeyT = 'all' | 'app' | 'layers' | 'liveLayers' | 'mappings' | 'sources' | 'automation' | 'timeline'
+export type StateSectionKeyT =
+	| 'all'
+	| 'app'
+	| 'layers'
+	| 'liveLayers'
+	| 'mappings'
+	| 'sources'
+	| 'automation'
+	| 'timeline'
+	| 'clipboard'
 
 export type AudioLayerRuntimeSummaryT = {
 	layerId: string
@@ -18,6 +29,21 @@ export type AudioLayerRuntimeSummaryT = {
 	hasBuffer: boolean
 	bufferDuration: number | null
 	clipCount: number
+}
+
+export type ClipboardKindT = 'none' | 'layers' | 'clips' | 'automationPoints' | 'mixed'
+
+export type ClipboardSnapshotT = {
+	hasContent: boolean
+	kind: ClipboardKindT
+	counts: {
+		layers: number
+		clips: number
+		automationPoints: number
+	}
+	layers: ClipboardEntryT[]
+	clips: ClipClipboardEntryT[]
+	automationPoints: AutomationPointT[]
 }
 
 export type AppStateSnapshotT = {
@@ -55,6 +81,7 @@ export type AppStateSnapshotT = {
 		selectedPointIds: string[]
 		impulseSelection: typeof sources.impulseSelection
 	}
+	clipboard: ClipboardSnapshotT
 	layers: LayerT[]
 	liveLayers: LayerT[]
 	mappings: typeof mappingsStore.list
@@ -87,6 +114,11 @@ export type AppStateSnapshotT = {
 	}
 }
 
+export const clearAllClipboards = (): void => {
+	clearLayerClipboards()
+	clearCopiedPoints()
+}
+
 export const buildAppStateSnapshot = (): AppStateSnapshotT => {
 	const rawLayers = layerStore.layers as LayerT[]
 	const modContext = { tracks: sources.tracks, lanes: automation.lanes }
@@ -105,6 +137,34 @@ export const buildAppStateSnapshot = (): AppStateSnapshotT => {
 				clipCount: layer.clips.length
 			}
 		})
+
+	const layerClipboard = getLayerClipboard()
+	const clipClipboard = getClipClipboard()
+	const pointClipboard = getCopiedPoints()
+
+	const hasLayers = layerClipboard.length > 0
+	const hasClips = clipClipboard.length > 0
+	const hasPoints = pointClipboard.length > 0
+	const hasContent = hasLayers || hasClips || hasPoints
+
+	let clipboardKind: ClipboardKindT = 'none'
+	if (hasLayers && !hasClips && !hasPoints) clipboardKind = 'layers'
+	else if (hasClips && !hasLayers && !hasPoints) clipboardKind = 'clips'
+	else if (hasPoints && !hasLayers && !hasClips) clipboardKind = 'automationPoints'
+	else if (hasContent) clipboardKind = 'mixed'
+
+	const clipboard: ClipboardSnapshotT = {
+		hasContent,
+		kind: clipboardKind,
+		counts: {
+			layers: layerClipboard.length,
+			clips: clipClipboard.length,
+			automationPoints: pointClipboard.length
+		},
+		layers: $state.snapshot(layerClipboard) as ClipboardEntryT[],
+		clips: $state.snapshot(clipClipboard) as ClipClipboardEntryT[],
+		automationPoints: $state.snapshot(pointClipboard) as AutomationPointT[]
+	}
 
 	return {
 		timestamp: new Date().toISOString(),
@@ -141,6 +201,7 @@ export const buildAppStateSnapshot = (): AppStateSnapshotT => {
 			selectedPointIds: [...automation.selectedPointIds],
 			impulseSelection: $state.snapshot(sources.impulseSelection)
 		},
+		clipboard,
 		layers: $state.snapshot(rawLayers),
 		liveLayers: $state.snapshot(evaluatedLayers),
 		mappings: $state.snapshot(mappingsStore.list),
@@ -182,6 +243,7 @@ export const selectStateSection = (snapshot: AppStateSnapshotT, section: StateSe
 	if (section === 'sources') return snapshot.sources
 	if (section === 'automation') return snapshot.automation
 	if (section === 'timeline') return snapshot.timeline
+	if (section === 'clipboard') return snapshot.clipboard
 	return snapshot
 }
 
@@ -190,6 +252,7 @@ export const installGlobalStateInspector = (): void => {
 	const globalTarget = window as unknown as Record<string, unknown>
 	globalTarget.__visualist = {
 		getState: buildAppStateSnapshot,
+		clearClipboard: clearAllClipboards,
 		stores: {
 			app,
 			layerStore,
